@@ -14,6 +14,7 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
     <title><?= e($titulo) ?> — Transportes Seguros S.A.</title>
+    <!-- Recurso externo limitado por CSP; producción debe fijar SRI o alojar el CSS aprobado. -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
     <link rel="stylesheet" href="/assets/css/estilos.css">
     <script src="/assets/js/htmx.min.js" defer></script>
@@ -21,30 +22,26 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
 </head>
 <body>
 <div class="app-shell">
-    <aside class="sidebar" aria-label="Navegación principal">
-        <div class="brand"><span class="brand-icon">TS</span><div><strong>Transportes Seguros</strong><span>Administración logística</span></div></div>
-        <div class="sidebar-label">PRINCIPAL</div>
+    <aside class="sidebar" id="sidebar" aria-label="Navegación principal">
+        <div class="brand"><span class="brand-icon" aria-hidden="true">TS</span><div><strong>Transportes Seguros</strong><span>Administración logística</span></div></div>
         <nav class="menu-list">
             <?php if ($puedeReportes): ?>
-                <a class="sidebar-link <?= $activo === 'dashboard' ? 'active' : '' ?>" href="/"><span aria-hidden="true">▦</span> Panel general</a>
+                <a class="sidebar-link <?= $activo === 'dashboard' ? 'active' : '' ?>" href="/"><?= svg_icon('dashboard') ?><span>Panel general</span></a>
             <?php endif; ?>
             <?php if ($puedeClientes): ?>
-                <a class="sidebar-link <?= $activo === 'clientes' ? 'active' : '' ?>" href="/clientes.php"><span aria-hidden="true">◉</span> Clientes</a>
+                <a class="sidebar-link <?= $activo === 'clientes' ? 'active' : '' ?>" href="/clientes.php"><?= svg_icon('clients') ?><span>Clientes</span></a>
             <?php endif; ?>
         </nav>
-        <div class="sidebar-label">PRÓXIMOS MÓDULOS</div>
-        <div class="menu-list">
-            <span class="sidebar-link muted">Solicitudes</span>
-            <span class="sidebar-link muted">Viajes y rutas</span>
-            <span class="sidebar-link muted">Entregas</span>
-            <span class="sidebar-link muted">Reportes avanzados</span>
-        </div>
-        <div class="sidebar-bottom"><small>Proyecto universitario · Grupo 6</small><strong>Transportes Seguros S.A.</strong></div>
+        <div class="sidebar-bottom"><strong>Transportes Seguros S.A.</strong></div>
     </aside>
     <div class="main-area">
-        <header class="topbar"><div class="mobile-brand">Transportes Seguros S.A.</div><div class="topbar-right"><span class="user-badge"><?= e($usuario['nombre_usuario']) ?></span><form action="/auth/logout.php" method="post"><input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>"><button class="button is-small is-light" type="submit">Cerrar sesión</button></form></div></header>
+        <header class="topbar">
+            <button class="icon-button sidebar-toggle" type="button" aria-controls="sidebar" aria-expanded="false" data-sidebar-toggle><?= svg_icon('menu', 'Abrir navegación') ?></button>
+            <div class="mobile-brand">Transportes Seguros S.A.</div>
+            <div class="topbar-right"><span class="user-badge"><?= e($usuario['nombre_usuario']) ?></span><form action="/auth/logout.php" method="post"><input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>"><button class="button button-secondary is-small" type="submit"><?= svg_icon('logout') ?><span>Cerrar sesión</span></button></form></div>
+        </header>
         <main class="main-content">
-            <div class="page-intro"><div><p class="eyebrow">SISTEMA DE GESTIÓN DE TRANSPORTES</p><h1 class="title is-3"><?= e($titulo) ?></h1><p class="page-subtitle"><?= e($descripcion) ?></p></div></div>
+            <div class="page-intro"><div><h1 class="title is-3"><?= e($titulo) ?></h1><p class="page-subtitle"><?= e($descripcion) ?></p></div></div>
 <?php
 }
 

@@ -6,7 +6,7 @@ $tipo = ($_GET['tipo'] ?? '') === 'juridico' ? 'juridico' : 'fisico';
 <div class="modal is-active" role="dialog" aria-modal="true" aria-labelledby="titulo-modal">
   <div class="modal-background" data-close-modal></div>
   <div class="modal-card">
-    <header class="modal-card-head"><p class="modal-card-title" id="titulo-modal"><?= $tipo === 'fisico' ? 'Registrar cliente físico' : 'Registrar empresa' ?></p><button class="delete" type="button" aria-label="Cerrar" data-close-modal></button></header>
+    <header class="modal-card-head"><p class="modal-card-title" id="titulo-modal"><?= $tipo === 'fisico' ? 'Nuevo cliente' : 'Nueva empresa' ?></p><button class="modal-close icon-button" type="button" aria-label="Cerrar" data-close-modal><?= svg_icon('close') ?></button></header>
     <form hx-post="/clientes/guardar.php" hx-target="#mensaje-form" hx-swap="innerHTML" hx-disabled-elt="find button[type=submit]">
       <section class="modal-card-body">
         <input type="hidden" name="tipo" value="<?= e($tipo) ?>">
@@ -25,7 +25,7 @@ $tipo = ($_GET['tipo'] ?? '') === 'juridico' ? 'juridico' : 'fisico';
         <div class="field"><label class="label" for="correo">Correo electrónico <span class="required">*</span></label><input class="input" id="correo" name="correo" type="email" maxlength="150" required></div>
         <p class="help">Los campos marcados con * son obligatorios.</p>
       </section>
-      <footer class="modal-card-foot"><div class="buttons"><button class="button is-primary" type="submit">Guardar cliente</button><button class="button" type="button" data-close-modal>Cancelar</button></div></footer>
+      <footer class="modal-card-foot"><div class="buttons"><button class="button is-primary" type="submit">Guardar</button><button class="button button-secondary" type="button" data-close-modal>Cancelar</button></div></footer>
     </form>
   </div>
 </div>
