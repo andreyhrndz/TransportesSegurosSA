@@ -53,6 +53,66 @@ function request(string $url, string $method = 'GET', string $body = '', string 
     return [$content === false ? '' : $content, $responseHeaders];
 }
 
+/** @param list<string> $headers */
+function response_status(array $headers): int
+{
+    return (int)(preg_match('/\s(\d{3})\s/', $headers[0] ?? '', $match) ? $match[1] : 0);
+}
+
+/** @param list<string> $headers */
+function has_header(array $headers, string $name): bool
+{
+    $prefix = strtolower($name) . ':';
+    foreach ($headers as $header) {
+        if (str_starts_with(strtolower($header), $prefix)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/** @return array<string,string> */
+function parallel_get(string $host, int $port, array $paths, string $cookie): array
+{
+    $sockets = [];
+    $responses = [];
+    foreach ($paths as $path) {
+        $socket = stream_socket_client("tcp://{$host}:{$port}", $errno, $error, 5);
+        if ($socket === false) {
+            fail('No se pudo abrir una petición paralela local.');
+        }
+        stream_set_blocking($socket, false);
+        fwrite($socket, "GET {$path} HTTP/1.1\r\nHost: {$host}:{$port}\r\nCookie: {$cookie}\r\nConnection: close\r\n\r\n");
+        $sockets[(int)$socket] = ['path' => $path, 'socket' => $socket, 'body' => ''];
+    }
+    while ($sockets !== []) {
+        $read = array_map(static fn (array $entry) => $entry['socket'], $sockets);
+        $changed = stream_select($read, $write, $except, 5);
+        assert_true($changed !== false && $changed > 0, 'Las peticiones paralelas deben completar.');
+        foreach ($read as $socket) {
+            $id = (int)$socket;
+            $chunk = fread($socket, 8192);
+            if ($chunk !== false && $chunk !== '') {
+                $sockets[$id]['body'] .= $chunk;
+            }
+            if (feof($socket)) {
+                $responses[$sockets[$id]['path']] = $sockets[$id]['body'];
+                fclose($socket);
+                unset($sockets[$id]);
+            }
+        }
+    }
+    return $responses;
+}
+
+/** @return array{0:int,1:list<string>,2:string} */
+function split_http_response(string $response): array
+{
+    [$rawHeaders, $body] = array_pad(explode("\r\n\r\n", $response, 2), 2, '');
+    $headers = explode("\r\n", $rawHeaders);
+    return [response_status($headers), $headers, $body];
+}
+
 /** @return array{0:string,1:string,2:string} */
 function login_form_session(string $url): array
 {
@@ -95,6 +155,22 @@ try {
 
     [$tokenA, $cookieNameA, $cookieValueA] = login_form_session($url);
     $cookieA = $cookieNameA . '=' . $cookieValueA;
+    $baseUrl = "http://127.0.0.1:{$port}";
+
+    [$faviconBody, $faviconHeaders] = request($baseUrl . '/favicon.svg', 'GET', '', $cookieA);
+    assert_true(response_status($faviconHeaders) === 200, 'El favicon declarado debe responder como recurso estático.');
+    assert_true(!has_header($faviconHeaders, 'Set-Cookie') && !str_contains($faviconBody, '<html'), 'El favicon no debe iniciar sesión ni devolver HTML.');
+
+    [$missingAssetBody, $missingAssetHeaders] = request($baseUrl . '/favicon.ico', 'GET', '', $cookieA);
+    assert_true(response_status($missingAssetHeaders) === 404, 'Un favicon ICO inexistente debe responder 404.');
+    assert_true(!has_header($missingAssetHeaders, 'Set-Cookie') && !has_header($missingAssetHeaders, 'Location') && !str_contains($missingAssetBody, '<html'), 'Un recurso inexistente no debe redirigir al login ni alterar la cookie.');
+
+    $parallel = parallel_get('127.0.0.1', $port, ['/auth/login.php', '/favicon.svg'], $cookieA);
+    [$parallelLoginStatus] = split_http_response($parallel['/auth/login.php'] ?? '');
+    [$parallelFaviconStatus, $parallelFaviconHeaders, $parallelFaviconBody] = split_http_response($parallel['/favicon.svg'] ?? '');
+    assert_true($parallelLoginStatus === 200 && $parallelFaviconStatus === 200, 'Las solicitudes paralelas de documento y favicon deben completar.');
+    assert_true(!has_header($parallelFaviconHeaders, 'Set-Cookie') && !str_contains($parallelFaviconBody, '<html'), 'El favicon paralelo no debe modificar la sesión.');
+
     [$validBody] = request($url, 'POST', http_build_query([
         'csrf_token' => $tokenA,
         'usuario' => 'synthetic-user',

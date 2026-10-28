@@ -14,6 +14,7 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light">
     <title><?= e($titulo) ?> — Transportes Seguros S.A.</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <!-- Recurso externo limitado por CSP; producción debe fijar SRI o alojar el CSS aprobado. -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
     <link rel="stylesheet" href="/assets/css/estilos.css">

@@ -21,5 +21,6 @@
 - Sintaxis PHP de todas las rutas de app/ y public/: correcta con PHP 8.4.
 - Prueba de proceso aislado: generación/validación CSRF y límite de sesión vigente/expirada: correcta.
 - Regresión HTTP automatizada: GET de login crea token y cookie, el POST con ambos pasa CSRF y los POST sin token, con token incorrecto o con cookie de otra sesión son rechazados. Ejecutar con PHP 8.4: `php tests/session_csrf_regression.php`.
+- Regresión de recursos: favicon estático responde sin sesión; favicon ICO inexistente responde 404 plano sin cookie ni redirección; cargas paralelas de login/favicon conservan la sesión y el token original.
 - openspec validate frontend-auth-and-permissions-hardening --strict: correcto.
 - Sin una base de pruebas autorizada no se realizaron intentos de login, consultas de usuarios/permisos, altas de clientes ni pruebas de usuario inactivo. Por ello las tareas de verificación 3.1, 3.2 y 3.3 siguen abiertas.

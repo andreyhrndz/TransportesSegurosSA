@@ -1,4 +1,13 @@
 <?php
+// El servidor integrado puede derivar recursos inexistentes a index.php.
+// Estos nunca deben iniciar sesión ni redirigir a la pantalla de acceso.
+$requestedPath = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
+if (is_string($requestedPath) && preg_match('/\.(?:avif|bmp|css|gif|ico|jpe?g|js|map|png|svg|webmanifest|webp|woff2?)$/i', $requestedPath)) {
+    http_response_code(404);
+    header('Content-Type: text/plain; charset=UTF-8');
+    exit;
+}
+
 require_once __DIR__ . '/../app/bootstrap.php';
 require_permission('REPORTES_VER');
 require_once __DIR__ . '/../app/layout.php';

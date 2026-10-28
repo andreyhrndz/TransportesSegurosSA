@@ -64,6 +64,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Iniciar sesión — Transportes Seguros S.A.</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
     <link rel="stylesheet" href="/assets/css/estilos.css">
 </head>
