@@ -35,4 +35,5 @@
 
 - Sintaxis PHP de todas las rutas de app/ y public/: correcta con PHP 8.4.
 - openspec validate frontend-foundation-design-system --strict: correcto.
+- Corrección puntual del login: nombre de producto en panel petróleo con blanco; contraste calculado 9.42:1.
 - El servidor de desarrollo no pudo mantenerse accesible desde el sandbox de Codex; las pruebas visuales de escritorio/tablet/móvil y los flujos que leen o escriben la base operativa quedan pendientes de un entorno de pruebas autorizado. Por ello 1.2, 4.1, 4.2, 5.1, 5.2 y 5.3 siguen abiertas.

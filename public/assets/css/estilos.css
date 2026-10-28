@@ -104,7 +104,8 @@ a { color: var(--color-primary-strong); }
 
 .login-page { min-height: 100vh; display: grid; grid-template-columns: minmax(18rem, 1fr) minmax(22rem, .8fr); background: var(--color-canvas); }
 .login-side { display: flex; flex-direction: column; min-height: 100%; padding: clamp(2rem, 6vw, 6rem); color: #eef6f6; background: #304a53; }
-.login-logo { display: flex; align-items: center; gap: var(--space-3); }
+.login-logo { display: flex; align-items: center; gap: var(--space-3); color: #fff; }
+.login-logo strong { color: #fff; }
 .login-claim { max-width: 34rem; margin: auto 0; }
 .login-claim h1 { margin: var(--space-4) 0; color: #fff; font-size: clamp(2rem, 4vw, 3.25rem); line-height: 1.1; }
 .login-claim p { color: #d6e7e8; font-size: 1.05rem; }

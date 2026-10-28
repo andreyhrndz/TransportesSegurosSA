@@ -12,6 +12,13 @@ function is_htmx_request(): bool
     return ($_SERVER['HTTP_HX_REQUEST'] ?? '') === 'true';
 }
 
+function session_cookie_name(): string
+{
+    // ASVS 3.3.1-3.3.3: aislar la cookie de esta aplicación; el prefijo
+    // __Host- sólo se usa cuando la petición realmente está protegida por HTTPS.
+    return is_https() ? '__Host-TSSA_TRANSPORTES_SESSION' : 'TSSA_TRANSPORTES_SESSION';
+}
+
 function send_security_headers(): void
 {
     if (headers_sent()) {
@@ -33,8 +40,8 @@ send_security_headers();
 if (session_status() !== PHP_SESSION_ACTIVE) {
     $https = is_https();
     // ASVS 3.3.1-3.3.4: cookie host-only, Secure, HttpOnly y SameSite en HTTPS.
-    // HTTP se conserva solo para el entorno local de desarrollo.
-    session_name($https ? '__Host-TSSA_SESSION' : 'TSSA_SESSION');
+    // HTTP se conserva sólo para el entorno local de desarrollo.
+    session_name(session_cookie_name());
     session_set_cookie_params([
         'lifetime' => 0,
         'path' => '/',
@@ -43,7 +50,13 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
         'samesite' => 'Lax',
     ]);
     ini_set('session.use_strict_mode', '1');
-    session_start();
+    session_cache_limiter('nocache');
+    if (!session_start()) {
+        // ASVS 16.3.4: no continuar una petición sin almacenamiento de sesión.
+        error_log('TSSA security: unable to start PHP session');
+        http_response_code(503);
+        exit('El servicio no está disponible temporalmente. Inténtalo más tarde.');
+    }
 }
 
 function db(): PDO
