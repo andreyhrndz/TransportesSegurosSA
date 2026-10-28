@@ -10,7 +10,7 @@ El dashboard actual usa cuatro consultas directas y una lista reciente; SQL Serv
 
 ## Alcance, exclusiones y riesgos
 
-Excluye alterar el DW, Jobs, ETL, backups, replicación y notificaciones. Riesgo: datos de DW atrasados o PII en auditoría; se mitiga con fuente/fecha visible y columnas mínimas.
+Excluye alterar el DW, Jobs, ETL, backups, replicación y envío/reintento de notificaciones. Riesgo: datos de DW atrasados o PII en auditoría; se mitiga con fuente/fecha visible y columnas mínimas.
 
 ## Capabilities
 

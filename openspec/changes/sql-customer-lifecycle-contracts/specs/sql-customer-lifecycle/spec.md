@@ -12,11 +12,18 @@ El procedimiento de edición SHALL verificar `CLIENTES_EDITAR`, conservar el sub
 - **THEN** el procedimiento no modifica el cliente y devuelve un conflicto de negocio.
 
 ### Requirement: Desactivación no destructiva
-El procedimiento de desactivación SHALL verificar `CLIENTES_DESACTIVAR` y SHALL marcar el cliente inactivo sin ejecutar DELETE.
+El procedimiento de desactivación SHALL verificar `CLIENTES_DESACTIVAR`, marcar el cliente inactivo sin DELETE y rechazarlo cuando tenga una solicitud `REGISTRADA`, `PENDIENTE_ASIGNACION`, `ASIGNADA` o `EN_TRANSITO`.
 
 #### Scenario: Cliente con solicitudes
 - **WHEN** se solicita desactivar un cliente que tiene solicitudes relacionadas
-- **THEN** el procedimiento aplica la regla de estado aprobada o rechaza la operación sin alterar las solicitudes.
+- **THEN** el procedimiento rechaza la operación sin alterar las solicitudes.
+
+### Requirement: Campos editables definidos
+Los procedimientos SHALL conservar identificación y subtipo; sólo actualizarán contacto/dirección común y los campos del subtipo definidos en el diseño, tras validar correo, longitudes y obligatoriedad.
+
+#### Scenario: Cambio de subtipo implícito
+- **WHEN** una edición intenta modificar un cliente físico como jurídico o alterar su identificación
+- **THEN** el procedimiento rechaza la solicitud sin modificar el cliente.
 
 ### Requirement: Integridad y trazabilidad
 Los procedimientos SHALL ejecutarse transaccionalmente y SHALL dejar evidencia de la operación cuando la auditoría aplicable esté habilitada.

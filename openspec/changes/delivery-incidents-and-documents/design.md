@@ -13,6 +13,11 @@
 - El formulario cambia campos según resultado y valida en servidor; el SP decide la validez terminal.
 - Receptor efectivo se captura sólo al éxito y se muestra junto al destinatario previsto sin sobrescribirlo.
 - Documentos usan URL/referencia existentes; no se aceptan binarios hasta un contrato de almacenamiento aprobado.
+- `notificaciones` se presenta, si `NOTIFICACIONES_VER` está aprobado, como lista de intentos/estado; no existe SP ni servicio para crear, enviar o reintentar y esas acciones quedan excluidas.
+
+## Contratos existentes a integrar
+
+`sp_registrar_entrega(@viaje_solicitud_id,@estado,@receptor_nombre=NULL,@receptor_identificacion=NULL,@receptor_telefono=NULL,@comprobante_url=NULL,@motivo_fallo=NULL)` exige `ENTREGAS_REGISTRAR` y puede devolver 50319–50324. `sp_registrar_incidencia(@solicitud_id,@tipo_incidencia_id,@descripcion,@incidencia_id OUTPUT)`, `sp_resolver_incidencia(@incidencia_id,@resolucion)` y `sp_registrar_documento(@solicitud_id,@tipo_documento_id,@numero_referencia,@archivo_url,@documento_id OUTPUT)` usan los permisos/códigos 50401–50406. Los listados, filtros de fecha/estado y paginación se obtienen del contrato de lectura; no se invoca SQL para enviar notificaciones.
 
 ## Risks / Trade-offs
 

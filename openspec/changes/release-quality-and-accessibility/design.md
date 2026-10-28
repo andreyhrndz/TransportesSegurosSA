@@ -1,6 +1,6 @@
 ## Context
 
-Stack: PHP 8.4, Bulma, HTMX y PDO_SQLSRV. La aplicación local usa Windows Integrated Auth, `Encrypt=yes;TrustServerCertificate=yes`. La prueba existente falló porque el cliente informó ODBC Driver 17 sin soporte del cifrado configurado; por tanto no hay evidencia de smoke SQL en esta ejecución.
+Stack: PHP 8.4, Bulma, HTMX y PDO_SQLSRV. La aplicación local usa Windows Integrated Auth, `Encrypt=yes;TrustServerCertificate=yes`. El equipo principal verificó conexión y 24 tablas con ODBC Driver 18. Un intento aislado en el entorno de Codex informó ODBC Driver 17 sin soporte de cifrado; es una limitación de ese entorno y no invalida la evidencia principal.
 
 ## Goals / Non-Goals
 
@@ -16,7 +16,7 @@ Stack: PHP 8.4, Bulma, HTMX y PDO_SQLSRV. La aplicación local usa Windows Integ
 
 ## Risks / Trade-offs
 
-- [Ambiente no conectable] → resolver driver/certificado con administrador antes de certificar flujos SQL.
+- [Ambiente Codex distinto] → ejecutar smoke funcional en el equipo principal con ODBC 18 y registrar ambiente/driver; no degradar TLS para adaptar Codex.
 - [Cobertura superficial] → matriz por permisos, estados y errores, más pruebas exploratorias.
 
 ## Migration Plan

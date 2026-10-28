@@ -1,6 +1,6 @@
 ## Why
 
-La aplicación inicial no tiene una estrategia de calidad/release consolidada y su acceso real a la base no pudo verificarse en este entorno por incompatibilidad de cifrado ODBC. Antes de producción se requieren pruebas, accesibilidad y límites operativos explícitos.
+La aplicación inicial no tiene una estrategia de calidad/release consolidada. La conexión del equipo principal con PHP 8.4, PDO_SQLSRV y ODBC Driver 18 sí verificó las 24 tablas; cualquier fallo del entorno aislado de Codex no representa un defecto del proyecto.
 
 ## What Changes
 
@@ -10,7 +10,7 @@ La aplicación inicial no tiene una estrategia de calidad/release consolidada y 
 
 ## Alcance, exclusiones y riesgos
 
-Excluye implementar módulos, desplegar producción, cambiar TLS/ODBC, migrar BD o automatizar Jobs. Riesgo: no poder probar contra SQL local; se registra como bloqueo con pasos de ambiente, nunca como éxito funcional.
+Excluye implementar módulos, desplegar producción, cambiar TLS/ODBC, migrar BD o automatizar Jobs. Riesgo: ejecutar pruebas en un ambiente distinto al principal; se registra el driver y evidencia real, sin presentar el resultado aislado de Codex como fallo del proyecto.
 
 ## Capabilities
 

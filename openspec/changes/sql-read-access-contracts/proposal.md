@@ -4,7 +4,7 @@ El catálogo actual sólo define permisos de acción y `REPORTES_VER`; el fronte
 
 ## What Changes
 
-- Especificar permisos individuales de consulta por dominio y su verificación mediante `dbo.fn_tiene_permiso`.
+- Especificar permisos individuales de consulta por dominio —incluidas cuentas, permisos y notificaciones— y su verificación mediante `dbo.fn_tiene_permiso`.
 - Especificar procedimientos o vistas de lectura con columnas mínimas, filtros parametrizados y paginación.
 - Definir migración, pruebas de denegación y compatibilidad temporal para clientes actuales.
 

@@ -1,6 +1,6 @@
 ## Context
 
-Existen vistas operativas y `vw_indicadores_operativos`; el DW almacena hechos de entrega e incluye `sp_cargar_datawarehouse`, cuya ejecución debe quedar en Job/operación SQL. Triggers actuales escriben auditoría de solicitudes, viajes, asignaciones y entregas, no de todas las entidades.
+Existen vistas operativas y `vw_indicadores_operativos`; el DW almacena hechos de entrega e incluye `sp_cargar_datawarehouse`, cuya ejecución debe quedar en Job/operación SQL. Triggers actuales escriben auditoría de solicitudes, viajes, asignaciones y entregas, no de todas las entidades. `notificaciones` no tiene productor ni servicio en los scripts: sólo puede reportarse su historial almacenado.
 
 ## Goals / Non-Goals
 

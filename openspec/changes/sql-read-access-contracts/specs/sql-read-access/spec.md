@@ -24,3 +24,10 @@ Los contratos SHALL excluir hashes, secretos y columnas no necesarias para la pa
 #### Scenario: Consulta de usuario
 - **WHEN** una pantalla autorizada consulta datos de usuario relacionados
 - **THEN** el resultado no contiene `password_hash` ni credenciales.
+
+### Requirement: Cobertura de seguimiento y seguridad
+El contrato SHALL ofrecer lectura autorizada de cuentas, permisos individuales, auditorías y notificaciones; SHALL tratar notificaciones como historial de envío y no como orden para enviar, reintentar o borrar mensajes.
+
+#### Scenario: Historial de notificación
+- **WHEN** una persona con `NOTIFICACIONES_VER` filtra notificaciones de una solicitud
+- **THEN** recibe sólo el historial y estado almacenado, sin que la consulta envíe ni reprograme correo.

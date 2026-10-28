@@ -14,6 +14,10 @@
 - La prioridad calculada se presenta como resultado; un ajuste exige justificación y permiso explícito.
 - El destinatario previsto permanece en `solicitudes`; receptor real no se captura aquí.
 
+## Contratos existentes a integrar
+
+`sp_crear_solicitud` recibe código, cliente, origen, destino, nombres/identificación/teléfono del destinatario, fecha requerida, `dbo.tipo_mercancias READONLY` y devuelve `@solicitud_id OUTPUT`; exige `SOLICITUDES_CREAR`. `sp_ajustar_prioridad(@solicitud_id,@prioridad,@justificacion)` exige `SOLICITUDES_AJUSTAR_PRIORIDAD`; `sp_cancelar_solicitud(@solicitud_id,@motivo)` exige `SOLICITUDES_CANCELAR`. Los errores 50203–50215, ya presentes en scripts de referencia, se traducen a mensajes seguros sin depender de texto literal. Filtros/listas y paginación dependen de `sql-read-access-contracts`.
+
 ## Risks / Trade-offs
 
 - [TVP PDO_SQLSRV] → probar binding y transacción contra la firma real antes de UI final.

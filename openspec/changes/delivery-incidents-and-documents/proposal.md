@@ -6,11 +6,11 @@ Existen procedimientos para entrega, incidencias, resolución y documentos, sin 
 
 - Crear vistas de entregas en tránsito/finalizadas y registro de entrega exitosa o fallida.
 - Crear registro/resolución de incidencias y registro de documento de referencia.
-- Distinguir destinatario esperado, receptor efectivo y motivo de fallo.
+- Distinguir destinatario esperado, receptor efectivo y motivo de fallo; consultar notificaciones sólo como historial, sin enviarlas ni reintentarlas.
 
 ## Alcance, exclusiones y riesgos
 
-Excluye reintentos, reprogramación, carga binaria/almacenamiento de archivos, notificaciones de correo y cambios SQL. Riesgo: `archivo_url` no implica un repositorio seguro; se aceptará sólo referencia URL según el contrato existente.
+Excluye reintentos, reprogramación, carga binaria/almacenamiento de archivos, envío/reintento de correo y cambios SQL. Riesgo: `archivo_url` no implica un repositorio seguro; se aceptará sólo referencia URL según el contrato existente.
 
 ## Capabilities
 

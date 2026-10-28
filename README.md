@@ -19,7 +19,7 @@ cd C:\AdmBD2026\ProyectoTransportesSegurosSA
 & "C:\AdmBD2026\Herramientas\PHP\8.4\php.exe" -S 127.0.0.1:8000 -t public
 ```
 
-La autenticación integrada de Windows y `TrustServerCertificate=yes` son sólo para laboratorio. Producción exige TLS verificable, secretos fuera de Git/public y cuenta SQL de mínimo privilegio.
+La conexión del equipo principal ya funciona con PHP 8.4, PDO_SQLSRV y ODBC Driver 18. La autenticación integrada de Windows y `TrustServerCertificate=yes` son sólo para laboratorio; producción exige TLS verificable, secretos fuera de Git/public y cuenta SQL de mínimo privilegio.
 
 ## OpenSpec
 

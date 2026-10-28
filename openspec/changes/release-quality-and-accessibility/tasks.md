@@ -2,7 +2,7 @@
 
 - [ ] 1.1 Inventariar flujos, permisos, estados y contratos SQL por change.
 - [ ] 1.2 Definir matriz de pruebas PHP, SQL de sólo lectura/escritura controlada y navegador.
-- [ ] 1.3 Resolver con administración el bloqueo ODBC/TLS sin reducir cifrado ni guardar credenciales.
+- [ ] 1.3 Ejecutar y registrar el smoke SQL en el equipo principal con PDO_SQLSRV y ODBC Driver 18, sin degradar TLS para adaptar Codex.
 
 ## 2. Accesibilidad y calidad
 
