@@ -6,7 +6,7 @@ function form_error(string $mensaje, int $codigo = 422): never
 {
     http_response_code($codigo);
     header('Content-Type: text/html; charset=UTF-8');
-    echo '<div class="notification is-danger">' . e($mensaje) . '</div>';
+    echo ui_notice($mensaje, 'danger');
     exit;
 }
 
@@ -15,6 +15,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
     form_error('Método no permitido.', 405);
 }
 if (!valid_csrf($_POST['csrf_token'] ?? null)) {
+    // ASVS 3.5.1, 16.3.3: proteger y registrar intentos de eludir CSRF.
+    error_log('TSSA security: invalid CSRF token on customer creation');
     form_error('El formulario caducó. Recarga la página y vuelve a intentarlo.', 403);
 }
 
