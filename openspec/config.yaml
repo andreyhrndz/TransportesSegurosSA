@@ -1,0 +1,35 @@
+schema: spec-driven
+context: |
+  Producto: Transportes Seguros S.A., plataforma de administración logística.
+  Idioma de artefactos, UI y mensajes: español profesional y conciso.
+  Stack: PHP 8.4, Microsoft SQL Server con PDO_SQLSRV, Bulma y HTMX.
+  Directorio web expuesto: public/; archivos privados en app/.
+  Base operativa: TransportesSegurosSA (24 tablas); DW: TransportesSegurosSA_DW.
+  Existe un frontend inicial que inicia sesión, muestra dashboard y consulta/registra clientes. Auditar el estado real antes de proponer cambios.
+  No incluir referencias universitarias ni a grupos en la interfaz.
+  Evitar colores estridentes; usar pasteles desaturados para superficies/acento y alto contraste para texto y botones.
+  Botones breves, comprensibles y uniformes; controles reutilizables; responsive desktop/tablet/móvil.
+  Mantener seguridad: autenticación, permisos, CSRF, parametrización, sesiones y salida HTML escapada.
+  No modificar esquema SQL, stored procedures, permisos, datos ni Jobs sin un change separado y aprobación.
+  No agregar GPS, mantenimiento ni capacidades fuera del modelo aprobado.
+  No realizar commits, pushes, merges ni operaciones destructivas sin aprobación.
+rules:
+  proposal:
+    - Explicar problema, alcance, no-alcance, dependencias y riesgos; incluir una estrategia de reversión.
+  specs:
+    - Formular requisitos observables y escenarios GIVEN/WHEN/THEN; cubrir carga, error, vacío y acceso denegado cuando aplique.
+    - Distinguir contratos de UI frente a decisiones internas de implementación.
+  design:
+    - Describir reutilización de componentes, integración con HTMX y cambios PHP/SQL si aplican.
+    - Registrar seguridad, accesibilidad, responsive y compatibilidad con el frontend existente.
+  tasks:
+    - Mantener tareas pequeñas, comprobables y con pasos de verificación.
+    - Incluir smoke tests en desktop, tablet y móvil para todo cambio visual.
+operations:
+  apply:
+    guidance:
+      - Inspeccionar los archivos reales antes de modificarlos; no asumir el estado descrito por un paquete anterior.
+      - Ejecutar validaciones y reportar limitaciones sin afirmar pruebas no realizadas.
+  archive:
+    guidance:
+      - Archivar solo cuando criterios de aceptación y pruebas estén cumplidos; resumir evidencia y pendientes.
