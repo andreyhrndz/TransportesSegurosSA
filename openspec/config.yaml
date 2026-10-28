@@ -12,7 +12,7 @@ context: |
   Mantener seguridad: autenticación, permisos, CSRF, parametrización, sesiones y salida HTML escapada.
   No modificar esquema SQL, stored procedures, permisos, datos ni Jobs sin un change separado y aprobación.
   No agregar GPS, mantenimiento ni capacidades fuera del modelo aprobado.
-  No realizar commits, pushes, merges ni operaciones destructivas sin aprobación.
+  Git: main es estable; development recibe cambios sólo mediante PR revisado. No hacer commits directos en main/development, merges, auto-merge, force-push ni autoaprobación. Con autorización explícita, trabajar en rama propia basada en development y abrir PR hacia development.
 rules:
   proposal:
     - Explicar problema, alcance, no-alcance, dependencias y riesgos; incluir una estrategia de reversión.

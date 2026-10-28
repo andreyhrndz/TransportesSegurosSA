@@ -1,10 +1,10 @@
 # Propuesta: estandarización del sistema visual del frontend
 
-## Por qué
+## Why
 
 El frontend ya inicia sesión, muestra dashboard y consulta/registra clientes, pero el CSS monolítico, iconos de caracteres, textos de demostración y patrones UI no centralizados dificultan ampliar módulos sin inconsistencias. Queremos una experiencia sobria, confiable y fácil de usar.
 
-## Qué cambia
+## What Changes
 
 - Crear tokens CSS de identidad visual desaturada y tipografía/espaciados/estados de interacción coherentes.
 - Introducir componentes de presentación PHP reutilizables, sin framework adicional.
@@ -15,17 +15,20 @@ El frontend ya inicia sesión, muestra dashboard y consulta/registra clientes, p
 - Simplificar etiquetas de botones sin perder significado.
 - Presentar fechas operativas en formato comprensible para el usuario, sin alterar el almacenamiento.
 
-## Fuera del alcance
+## Alcance, exclusiones y riesgos
 
-- CRUD de nuevos módulos, cambios de esquema o SP SQL, permisos adicionales y despliegue público.
-- Reescritura de autenticación, alteración de Jobs/DW o cambio de stack.
+- Incluye tokens, componentes de presentación, navegación y estados reutilizables para login, dashboard y clientes reales.
+- Excluye CRUD de módulos nuevos, cambios SQL/permisos, despliegue público y reescritura de autenticación.
+- Riesgos: regresión HTMX/CSRF, contraste o navegación móvil. Mitigación: conservar contratos, probar flujos y revisar teclado/contraste.
 
-## Riesgos y mitigación
+## Capabilities
 
-- Riesgo de regresión en formularios HTMX y CSRF: conservar contratos y probar flujos antes/después.
-- Contraste insuficiente por usar pasteles: aplicar pasteles a superficies, conservar texto y botones de alto contraste.
-- Cambios móviles que oculten navegación: incorporar estado/activación accesibles y probar teclado/tacto.
+### New Capabilities
+- `ui-foundations`: Sistema visual reutilizable, accesible y responsive para capacidades implementadas.
 
-## Reversión
+### Modified Capabilities
+- Ninguna.
 
-Cambio aislado en frontend; restaurar archivos del commit anterior si fallan criterios de aceptación. No hay migraciones SQL.
+## Impact
+
+Cambios posteriores en CSS, layout, JavaScript y vistas PHP. No debe exhibir módulos pendientes como navegables ni alterar SQL Server. Reversión por commit de frontend sin migraciones.

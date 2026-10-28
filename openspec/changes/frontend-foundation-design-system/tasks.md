@@ -29,4 +29,4 @@
 
 - [ ] 5.1 Probar escritorio, tablet y móvil; registrar tamaños evaluados y defectos corregidos.
 - [ ] 5.2 Verificar teclado/foco, contraste, mensajes y accesibilidad de controles.
-- [ ] 5.3 Ejecutar `openspec validate frontend-foundation-design-system --strict` y documentar pruebas/limitaciones antes de archivar.
+- [ ] 5.3 Ejecutar `openspec validate frontend-foundation-design-system --strict`, documentar pruebas/limitaciones y dejar el change listo para revisión (sin archivarlo).
