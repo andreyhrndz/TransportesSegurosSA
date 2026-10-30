@@ -1,8 +1,8 @@
 ## 1. Contratos y lectura
 
 - [x] 1.1 Confirmar firma real del TVP/SP y contratos de lectura de solicitudes, clientes, ubicaciones y tipos.
-- [ ] 1.2 Crear guards para `SOLICITUDES_VER`, `SOLICITUDES_CREAR`, ajuste y cancelación.
-- [ ] 1.3 Implementar lista/detalle con filtros, paginación, estados y destinatario esperado.
+- [ ] 1.2 Crear guards para `SOLICITUDES_VER`, `SOLICITUDES_CREAR`, ajuste y cancelación. (Sólo `SOLICITUDES_VER` está aplicado; las acciones permanecen fuera de esta tanda.)
+- [x] 1.3 Implementar lista/detalle con filtros, paginación, estados y destinatario esperado.
 
 ## 2. Operaciones
 
@@ -29,5 +29,8 @@
   efímera de mínimo privilegio creó una solicitud con dos mercancías, ajustó su prioridad y la
   canceló mediante los procedimientos existentes. Todos los datos se revirtieron.
 - Los contratos de lectura de solicitudes, clientes, ubicaciones y tipos están desplegados sólo
-  en Test. La integración PHP y la UI siguen bloqueadas hasta que los contratos sean promovidos
-  de forma aprobada fuera de la copia aislada; no se muestra un módulo ni botones de solicitudes.
+  en Test. `public/solicitudes.php`, sus fragmentos HTMX y el detalle consumen exclusivamente
+  `sp_listar_solicitudes` y `sp_obtener_solicitud` con `SOLICITUDES_VER`. La prueba PHP/PDO y
+  la prueba HTTP con sesión temporal confirmaron lista, detalle, filtros y paginación.
+- No se habilitaron alta, ajuste ni cancelación en la UI; aunque sus SP fueron probados de forma
+  reversible, requieren un flujo de escritura y regresiones separados.

@@ -229,6 +229,26 @@ function require_permission(string $codigo): void
     }
 }
 
+function has_any_permission(array $codigos): bool
+{
+    foreach ($codigos as $codigo) {
+        if (has_permission($codigo)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function require_any_permission(array $codigos): void
+{
+    // ASVS 8.2.1: un módulo compuesto exige al menos una capacidad explícita.
+    if (!has_any_permission($codigos)) {
+        http_response_code(403);
+        exit('No tienes permiso para acceder a esta función.');
+    }
+}
+
 function valid_text(string $texto, int $max, bool $required = true): bool
 {
     if ($required && $texto === '') {

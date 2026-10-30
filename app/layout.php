@@ -6,6 +6,10 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
     $usuario = require_login();
     $puedeClientes = has_permission('CLIENTES_CREAR');
     $puedeReportes = has_permission('REPORTES_VER');
+    $puedeSolicitudes = has_permission('SOLICITUDES_VER');
+    $puedeViajes = has_permission('VIAJES_VER');
+    $puedeEntregas = has_any_permission(['ENTREGAS_VER', 'INCIDENCIAS_VER', 'DOCUMENTOS_VER', 'NOTIFICACIONES_VER']);
+    $puedeFlota = has_any_permission(['FLOTAS_VER', 'RUTAS_VER', 'UBICACIONES_VER', 'CATALOGOS_VER']);
 ?>
 <!DOCTYPE html>
 <html lang="es" data-theme="light">
@@ -35,6 +39,26 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
                 <a class="sidebar-link <?= $activo === 'clientes' ? 'active' : '' ?>" href="/clientes.php"><?= svg_icon('clients') ?><span>Clientes</span></a>
             <?php endif; ?>
             </div>
+            <?php if ($puedeSolicitudes || $puedeViajes || $puedeEntregas): ?>
+            <p class="nav-section-label nav-section-spaced">Operaciones</p>
+            <div class="menu-list">
+            <?php if ($puedeSolicitudes): ?>
+                <a class="sidebar-link <?= $activo === 'solicitudes' ? 'active' : '' ?>" href="/solicitudes.php"><?= svg_icon('requests') ?><span>Solicitudes</span></a>
+            <?php endif; ?>
+            <?php if ($puedeViajes): ?>
+                <a class="sidebar-link <?= $activo === 'viajes' ? 'active' : '' ?>" href="/viajes.php"><?= svg_icon('trips') ?><span>Viajes</span></a>
+            <?php endif; ?>
+            <?php if ($puedeEntregas): ?>
+                <a class="sidebar-link <?= $activo === 'entregas' ? 'active' : '' ?>" href="/entregas.php"><?= svg_icon('deliveries') ?><span>Entregas</span></a>
+            <?php endif; ?>
+            </div>
+            <?php endif; ?>
+            <?php if ($puedeFlota): ?>
+            <p class="nav-section-label nav-section-spaced">Administración</p>
+            <div class="menu-list">
+                <a class="sidebar-link <?= $activo === 'flota' ? 'active' : '' ?>" href="/flota.php"><?= svg_icon('fleet') ?><span>Flota y maestros</span></a>
+            </div>
+            <?php endif; ?>
         </nav>
         <div class="sidebar-bottom"><span class="sidebar-status" aria-hidden="true"></span>Acceso protegido</div>
     </aside>
