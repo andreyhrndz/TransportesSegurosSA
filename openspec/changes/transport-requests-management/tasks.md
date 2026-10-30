@@ -1,6 +1,6 @@
 ## 1. Contratos y lectura
 
-- [ ] 1.1 Confirmar firma real del TVP/SP y contratos de lectura de solicitudes, clientes, ubicaciones y tipos.
+- [x] 1.1 Confirmar firma real del TVP/SP y contratos de lectura de solicitudes, clientes, ubicaciones y tipos.
 - [ ] 1.2 Crear guards para `SOLICITUDES_VER`, `SOLICITUDES_CREAR`, ajuste y cancelación.
 - [ ] 1.3 Implementar lista/detalle con filtros, paginación, estados y destinatario esperado.
 
@@ -24,7 +24,10 @@
   estructura para PDO_SQLSRV y `tests/transport_request_tvp_test.php` rechaza
   mercancías vacías, tipos inválidos, texto vacío, peso no positivo y escalas inválidas,
   sin conexión ni escrituras SQL.
-- La integración de la llamada a `sp_crear_solicitud` y la UI siguen bloqueadas:
-  los contratos de lectura para clientes, ubicaciones, tipos y solicitudes aún no se han
-  desplegado ni validado por el DBA. No se muestra un módulo ni botones de solicitudes
-  hasta que esos contratos estén aprobados y probados en una base aislada.
+- En `TransportesSegurosSA_Test` se confirmó la firma real de `sp_crear_solicitud` y del TVP,
+  y se ejecutó `sql/test-environment/03_transport_request_contract_test.sql`: una identidad
+  efímera de mínimo privilegio creó una solicitud con dos mercancías, ajustó su prioridad y la
+  canceló mediante los procedimientos existentes. Todos los datos se revirtieron.
+- Los contratos de lectura de solicitudes, clientes, ubicaciones y tipos están desplegados sólo
+  en Test. La integración PHP y la UI siguen bloqueadas hasta que los contratos sean promovidos
+  de forma aprobada fuera de la copia aislada; no se muestra un módulo ni botones de solicitudes.
