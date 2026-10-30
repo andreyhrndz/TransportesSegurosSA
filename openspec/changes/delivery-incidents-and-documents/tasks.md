@@ -2,7 +2,7 @@
 
 - [x] 1.1 Confirmar contratos de lectura de entregas, solicitudes, incidencias, tipos y documentos.
 - [x] 1.2 Aplicar permisos `ENTREGAS_REGISTRAR`, `INCIDENCIAS_*` y `DOCUMENTOS_REGISTRAR` por acción.
-- [ ] 1.3 Implementar detalle que separe destinatario esperado y receptor efectivo.
+- [ ] 1.3 Implementar detalle que separe destinatario esperado y receptor efectivo (el contrato propuesto queda pendiente de aprobación y despliegue).
 - [x] 1.4 Implementar historial de notificaciones de sólo lectura si el contrato `NOTIFICACIONES_VER` está desplegado.
 
 ## 2. Operaciones
@@ -34,3 +34,6 @@
   alta/resolución de incidencia y documento, con rollback completo en Test.
 - El contrato no provee detalle de entrega por solicitud que una en una misma vista destinatario
   esperado y receptor efectivo; por ello 1.3 y las tareas de cobertura adicional permanecen pendientes.
+- `sql/read-access/06_delivery_recipient_detail_contract.sql` y su prueba no ejecutada preparan
+  `sp_obtener_entrega @entrega_id` con `ENTREGAS_VER`; se verificaron las columnas reales de
+  `solicitudes`, `entregas` y `viaje_solicitudes`, pero el contrato no se desplegó.
