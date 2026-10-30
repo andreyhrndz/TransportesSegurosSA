@@ -4,7 +4,11 @@
   de @usuario_autorizado por una cuenta de prueba ya preparada con los *_VER.
   No ejecutar en la base operativa.
 */
-USE TransportesSegurosSA;
+USE TransportesSegurosSA_Test;
+GO
+
+IF DB_NAME() <> N'TransportesSegurosSA_Test'
+    THROW 50923, 'Las pruebas solo pueden ejecutarse en TransportesSegurosSA_Test.', 1;
 GO
 
 SET NOCOUNT ON;

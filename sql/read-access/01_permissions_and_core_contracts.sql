@@ -1,9 +1,13 @@
 /*
   Contratos SQL propuestos para sql-read-access-contracts.
-  No ejecutar en TransportesSegurosSA sin revisión y despliegue DBA aprobados.
+  Ejecutar exclusivamente en TransportesSegurosSA_Test durante esta etapa.
   Requiere dbo.fn_tiene_permiso y SESSION_CONTEXT(N'usuario_id') existentes.
 */
-USE TransportesSegurosSA;
+USE TransportesSegurosSA_Test;
+GO
+
+IF DB_NAME() <> N'TransportesSegurosSA_Test'
+    THROW 50920, 'Este contrato solo puede ejecutarse en TransportesSegurosSA_Test.', 1;
 GO
 
 SET XACT_ABORT ON;

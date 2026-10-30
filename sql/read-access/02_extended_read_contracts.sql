@@ -1,8 +1,12 @@
 /*
   Contratos de lectura para los dominios restantes.
-  Complementa 01_permissions_and_core_contracts.sql; no ejecutar sin aprobación DBA.
+  Complementa 01_permissions_and_core_contracts.sql y solo se ejecuta en Test.
 */
-USE TransportesSegurosSA;
+USE TransportesSegurosSA_Test;
+GO
+
+IF DB_NAME() <> N'TransportesSegurosSA_Test'
+    THROW 50921, 'Este contrato solo puede ejecutarse en TransportesSegurosSA_Test.', 1;
 GO
 
 MERGE dbo.permisos AS target

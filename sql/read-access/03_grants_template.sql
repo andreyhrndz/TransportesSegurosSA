@@ -4,7 +4,11 @@
   Los procedimientos conservan la autorización funcional con SESSION_CONTEXT;
   este GRANT sólo permite a la identidad de aplicación invocarlos.
 */
-USE TransportesSegurosSA;
+USE TransportesSegurosSA_Test;
+GO
+
+IF DB_NAME() <> N'TransportesSegurosSA_Test'
+    THROW 50922, 'Los grants de prueba solo pueden ejecutarse en TransportesSegurosSA_Test.', 1;
 GO
 
 DECLARE @principal SYSNAME = N'REPLACE_WITH_APPLICATION_DATABASE_PRINCIPAL';
