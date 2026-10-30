@@ -1,29 +1,42 @@
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
+const { execSync } = require('child_process');
+
+const PHP_BIN = 'C:\\AdmBD2026\\Herramientas\\PHP\\8.4\\php.exe';
 
 async function runVisualVerification() {
-    console.log('=== INICIO DE VERIFICACIÓN VISUAL PLAYWRIGHT ===');
+    console.log('=== INICIO DE VERIFICACIÓN VISUAL PLAYWRIGHT CON CUENTA EFÍMERA ===');
 
     const screenshotDir = path.join(__dirname, '..', 'docs', 'screenshots');
     if (!fs.existsSync(screenshotDir)) {
         fs.mkdirSync(screenshotDir, { recursive: true });
     }
 
+    // Crear cuenta efímera controlada para no modificar admin_proyecto
+    const helperPath = path.join(__dirname, 'ephemeral_auth_helper.php');
+    const helperOutput = execSync(`"${PHP_BIN}" "${helperPath}" create`, {
+        env: { ...process.env, TSSA_DB_DATABASE: 'TransportesSegurosSA_Test' },
+        encoding: 'utf8'
+    });
+    const ephemeralUser = JSON.parse(helperOutput.trim());
+    console.log(`Cuenta efímera creada: ${ephemeralUser.username} (ID: ${ephemeralUser.user_id})`);
+
     const browser = await chromium.launch({ headless: true });
 
-    // Test en resoluciones de laptop solicitadas (1366x768 y 1440x900)
-    for (const resolution of [{ width: 1366, height: 768 }, { width: 1440, height: 900 }]) {
-        console.log(`\n--- Probando resolución ${resolution.width}x${resolution.height} ---`);
-        const context = await browser.newContext({ viewport: resolution });
-        const page = await context.newPage();
+    try {
+        // Test en resoluciones de laptop solicitadas (1366x768 y 1440x900)
+        for (const resolution of [{ width: 1366, height: 768 }, { width: 1440, height: 900 }]) {
+            console.log(`\n--- Probando resolución ${resolution.width}x${resolution.height} ---`);
+            const context = await browser.newContext({ viewport: resolution });
+            const page = await context.newPage();
 
-        // 1. Autenticación
-        await page.goto('http://127.0.0.1:8085/auth/login.php');
-        await page.fill('input[name="usuario"]', 'admin_proyecto');
-        await page.fill('input[name="password"]', 'Admin2026*');
-        await page.click('button[type="submit"]');
-        await page.waitForLoadState('networkidle');
+            // 1. Autenticación con cuenta efímera
+            await page.goto('http://127.0.0.1:8085/auth/login.php');
+            await page.fill('input[name="usuario"]', ephemeralUser.username);
+            await page.fill('input[name="password"]', ephemeralUser.password);
+            await page.click('button[type="submit"]');
+            await page.waitForLoadState('networkidle');
 
         // 2. Verificar Entregas: selector de estado
         await page.goto('http://127.0.0.1:8085/entregas.php');
@@ -216,10 +229,24 @@ async function runVisualVerification() {
         }
 
         await context.close();
-    }
+        }
 
-    await browser.close();
-    console.log('\n=== TODAS LAS VERIFICACIONES VISUALES PLAYWRIGHT COMPLETADAS CON ÉXITO ===');
+        await browser.close();
+        console.log('\n=== TODAS LAS VERIFICACIONES VISUALES PLAYWRIGHT COMPLETADAS CON ÉXITO ===');
+    } finally {
+        try {
+            await browser.close();
+        } catch {
+            // Ignorar si ya está cerrado
+        }
+        if (ephemeralUser && ephemeralUser.user_id) {
+            console.log(`Limpiando cuenta efímera: ${ephemeralUser.username}...`);
+            execSync(`"${PHP_BIN}" "${helperPath}" cleanup ${ephemeralUser.user_id}`, {
+                env: { ...process.env, TSSA_DB_DATABASE: 'TransportesSegurosSA_Test' },
+                encoding: 'utf8'
+            });
+        }
+    }
 }
 
 runVisualVerification().catch(err => {
