@@ -15,16 +15,100 @@ session_name($sessionName); session_id($sessionId); session_start();
 $_SESSION = ['usuario_id'=>1,'authenticated_at'=>time(),'last_activity_at'=>time(),'csrf_token'=>bin2hex(random_bytes(32))];
 session_write_close();
 $port=routes_port();$root=dirname(__DIR__);$log=tempnam(sys_get_temp_dir(),'tssa-operational-routes-');
-$process=proc_open([PHP_BINARY,'-S',"127.0.0.1:{$port}",'-t',$root.DIRECTORY_SEPARATOR.'public'],[0=>['pipe','r'],1=>['file',$log,'a'],2=>['file',$log,'a']],$pipes,$root);
+$env = array_merge(getenv(), ['TSSA_DB_DATABASE' => 'TransportesSegurosSA_Test']);
+$process=proc_open([PHP_BINARY,'-S',"127.0.0.1:{$port}",'-t',$root.DIRECTORY_SEPARATOR.'public'],[0=>['pipe','r'],1=>['file',$log,'a'],2=>['file',$log,'a']],$pipes,$root,$env);
 if(!is_resource($process)){@unlink($log);routes_fail('No se pudo iniciar servidor PHP.');}
-try { for($i=0;$i<25;$i++){ $socket=@fsockopen('127.0.0.1',$port); if($socket!==false){fclose($socket);break;}usleep(100000);} $base="http://127.0.0.1:{$port}";$cookie="{$sessionName}={$sessionId}";
-    foreach(['/clientes.php'=>'Clientes','/usuarios.php'=>'Usuarios y permisos','/solicitudes.php'=>'Solicitudes','/viajes.php'=>'Viajes','/entregas.php'=>'Entregas','/flota.php'=>'Flota y maestros'] as $path=>$title){[$status,$body]=routes_request($base.$path,$cookie);routes_assert($status===200,"{$path} debe responder 200 con sesión autorizada.");routes_assert(str_contains($body,$title),"{$path} debe renderizar su contenido real.");}
-    foreach(['/'=>'Panel general','/reportes.php'=>'Reportes'] as $path=>$title){[$status,$body]=routes_request($base.$path,$cookie);routes_assert($status===200,"{$path} debe responder 200 con sesión autorizada.");routes_assert(str_contains($body,$title),"{$path} debe renderizar su contenido real.");}
-    foreach(['/solicitudes/form.php','/viajes/form.php','/entregas/registrar_form.php?viaje_solicitud_id=1','/entregas/incidencia_form.php?accion=registrar','/entregas/documento_form.php'] as $path){[$status,$body]=routes_request($base.$path,$cookie,true);routes_assert($status===200,"Formulario {$path} debe responder 200.");routes_assert(str_contains($body,'csrf_token'),"Formulario {$path} debe renderizar controles reales.");}
-    foreach(['/clientes/lista.php'=>'table','/usuarios/lista.php'=>'table','/solicitudes/lista.php'=>'table','/viajes/lista.php'=>'table','/entregas/lista.php?seccion=entregas'=>'table','/entregas/lista.php?seccion=incidencias'=>'table','/entregas/lista.php?seccion=notificaciones'=>'table','/flota/lista.php?seccion=vehiculos'=>'table','/flota/lista.php?seccion=conductores'=>'table','/flota/lista.php?seccion=rutas'=>'table','/flota/lista.php?seccion=ubicaciones'=>'table','/flota/lista.php?seccion=catalogos'=>'detail-grid'] as $path=>$expectedMarkup){[$status,$body]=routes_request($base.$path,$cookie,true);routes_assert($status===200,"Fragmento {$path} debe responder 200.");routes_assert(str_contains($body,$expectedMarkup),"{$path} debe devolver el componente esperado.");}
-    foreach(['/clientes/detalle.php?id=1'=>'Detalle de cliente','/usuarios/detalle.php?id=1'=>'Detalle de usuario'] as $path=>$title){[$status,$body]=routes_request($base.$path,$cookie);routes_assert($status===200,"Detalle {$path} debe responder 200.");routes_assert(str_contains($body,$title),"Detalle {$path} debe renderizar datos reales.");}
-    foreach(['/reportes/lista.php?seccion=solicitudes'=>'table','/reportes/lista.php?seccion=flota'=>'table','/reportes/lista.php?seccion=viajes'=>'table','/reportes/lista.php?seccion=entregas'=>'table','/reportes/lista.php?seccion=auditoria'=>'table'] as $path=>$expectedMarkup){[$status,$body]=routes_request($base.$path,$cookie,true);routes_assert($status===200,"Reporte {$path} debe responder 200.");routes_assert(str_contains($body,$expectedMarkup),"Reporte {$path} debe devolver datos o estado vacío real.");}
-    [$status,, $headers]=routes_request($base.'/solicitudes/lista.php','',true);routes_assert($status===401,'HTMX sin sesión debe recibir 401.');routes_assert((bool)array_filter($headers,static fn(string $header):bool=>str_starts_with(strtolower($header),'hx-redirect:')),'HTMX sin sesión debe redirigir al login.');
-    foreach(['/solicitudes/guardar.php'=>'csrf_token=incorrecto','/solicitudes/accion.php'=>'csrf_token=incorrecto&accion=prioridad','/viajes/guardar.php'=>'csrf_token=incorrecto','/viajes/accion.php'=>'csrf_token=incorrecto&accion=iniciar','/entregas/registrar.php'=>'csrf_token=incorrecto','/entregas/incidencia.php'=>'csrf_token=incorrecto&accion=registrar','/entregas/documento.php'=>'csrf_token=incorrecto'] as $path=>$bodyPost){[$status,$body]=routes_request($base.$path,$cookie,true,$bodyPost);routes_assert($status===403,"{$path} debe rechazar CSRF inválido.");routes_assert(str_contains($body,'formulario caducó'),"{$path} debe devolver un mensaje seguro de CSRF.");}
-    fwrite(STDOUT,"OK: rutas operativas consultadas con sesión temporal contra TransportesSegurosSA_Test.\n");
-} finally { foreach($pipes as $pipe){if(is_resource($pipe)){fclose($pipe);}}proc_terminate($process);proc_close($process);@unlink($log);session_id($sessionId);session_start();$_SESSION=[];session_destroy(); }
+try {
+    for($i=0;$i<25;$i++){ $socket=@fsockopen('127.0.0.1',$port); if($socket!==false){fclose($socket);break;}usleep(100000);}
+    $base="http://127.0.0.1:{$port}";$cookie="{$sessionName}={$sessionId}";
+
+    foreach(['/clientes.php'=>'Clientes','/usuarios.php'=>'Usuarios y permisos','/solicitudes.php'=>'Solicitudes','/viajes.php'=>'Viajes','/entregas.php'=>'Entregas','/flota.php'=>'Flota y maestros'] as $path=>$title){
+        [$status,$body]=routes_request($base.$path,$cookie);
+        routes_assert($status===200,"{$path} debe responder 200 con sesión autorizada.");
+        routes_assert(str_contains($body,$title),"{$path} debe renderizar su contenido real.");
+    }
+    foreach(['/'=>'Panel general','/reportes.php'=>'Reportes'] as $path=>$title){
+        [$status,$body]=routes_request($base.$path,$cookie);
+        routes_assert($status===200,"{$path} debe responder 200 con sesión autorizada.");
+        routes_assert(str_contains($body,$title),"{$path} debe renderizar su contenido real.");
+    }
+    foreach([
+        '/solicitudes/form.php',
+        '/viajes/form.php',
+        '/entregas/registrar_form.php?viaje_solicitud_id=1',
+        '/entregas/incidencia_form.php?accion=registrar',
+        '/entregas/documento_form.php',
+        '/clientes/editar_form.php?id=1',
+        '/usuarios/form.php',
+        '/usuarios/form.php?id=1',
+        '/usuarios/password_form.php?id=1',
+        '/flota/form.php?entidad=vehiculo',
+        '/flota/form.php?entidad=conductor',
+        '/flota/form.php?entidad=ruta',
+        '/flota/form.php?entidad=ubicacion',
+        '/flota/form.php?entidad=tipo_mercancia',
+    ] as $path){
+        [$status,$body]=routes_request($base.$path,$cookie,true);
+        routes_assert($status===200,"Formulario {$path} debe responder 200.");
+        routes_assert(str_contains($body,'csrf_token'),"Formulario {$path} debe renderizar controles reales.");
+    }
+    foreach([
+        '/clientes/lista.php'=>'table',
+        '/usuarios/lista.php'=>'table',
+        '/solicitudes/lista.php'=>'table',
+        '/viajes/lista.php'=>'table',
+        '/entregas/lista.php?seccion=entregas'=>'table',
+        '/entregas/lista.php?seccion=incidencias'=>'table',
+        '/entregas/lista.php?seccion=notificaciones'=>'table',
+        '/flota/lista.php?seccion=vehiculos'=>'table',
+        '/flota/lista.php?seccion=conductores'=>'table',
+        '/flota/lista.php?seccion=rutas'=>'table',
+        '/flota/lista.php?seccion=ubicaciones'=>'table',
+        '/flota/lista.php?seccion=catalogos'=>'detail-grid',
+    ] as $path=>$expectedMarkup){
+        [$status,$body]=routes_request($base.$path,$cookie,true);
+        routes_assert($status===200,"Fragmento {$path} debe responder 200.");
+        routes_assert(str_contains($body,$expectedMarkup),"{$path} debe devolver el componente esperado.");
+    }
+    foreach(['/clientes/detalle.php?id=1'=>'Detalle de cliente','/usuarios/detalle.php?id=1'=>'Detalle de usuario'] as $path=>$title){
+        [$status,$body]=routes_request($base.$path,$cookie);
+        routes_assert($status===200,"Detalle {$path} debe responder 200.");
+        routes_assert(str_contains($body,$title),"Detalle {$path} debe renderizar datos reales.");
+    }
+    foreach(['/reportes/lista.php?seccion=solicitudes'=>'table','/reportes/lista.php?seccion=flota'=>'table','/reportes/lista.php?seccion=viajes'=>'table','/reportes/lista.php?seccion=entregas'=>'table','/reportes/lista.php?seccion=auditoria'=>'table'] as $path=>$expectedMarkup){
+        [$status,$body]=routes_request($base.$path,$cookie,true);
+        routes_assert($status===200,"Reporte {$path} debe responder 200.");
+        routes_assert(str_contains($body,$expectedMarkup),"Reporte {$path} debe devolver datos o estado vacío real.");
+    }
+    [$status,, $headers]=routes_request($base.'/solicitudes/lista.php','',true);
+    routes_assert($status===401,'HTMX sin sesión debe recibir 401.');
+    routes_assert((bool)array_filter($headers,static fn(string $header):bool=>str_starts_with(strtolower($header),'hx-redirect:')),'HTMX sin sesión debe redirigir al login.');
+
+    foreach([
+        '/solicitudes/guardar.php'=>'csrf_token=incorrecto',
+        '/solicitudes/accion.php'=>'csrf_token=incorrecto&accion=prioridad',
+        '/viajes/guardar.php'=>'csrf_token=incorrecto',
+        '/viajes/accion.php'=>'csrf_token=incorrecto&accion=iniciar',
+        '/entregas/registrar.php'=>'csrf_token=incorrecto',
+        '/entregas/incidencia.php'=>'csrf_token=incorrecto&accion=registrar',
+        '/entregas/documento.php'=>'csrf_token=incorrecto',
+        '/clientes/guardar.php'=>'csrf_token=incorrecto',
+        '/clientes/actualizar.php'=>'csrf_token=incorrecto',
+        '/clientes/desactivar.php'=>'csrf_token=incorrecto',
+        '/usuarios/guardar.php'=>'csrf_token=incorrecto',
+        '/usuarios/estado.php'=>'csrf_token=incorrecto',
+        '/usuarios/password.php'=>'csrf_token=incorrecto',
+        '/usuarios/permiso.php'=>'csrf_token=incorrecto',
+        '/flota/guardar.php'=>'csrf_token=incorrecto&entidad=vehiculo',
+        '/flota/desactivar.php'=>'csrf_token=incorrecto&entidad=vehiculo',
+    ] as $path=>$bodyPost){
+        [$status,$body]=routes_request($base.$path,$cookie,true,$bodyPost);
+        routes_assert($status===403,"{$path} debe rechazar CSRF inválido.");
+        routes_assert(str_contains($body,'formulario caducó'),"{$path} debe devolver un mensaje seguro de CSRF.");
+    }
+    fwrite(STDOUT,"OK: rutas operativas y administrativas consultadas con sesión temporal contra TransportesSegurosSA_Test.\n");
+} finally {
+    foreach($pipes as $pipe){if(is_resource($pipe)){fclose($pipe);}}
+    proc_terminate($process);proc_close($process);@unlink($log);
+    session_id($sessionId);session_start();$_SESSION=[];session_destroy();
+}
