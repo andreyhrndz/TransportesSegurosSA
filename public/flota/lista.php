@@ -5,9 +5,10 @@ require_once __DIR__ . '/../../app/bootstrap.php';
 require_once __DIR__ . '/../../app/read_queries.php';
 header('Cache-Control: no-store');
 
+$isJson = ($_GET['formato'] ?? '') === 'json';
 $section = (string)($_GET['seccion'] ?? '');
 $activeFilter = filter_var($_GET['activo'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 1]]);
-$soloActivos = $activeFilter === false ? null : $activeFilter;
+$soloActivos = $activeFilter === false ? ($isJson ? 1 : null) : $activeFilter;
 
 if ($section === 'catalogos') {
     require_permission('CATALOGOS_VER');
@@ -19,7 +20,35 @@ if ($section === 'catalogos') {
         $incidencias = read_procedure_sets('EXEC dbo.sp_listar_tipos_incidencia @solo_activos=?;', [$soloActivos])[0] ?? [];
         $documentos = read_procedure_sets('EXEC dbo.sp_listar_tipos_documento @solo_activos=?;', [$soloActivos])[0] ?? [];
     } catch (PDOException) {
+        if ($isJson) {
+            header('Content-Type: application/json; charset=UTF-8');
+            echo '[]';
+            exit;
+        }
         read_error_response('No se pudieron consultar los catálogos operativos.');
+    }
+
+    if ($isJson) {
+        header('Content-Type: application/json; charset=UTF-8');
+        $tipo = (string)($_GET['tipo'] ?? 'mercancia');
+        $source = match ($tipo) {
+            'incidencia' => ['rows' => $incidencias, 'key' => 'tipo_incidencia_id'],
+            'documento' => ['rows' => $documentos, 'key' => 'tipo_documento_id'],
+            default => ['rows' => $mercancias, 'key' => 'tipo_mercancia_id'],
+        };
+        $options = [];
+        foreach ($source['rows'] as $row) {
+            if ($search !== '' && stripos((string)$row['nombre'] . ' ' . (string)($row['descripcion'] ?? ''), $search) === false) {
+                continue;
+            }
+            $options[] = [
+                'value' => (string)(int)$row[$source['key']],
+                'text' => (string)$row['nombre'],
+                'subtext' => (string)($row['descripcion'] ?? ''),
+            ];
+        }
+        echo json_encode($options, JSON_UNESCAPED_UNICODE);
+        exit;
     }
 
     $catalogPanels = [
@@ -55,9 +84,9 @@ if ($section === 'catalogos') {
                 ));
             }
             ?>
-            <section class="box">
-                <div class="catalog-card-head">
-                    <h3 class="title is-6"><?= e($panel['title']) ?></h3>
+            <section class="panel-box">
+                <div class="panel-box-header">
+                    <h3 class="panel-box-title"><?= e($panel['title']) ?></h3>
                     <?php if ($canManageCatalogs): ?>
                         <button class="button is-small is-primary" type="button" hx-get="/flota/form.php?entidad=<?= e($panel['entity']) ?>" hx-target="#modal-contenido">
                             <?= svg_icon('plus') ?><span>Nuevo</span>
@@ -67,27 +96,35 @@ if ($section === 'catalogos') {
                 <?php if (!$filteredRows): ?>
                     <p class="has-text-grey">Sin registros para los filtros seleccionados.</p>
                 <?php else: ?>
-                    <ul class="catalog-list">
-                        <?php foreach ($filteredRows as $row): ?>
-                            <?php $itemId = (int)$row[$panel['id_key']]; ?>
-                            <?php $isActive = (int)$row['activo'] === 1; ?>
-                            <li class="catalog-item">
-                                <div class="catalog-item-meta">
-                                    <div>
-                                        <strong><?= e($row['nombre']) ?></strong>
-                                        <span class="ml-1"><?= status_tag($isActive ? 'ACTIVO' : 'INACTIVO') ?></span>
-                                    </div>
-                                    <small><?= e($row['descripcion'] ?: 'Sin descripción') ?></small>
-                                </div>
-                                <?php if ($canManageCatalogs && $isActive): ?>
-                                    <div class="table-actions">
-                                        <button class="button is-small button-secondary" type="button" hx-get="/flota/form.php?entidad=<?= e($panel['entity']) ?>&id=<?= $itemId ?>" hx-target="#modal-contenido" aria-label="Editar <?= e($row['nombre']) ?>"><?= svg_icon('edit') ?><span>Editar</span></button>
-                                        <button class="button is-small button-secondary" type="button" hx-get="/flota/desactivar_form.php?entidad=<?= e($panel['entity']) ?>&id=<?= $itemId ?>" hx-target="#modal-contenido" aria-label="Desactivar <?= e($row['nombre']) ?>"><?= svg_icon('deactivate') ?><span>Desactivar</span></button>
-                                    </div>
-                                <?php endif; ?>
-                            </li>
-                        <?php endforeach; ?>
-                    </ul>
+                    <div class="table-container">
+                        <table class="table is-fullwidth is-hoverable">
+                            <tbody>
+                                <?php foreach ($filteredRows as $row): ?>
+                                    <?php $itemId = (int)$row[$panel['id_key']]; ?>
+                                    <?php $isActive = (int)$row['activo'] === 1; ?>
+                                    <tr>
+                                        <td>
+                                            <div class="cell-stack">
+                                                <div>
+                                                    <strong><?= e($row['nombre']) ?></strong>
+                                                    <span class="ml-2"><?= status_tag($isActive ? 'ACTIVO' : 'INACTIVO') ?></span>
+                                                </div>
+                                                <span><?= e($row['descripcion'] ?: 'Sin descripción') ?></span>
+                                            </div>
+                                        </td>
+                                        <?php if ($canManageCatalogs && $isActive): ?>
+                                            <td>
+                                                <div class="row-actions">
+                                                    <button class="button is-small button-secondary" type="button" hx-get="/flota/form.php?entidad=<?= e($panel['entity']) ?>&id=<?= $itemId ?>" hx-target="#modal-contenido" aria-label="Editar <?= e($row['nombre']) ?>"><?= svg_icon('edit') ?><span>Editar</span></button>
+                                                    <button class="button is-small button-secondary" type="button" hx-get="/flota/desactivar_form.php?entidad=<?= e($panel['entity']) ?>&id=<?= $itemId ?>" hx-target="#modal-contenido" aria-label="Desactivar <?= e($row['nombre']) ?>"><?= svg_icon('deactivate') ?><span>Desactivar</span></button>
+                                                </div>
+                                            </td>
+                                        <?php endif; ?>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
                 <?php endif; ?>
             </section>
         <?php endforeach; ?>
@@ -138,7 +175,7 @@ $canWrite = has_permission($cfg['write']);
 
 $search = read_optional_text($_GET['buscar'] ?? null, $section === 'vehiculos' ? 80 : 120);
 $page = read_page_number($_GET['pagina'] ?? null);
-$perPage = 10;
+$perPage = $isJson ? 25 : 10;
 
 $allowedStates = $section === 'vehiculos'
     ? ['DISPONIBLE', 'ASIGNADO', 'MANTENIMIENTO', 'FUERA_SERVICIO']
@@ -154,7 +191,47 @@ try {
     };
     $result = read_procedure_list($cfg['sql'], $params);
 } catch (PDOException) {
+    if ($isJson) {
+        header('Content-Type: application/json; charset=UTF-8');
+        echo '[]';
+        exit;
+    }
     read_error_response('No se pudo consultar la sección solicitada.');
+}
+
+if ($isJson) {
+    header('Content-Type: application/json; charset=UTF-8');
+    $options = [];
+    foreach ($result['rows'] as $row) {
+        if ($section === 'vehiculos') {
+            $options[] = [
+                'value' => (string)(int)$row['vehiculo_id'],
+                'text' => (string)$row['placa'] . ' · ' . (string)$row['marca'] . ' ' . (string)$row['modelo'],
+                'subtext' => (string)$row['capacidad_carga_kg'] . ' kg · ' . humanize_status($row['estado']),
+            ];
+        } elseif ($section === 'conductores') {
+            $fullName = trim((string)$row['nombre'] . ' ' . (string)$row['primer_apellido'] . ' ' . (string)($row['segundo_apellido'] ?? ''));
+            $options[] = [
+                'value' => (string)(int)$row['conductor_id'],
+                'text' => $fullName,
+                'subtext' => 'Lic. ' . (string)$row['numero_licencia'] . ' · Vence ' . format_cr_date($row['fecha_vencimiento_licencia']),
+            ];
+        } elseif ($section === 'rutas') {
+            $options[] = [
+                'value' => (string)(int)$row['ruta_id'],
+                'text' => (string)$row['nombre'],
+                'subtext' => (string)$row['origen_nombre'] . ' → ' . (string)$row['destino_nombre'],
+            ];
+        } else {
+            $options[] = [
+                'value' => (string)(int)$row['ubicacion_id'],
+                'text' => (string)$row['nombre'],
+                'subtext' => (string)($row['direccion'] ?? ''),
+            ];
+        }
+    }
+    echo json_encode($options, JSON_UNESCAPED_UNICODE);
+    exit;
 }
 
 $total = $result['total'];
@@ -184,11 +261,18 @@ $colCount = count($cfg['headers']) + ($canWrite ? 1 : 0);
                     <?php if ($section === 'vehiculos'): ?>
                         <?php $rowId = (int)$row['vehiculo_id']; ?>
                         <?php $isAssigned = (string)$row['estado'] === 'ASIGNADO'; ?>
-                        <td><strong><?= e($row['placa']) ?></strong></td>
-                        <td><?= e($row['marca'] . ' ' . $row['modelo']) ?><br><small class="has-text-grey">Modelo <?= (int)$row['anio'] ?></small></td>
+                        <td><code><?= e($row['placa']) ?></code></td>
                         <td>
-                            <?= e($row['capacidad_carga_kg']) ?> kg · <?= e($row['capacidad_volumen_m3'] !== null ? $row['capacidad_volumen_m3'] . ' m³' : 'Vol. N/D') ?><br>
-                            <small class="has-text-grey"><?= e($row['kilometraje_actual']) ?> km</small>
+                            <div class="cell-stack">
+                                <strong><?= e($row['marca'] . ' ' . $row['modelo']) ?></strong>
+                                <span>Modelo <?= (int)$row['anio'] ?></span>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="cell-stack">
+                                <strong><?= e($row['capacidad_carga_kg']) ?> kg · <?= e($row['capacidad_volumen_m3'] !== null ? $row['capacidad_volumen_m3'] . ' m³' : 'Vol. N/D') ?></strong>
+                                <span><?= e($row['kilometraje_actual']) ?> km recorridos</span>
+                            </div>
                         </td>
                         <td><?= status_tag($row['estado']) ?></td>
                         <td><?= status_tag($isActive ? 'ACTIVO' : 'INACTIVO') ?></td>
@@ -197,12 +281,16 @@ $colCount = count($cfg['headers']) + ($canWrite ? 1 : 0);
                         <?php $isAssigned = (string)$row['estado_operativo'] === 'ASIGNADO'; ?>
                         <td><strong><?= e(trim($row['nombre'] . ' ' . $row['primer_apellido'] . ' ' . ($row['segundo_apellido'] ?? ''))) ?></strong></td>
                         <td>
-                            <?= e($row['identificacion']) ?><br>
-                            <small class="has-text-grey"><?= e($row['telefono'] ?: ($row['correo'] ?: 'Sin contacto')) ?></small>
+                            <div class="cell-stack">
+                                <strong><?= e($row['identificacion']) ?></strong>
+                                <span><?= e($row['telefono'] ?: ($row['correo'] ?: 'Sin contacto')) ?></span>
+                            </div>
                         </td>
                         <td>
-                            <strong><?= e($row['numero_licencia']) ?></strong><br>
-                            <small class="has-text-grey">Vence: <?= e($row['fecha_vencimiento_licencia']) ?></small>
+                            <div class="cell-stack">
+                                <strong><?= e($row['numero_licencia']) ?></strong>
+                                <span>Vence: <?= e(format_cr_date($row['fecha_vencimiento_licencia'])) ?></span>
+                            </div>
                         </td>
                         <td><?= status_tag($row['estado_operativo']) ?></td>
                         <td><?= status_tag($isActive ? 'ACTIVO' : 'INACTIVO') ?></td>
@@ -221,7 +309,7 @@ $colCount = count($cfg['headers']) + ($canWrite ? 1 : 0);
                         <td><?= e($row['direccion']) ?></td>
                         <td>
                             <?php if ($row['latitud'] !== null && $row['longitud'] !== null): ?>
-                                <?= e($row['latitud'] . ', ' . $row['longitud']) ?>
+                                <code><?= e($row['latitud'] . ', ' . $row['longitud']) ?></code>
                             <?php else: ?>
                                 <span class="has-text-grey">Sin coordenadas</span>
                             <?php endif; ?>
@@ -231,9 +319,9 @@ $colCount = count($cfg['headers']) + ($canWrite ? 1 : 0);
 
                     <?php if ($canWrite): ?>
                         <td>
-                            <div class="table-actions">
+                            <div class="row-actions">
                                 <?php if (!$isActive): ?>
-                                    <span class="has-text-grey is-size-7">Histórico</span>
+                                    <span class="has-text-grey">Histórico</span>
                                 <?php elseif ($isAssigned): ?>
                                     <span class="status-tag status-tag-info">En viaje</span>
                                 <?php else: ?>
@@ -248,11 +336,11 @@ $colCount = count($cfg['headers']) + ($canWrite ? 1 : 0);
         </tbody>
     </table>
 </div>
-<div class="pagination-wrap">
+<div class="pagination-bar">
     <span><?= $total ?> resultado<?= $total === 1 ? '' : 's' ?></span>
     <div class="buttons" hx-target="#flota-resultado" hx-include="#flota-filtros">
-        <button class="button is-small" type="button" <?= $page <= 1 ? 'disabled' : '' ?> hx-get="/flota/lista.php?seccion=<?= e($section) ?>&pagina=<?= $page - 1 ?>">Anterior</button>
+        <button class="button is-small button-secondary" type="button" <?= $page <= 1 ? 'disabled' : '' ?> hx-get="/flota/lista.php?seccion=<?= e($section) ?>&pagina=<?= $page - 1 ?>">Anterior</button>
         <span class="pagination-info">Página <?= $page ?> de <?= $pages ?></span>
-        <button class="button is-small" type="button" <?= $page >= $pages ? 'disabled' : '' ?> hx-get="/flota/lista.php?seccion=<?= e($section) ?>&pagina=<?= $page + 1 ?>">Siguiente</button>
+        <button class="button is-small button-secondary" type="button" <?= $page >= $pages ? 'disabled' : '' ?> hx-get="/flota/lista.php?seccion=<?= e($section) ?>&pagina=<?= $page + 1 ?>">Siguiente</button>
     </div>
 </div>

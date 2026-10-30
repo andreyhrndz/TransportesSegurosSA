@@ -6,11 +6,12 @@ require_once __DIR__ . '/../../app/read_queries.php';
 require_permission('CLIENTES_VER');
 header('Cache-Control: no-store');
 
+$isJson = ($_GET['formato'] ?? '') === 'json';
 $buscar = read_optional_text($_GET['buscar'] ?? '', 120);
 $active = filter_var($_GET['activo'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 1]]);
-$soloActivos = $active === false ? null : $active;
+$soloActivos = $active === false ? ($isJson ? 1 : null) : $active;
 $page = read_page_number($_GET['pagina'] ?? null);
-$perPage = 10;
+$perPage = $isJson ? 25 : 10;
 
 $canEdit = has_permission('CLIENTES_EDITAR');
 $canDeactivate = has_permission('CLIENTES_DESACTIVAR');
@@ -21,7 +22,26 @@ try {
         [$buscar, $soloActivos, $page, $perPage]
     );
 } catch (PDOException) {
+    if ($isJson) {
+        header('Content-Type: application/json; charset=UTF-8');
+        echo '[]';
+        exit;
+    }
     read_error_response('No se pudo consultar el directorio de clientes.');
+}
+
+if ($isJson) {
+    header('Content-Type: application/json; charset=UTF-8');
+    $options = [];
+    foreach ($result['rows'] as $customer) {
+        $options[] = [
+            'value' => (string)(int)$customer['cliente_id'],
+            'text' => trim((string)$customer['nombre']) . ' · ' . (string)$customer['identificacion'],
+            'subtext' => (string)($customer['correo'] ?? ''),
+        ];
+    }
+    echo json_encode($options, JSON_UNESCAPED_UNICODE);
+    exit;
 }
 
 $total = $result['total'];
@@ -35,7 +55,7 @@ $page = min($page, $pages);
                 <th>Cliente</th>
                 <th>Identificación</th>
                 <th>Tipo</th>
-                <th>Correo</th>
+                <th>Correo electrónico</th>
                 <th>Estado</th>
                 <th class="has-text-right">Acciones</th>
             </tr>
@@ -50,13 +70,18 @@ $page = min($page, $pages);
                 <?php $customerId = (int)$customer['cliente_id']; ?>
                 <?php $isActive = (int)$customer['activo'] === 1; ?>
                 <tr>
-                    <td><strong><?= e(trim((string)$customer['nombre'])) ?></strong></td>
-                    <td><?= e($customer['identificacion']) ?></td>
-                    <td><?= e($customer['tipo_cliente'] === 'FISICA' ? 'Física' : 'Jurídica') ?></td>
+                    <td>
+                        <div class="cell-stack">
+                            <strong><?= e(trim((string)$customer['nombre'])) ?></strong>
+                            <span><?= e($customer['telefono'] ?? 'Sin teléfono') ?></span>
+                        </div>
+                    </td>
+                    <td><code><?= e($customer['identificacion']) ?></code></td>
+                    <td><?= e($customer['tipo_cliente'] === 'FISICA' ? 'Persona física' : 'Persona jurídica') ?></td>
                     <td><?= e($customer['correo']) ?></td>
                     <td><?= status_tag($isActive ? 'ACTIVO' : 'INACTIVO') ?></td>
                     <td>
-                        <div class="table-actions">
+                        <div class="row-actions">
                             <a class="button is-small button-secondary" href="/clientes/detalle.php?id=<?= $customerId ?>">Ver</a>
                             <?php if ($canEdit): ?>
                                 <button class="button is-small button-secondary" type="button" hx-get="/clientes/editar_form.php?id=<?= $customerId ?>" hx-target="#modal-contenido"><?= svg_icon('edit') ?><span>Editar</span></button>
@@ -71,11 +96,11 @@ $page = min($page, $pages);
         </tbody>
     </table>
 </div>
-<div class="pagination-wrap">
-    <span><?= $total ?> cliente<?= $total === 1 ? '' : 's' ?></span>
+<div class="pagination-bar">
+    <span><?= $total ?> cliente<?= $total === 1 ? '' : 's' ?> registrado<?= $total === 1 ? '' : 's' ?></span>
     <div class="buttons" hx-target="#clientes-resultado" hx-include="#clientes-filtros">
-        <button class="button is-small" type="button" <?= $page <= 1 ? 'disabled' : '' ?> hx-get="/clientes/lista.php?pagina=<?= $page - 1 ?>">Anterior</button>
+        <button class="button is-small button-secondary" type="button" <?= $page <= 1 ? 'disabled' : '' ?> hx-get="/clientes/lista.php?pagina=<?= $page - 1 ?>">Anterior</button>
         <span class="pagination-info">Página <?= $page ?> de <?= $pages ?></span>
-        <button class="button is-small" type="button" <?= $page >= $pages ? 'disabled' : '' ?> hx-get="/clientes/lista.php?pagina=<?= $page + 1 ?>">Siguiente</button>
+        <button class="button is-small button-secondary" type="button" <?= $page >= $pages ? 'disabled' : '' ?> hx-get="/clientes/lista.php?pagina=<?= $page + 1 ?>">Siguiente</button>
     </div>
 </div>

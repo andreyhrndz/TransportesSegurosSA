@@ -31,8 +31,14 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
     <title><?= e($titulo) ?> — Transportes Seguros S.A.</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
+    <link rel="stylesheet" href="/assets/vendor/tom-select/tom-select.css">
+    <link rel="stylesheet" href="/assets/vendor/flatpickr/flatpickr.min.css">
     <link rel="stylesheet" href="/assets/css/estilos.css">
     <script src="/assets/js/htmx.min.js" defer></script>
+    <script src="/assets/vendor/tom-select/tom-select.complete.min.js" defer></script>
+    <script src="/assets/vendor/flatpickr/flatpickr.min.js" defer></script>
+    <script src="/assets/vendor/flatpickr/es.js" defer></script>
+    <script src="/assets/vendor/chartjs/chart.umd.min.js" defer></script>
     <script src="/assets/js/app.js" defer></script>
 </head>
 <body>

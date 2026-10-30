@@ -7,11 +7,12 @@ $currentUser = require_login();
 require_permission('USUARIOS_VER');
 header('Cache-Control: no-store');
 
+$isJson = ($_GET['formato'] ?? '') === 'json';
 $buscar = read_optional_text($_GET['buscar'] ?? '', 120);
 $active = filter_var($_GET['activo'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 0, 'max_range' => 1]]);
-$activo = $active === false ? null : $active;
+$activo = $active === false ? ($isJson ? 1 : null) : $active;
 $page = read_page_number($_GET['pagina'] ?? null);
-$perPage = 10;
+$perPage = $isJson ? 25 : 10;
 
 $canManageAccounts = has_permission('USUARIOS_GESTIONAR_CUENTAS');
 $currentUserId = (int)$currentUser['usuario_id'];
@@ -22,7 +23,26 @@ try {
         [$buscar, $activo, $page, $perPage]
     );
 } catch (PDOException) {
+    if ($isJson) {
+        header('Content-Type: application/json; charset=UTF-8');
+        echo '[]';
+        exit;
+    }
     read_error_response('No se pudo consultar el directorio de usuarios.');
+}
+
+if ($isJson) {
+    header('Content-Type: application/json; charset=UTF-8');
+    $options = [];
+    foreach ($result['rows'] as $user) {
+        $options[] = [
+            'value' => (string)(int)$user['usuario_id'],
+            'text' => (string)$user['nombre_usuario'] . ' · ' . (string)$user['correo_acceso'],
+            'subtext' => (string)$user['correo_acceso'],
+        ];
+    }
+    echo json_encode($options, JSON_UNESCAPED_UNICODE);
+    exit;
 }
 
 $total = $result['total'];
@@ -59,7 +79,7 @@ $page = min($page, $pages);
                     <td><?= status_tag($isActive ? 'ACTIVO' : 'INACTIVO') ?></td>
                     <td><?= e(format_utc_datetime($user['ultimo_acceso'])) ?></td>
                     <td>
-                        <div class="table-actions">
+                        <div class="row-actions">
                             <a class="button is-small button-secondary" href="/usuarios/detalle.php?id=<?= $userId ?>">Ver</a>
                             <?php if ($canManageAccounts): ?>
                                 <button class="button is-small button-secondary" type="button" hx-get="/usuarios/form.php?id=<?= $userId ?>" hx-target="#modal-contenido"><?= svg_icon('edit') ?><span>Editar</span></button>
@@ -76,11 +96,11 @@ $page = min($page, $pages);
         </tbody>
     </table>
 </div>
-<div class="pagination-wrap">
+<div class="pagination-bar">
     <span><?= $total ?> usuario<?= $total === 1 ? '' : 's' ?></span>
     <div class="buttons" hx-target="#usuarios-resultado" hx-include="#usuarios-filtros">
-        <button class="button is-small" type="button" <?= $page <= 1 ? 'disabled' : '' ?> hx-get="/usuarios/lista.php?pagina=<?= $page - 1 ?>">Anterior</button>
+        <button class="button is-small button-secondary" type="button" <?= $page <= 1 ? 'disabled' : '' ?> hx-get="/usuarios/lista.php?pagina=<?= $page - 1 ?>">Anterior</button>
         <span class="pagination-info">Página <?= $page ?> de <?= $pages ?></span>
-        <button class="button is-small" type="button" <?= $page >= $pages ? 'disabled' : '' ?> hx-get="/usuarios/lista.php?pagina=<?= $page + 1 ?>">Siguiente</button>
+        <button class="button is-small button-secondary" type="button" <?= $page >= $pages ? 'disabled' : '' ?> hx-get="/usuarios/lista.php?pagina=<?= $page + 1 ?>">Siguiente</button>
     </div>
 </div>
