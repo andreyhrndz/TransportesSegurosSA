@@ -76,9 +76,9 @@ require_permission($activeConfig['read']);
 $canWrite = has_permission($activeConfig['write']);
 
 require_once __DIR__ . '/../app/layout.php';
-layout_start('flota', 'Flota y maestros', 'Administra vehículos, conductores, rutas, ubicaciones y catálogos respetando la disponibilidad operativa.');
+layout_start('flota', 'Flota y catálogos', 'Administra vehículos, conductores, rutas, ubicaciones y catálogos respetando la disponibilidad operativa.');
 ?>
-<nav class="tabs-bar" aria-label="Secciones de flota y maestros">
+<nav class="tabs-bar" aria-label="Secciones de flota y catálogos">
     <?php foreach ($sections as $key => $cfg): ?>
         <?php if (has_permission($cfg['read'])): ?>
             <a class="tab-chip <?= $section === $key ? 'active' : '' ?>" href="/flota.php?seccion=<?= e($key) ?>">
@@ -89,12 +89,12 @@ layout_start('flota', 'Flota y maestros', 'Administra vehículos, conductores, r
     <?php endforeach; ?>
 </nav>
 
-<section class="toolbar-panel" aria-label="Filtros y acciones de <?= e(strtolower($activeConfig['label'])) ?>">
+<section class="toolbar-panel" aria-label="Filtros y acciones de <?= e(utf8_strtolower($activeConfig['label'])) ?>">
     <form class="filter-form" id="flota-filtros" hx-get="/flota/lista.php" hx-target="#flota-resultado" hx-trigger="keyup changed delay:350ms from:input, change" hx-include="this">
         <input type="hidden" name="seccion" value="<?= e($section) ?>">
         <div class="input-with-icon">
             <?= svg_icon('search', '', 'input-icon') ?>
-            <input class="input" id="flota-buscar" type="search" name="buscar" maxlength="120" placeholder="Filtrar <?= e(strtolower($activeConfig['label'])) ?>…" autocomplete="off" aria-label="Buscar en <?= e($activeConfig['label']) ?>" aria-controls="flota-resultado">
+            <input class="input" id="flota-buscar" type="search" name="buscar" maxlength="120" placeholder="Filtrar <?= e(utf8_strtolower($activeConfig['label'])) ?>…" autocomplete="off" aria-label="Buscar en <?= e($activeConfig['label']) ?>" aria-controls="flota-resultado">
         </div>
 
         <?php if (in_array($section, ['vehiculos', 'conductores'], true)): ?>

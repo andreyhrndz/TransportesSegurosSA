@@ -25,11 +25,12 @@
 - [x] 4.3 Migrar `public/viajes.php` y `public/viajes/*` (listado, detalle, formulario con combobox buscables de vehículo/conductor/ruta y modales de paradas/asignación de solicitudes).
 - [x] 4.4 Migrar `public/entregas.php` y `public/entregas/*` (entregas, incidencias, notificaciones, documentos y formularios modales con combobox buscables de solicitudes y catálogos).
 - [x] 4.5 Migrar `public/usuarios.php` y `public/usuarios/*` (directorio, ficha de usuario y permisos individuales, creación/edición, contraseña, estado y concesión/revocación).
-- [x] 4.6 Migrar `public/flota.php` y `public/flota/*` (vehículos, conductores, rutas, ubicaciones y catálogos con combobox buscables de ubicaciones y usuarios).
+- [x] 4.6 Migrar `public/flota.php` y `public/flota/*` («Flota y catálogos»: vehículos, conductores, rutas, ubicaciones y catálogos con combobox buscables de ubicaciones y usuarios).
 
-## 5. Fase E: Revisión visual en laptop, integración HTMX, accesibilidad y regresiones
+## 5. Fase E: Integridad UTF-8 extremo a extremo, lenguaje de usuario, revisión visual en laptop y regresiones
 
-- [x] 5.1 Ejecutar las 14 suites automatizadas existentes contra `TransportesSegurosSA_Test` y verificar cero regresiones funcionales o de seguridad.
-- [x] 5.2 Ejecutar comprobación visual y funcional en navegador real con Playwright en resoluciones de laptop (`1366x768` y `1440x900`), validando sidebar colapsable, topbar, combobox en modales, calendarios Flatpickr, gráficos del dashboard, swaps HTMX y consola sin errores JavaScript, guardando capturas de evidencia.
-- [x] 5.3 Ejecutar `openspec validate frontend-premium-ux-redesign --strict` y actualizar este archivo de tareas con la evidencia obtenida.
+- [x] 5.1 Garantizar UTF-8 de extremo a extremo (`default_charset`, cabeceras `Content-Type`, `PDO::SQLSRV_ATTR_ENCODING => PDO::SQLSRV_ENCODING_UTF8`, literales Unicode `N'...'` en scripts SQL y reparación verificable/reversible en `TransportesSegurosSA_Test`), eliminando parches superficiales de reemplazo de caracteres y humanizando textos de usuario («Flota y catálogos», «Consultar historial de actividad», «Ver historial de actividad»).
+- [x] 5.2 Crear y ejecutar la suite automatizada de codificación UTF-8 y lenguaje (`tests/utf8_encoding_and_language_test.php`) junto con las 14 suites automatizadas existentes contra `TransportesSegurosSA_Test` (15 suites en total) verificando cero regresiones.
+- [x] 5.3 Ejecutar comprobación visual y funcional en navegador real con Playwright en resoluciones de laptop (`1366x768` y `1440x900`), validando sidebar colapsable, topbar, combobox en modales, calendarios Flatpickr, gráficos del dashboard, tildes en permisos/catálogos, swaps HTMX y consola sin errores JavaScript, guardando capturas de evidencia.
+- [x] 5.4 Ejecutar `openspec validate frontend-premium-ux-redesign --strict` y actualizar este archivo de tareas con la evidencia obtenida.
 

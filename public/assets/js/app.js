@@ -150,7 +150,7 @@
                         return '<div class="no-results">No se encontraron coincidencias</div>';
                     },
                     loading() {
-                        return '<div class="loading">Buscando registros autorizados…</div>';
+                        return '<div class="loading">Buscando opciones disponibles…</div>';
                     },
                 },
             };

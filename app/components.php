@@ -133,6 +133,59 @@ function format_cr_date(mixed $value): string
     }
 }
 
+function utf8_strtolower(string $value): string
+{
+    return strtolower(strtr($value, [
+        'Á' => 'á',
+        'É' => 'é',
+        'Í' => 'í',
+        'Ó' => 'ó',
+        'Ú' => 'ú',
+        'Ü' => 'ü',
+        'Ñ' => 'ñ',
+    ]));
+}
+
+function utf8_strtoupper(string $value): string
+{
+    return strtoupper(strtr($value, [
+        'á' => 'Á',
+        'é' => 'É',
+        'í' => 'Í',
+        'ó' => 'Ó',
+        'ú' => 'Ú',
+        'ü' => 'Ü',
+        'ñ' => 'Ñ',
+    ]));
+}
+
+function utf8_ucfirst(string $value): string
+{
+    if ($value === '') {
+        return '';
+    }
+    $chars = preg_split('//u', $value, 2, PREG_SPLIT_NO_EMPTY) ?: [];
+    if (!$chars) {
+        return $value;
+    }
+    return utf8_strtoupper($chars[0]) . ($chars[1] ?? '');
+}
+
+function format_number_str(mixed $value): string
+{
+    $raw = trim((string)($value ?? ''));
+    if ($raw === '') {
+        return '0';
+    }
+    if (str_starts_with($raw, '.')) {
+        return '0' . $raw;
+    }
+    if (str_starts_with($raw, '-.')) {
+        return '-0.' . substr($raw, 2);
+    }
+    return $raw;
+}
+
 /**
  * Traduce códigos técnicos y enumeraciones con guiones bajos a etiquetas legibles en español.
  */
@@ -143,7 +196,7 @@ function humanize_status(mixed $value): string
         return 'Sin estado';
     }
 
-    $upper = strtoupper($raw);
+    $upper = utf8_strtoupper($raw);
     $dictionary = [
         'REGISTRADA' => 'Registrada',
         'PENDIENTE_ASIGNACION' => 'Pendiente de asignación',
@@ -155,6 +208,7 @@ function humanize_status(mixed $value): string
         'ENTREGA_FALLIDA' => 'Entrega fallida',
         'FALLIDA' => 'Fallida',
         'CANCELADA' => 'Cancelada',
+        'CANCELADO' => 'Cancelado',
         'FINALIZADO' => 'Finalizado',
         'PLANIFICADO' => 'Planificado',
         'DISPONIBLE' => 'Disponible',
@@ -162,11 +216,15 @@ function humanize_status(mixed $value): string
         'FUERA_SERVICIO' => 'Fuera de servicio',
         'ACTIVO' => 'Activo',
         'INACTIVO' => 'Inactivo',
+        'FISICA' => 'Persona física',
+        'JURIDICA' => 'Persona jurídica',
         'ABIERTA' => 'Abierta',
         'EN_ATENCION' => 'En atención',
         'RESUELTA' => 'Resuelta',
         'CERRADA' => 'Cerrada',
         'PENDIENTE' => 'Pendiente',
+        'COMPLETADA' => 'Completada',
+        'OMITIDA' => 'Omitida',
         'ENVIADA' => 'Enviada',
         'ERROR' => 'Con error',
         'BAJA' => 'Baja',
@@ -211,19 +269,41 @@ function humanize_status(mixed $value): string
         'SMS' => 'Mensaje SMS',
         'SISTEMA' => 'Aviso del sistema',
         'WHATSAPP' => 'WhatsApp',
+        'CLIENTES' => 'Clientes',
+        'CLIENTES_FISICOS' => 'Clientes físicos',
+        'CLIENTES_JURIDICOS' => 'Empresas',
+        'SOLICITUDES' => 'Solicitudes',
+        'MERCANCIAS' => 'Mercancías',
+        'VIAJES' => 'Viajes',
+        'PARADAS_VIAJE' => 'Paradas de viaje',
+        'VIAJE_SOLICITUDES' => 'Solicitudes en viaje',
+        'ENTREGAS' => 'Entregas',
+        'INCIDENCIAS' => 'Incidencias',
+        'DOCUMENTOS' => 'Documentos',
+        'NOTIFICACIONES' => 'Notificaciones',
+        'USUARIOS' => 'Usuarios',
+        'PERMISOS' => 'Permisos',
+        'USUARIOS_PERMISOS' => 'Permisos de usuario',
+        'VEHICULOS' => 'Vehículos',
+        'CONDUCTORES' => 'Conductores',
+        'RUTAS' => 'Rutas',
+        'UBICACIONES' => 'Ubicaciones',
+        'TIPOS_MERCANCIA' => 'Tipos de mercancía',
+        'TIPOS_INCIDENCIA' => 'Tipos de incidencia',
+        'TIPOS_DOCUMENTO' => 'Tipos de documento',
     ];
 
     if (isset($dictionary[$upper])) {
         return $dictionary[$upper];
     }
 
-    $cleaned = str_replace('_', ' ', strtolower($raw));
-    return ucfirst($cleaned);
+    $cleaned = str_replace('_', ' ', utf8_strtolower($raw));
+    return utf8_ucfirst($cleaned);
 }
 
 function status_tag(mixed $value): string
 {
-    $status = strtoupper(trim((string)$value));
+    $status = utf8_strtoupper(trim((string)$value));
     $tone = match ($status) {
         'ENTREGADA', 'FINALIZADO', 'RESUELTA', 'ENVIADA', 'DISPONIBLE', 'ACTIVO' => 'success',
         'CANCELADA', 'FALLIDA', 'ENTREGA_FALLIDA', 'ERROR', 'FUERA_SERVICIO', 'INACTIVO', 'CRITICA' => 'danger',
@@ -240,28 +320,14 @@ function user_initials(string $username): string
     if ($clean === '') {
         return 'TS';
     }
-    $parts = preg_split('/[\s._-]+/', $clean) ?: [];
+    $parts = preg_split('/[\s._-]+/u', $clean) ?: [];
     $parts = array_values(array_filter($parts, static fn(string $p): bool => $p !== ''));
     if (count($parts) >= 2) {
         $chars0 = preg_split('//u', $parts[0], -1, PREG_SPLIT_NO_EMPTY) ?: [];
         $chars1 = preg_split('//u', $parts[1], -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        return strtoupper(($chars0[0] ?? '') . ($chars1[0] ?? ''));
+        return utf8_strtoupper(($chars0[0] ?? '') . ($chars1[0] ?? ''));
     }
     $chars = preg_split('//u', $clean, -1, PREG_SPLIT_NO_EMPTY) ?: [];
-    return strtoupper(($chars[0] ?? '') . ($chars[1] ?? ''));
-}
-
-function normalize_spanish_text(mixed $value): string
-{
-    $text = (string)$value;
-    return strtr($text, [
-        'Ã¡' => 'á',
-        'Ã©' => 'é',
-        'Ã­' => 'í',
-        'Ã³' => 'ó',
-        'Ãº' => 'ú',
-        'Ã±' => 'ñ',
-        'Ãa' => 'ía',
-    ]);
+    return utf8_strtoupper(($chars[0] ?? '') . ($chars[1] ?? ''));
 }
 

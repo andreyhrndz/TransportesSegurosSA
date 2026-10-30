@@ -139,7 +139,7 @@ try {
             break;
 
         default:
-            throw new InvalidArgumentException('Tipo de dato maestro no reconocido.');
+            throw new InvalidArgumentException('Tipo de registro no reconocido.');
     }
 } catch (InvalidArgumentException $exception) {
     operation_error($exception->getMessage());
@@ -151,16 +151,16 @@ try {
     $stmt->closeCursor();
 } catch (PDOException $exception) {
     operation_sql_error($exception, [
-        50501 => 'No tienes permiso para gestionar este dato maestro.',
+        50501 => 'No tienes permiso para gestionar este registro.',
         50502 => 'Revisa los valores ingresados (capacidad, kilometraje no regresivo, vigencia o coordenadas).',
-        50503 => 'El registro maestro solicitado no existe.',
+        50503 => 'El registro solicitado no existe.',
         50504 => 'Ya existe un registro con esos datos únicos (placa, identificación, licencia, usuario o nombre).',
         50505 => 'No se puede modificar el registro porque participa en viajes activos o tiene referencias históricas protegidas.',
-        50506 => 'No se puede editar un registro maestro inactivo.',
+        50506 => 'No se puede editar un registro inactivo.',
         50507 => 'Las referencias seleccionadas (origen, destino o cuenta de usuario) no existen o están inactivas.',
     ]);
 }
 
-$label = ucfirst($meta['label']);
+$label = utf8_ucfirst($meta['label']);
 $message = $isEdit ? "{$label} actualizado correctamente." : "{$label} registrado correctamente.";
 operation_modal_success($message, 'maestroActualizado', '/flota.php?seccion=' . $meta['section']);

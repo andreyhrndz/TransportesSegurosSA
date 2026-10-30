@@ -21,7 +21,7 @@ require_permission($meta['write_permission']);
 $id = filter_var($_GET['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
 if ($id === false) {
     http_response_code(404);
-    exit(ui_notice('Registro maestro no encontrado.', 'danger'));
+    exit(ui_notice('Registro no encontrado.', 'danger'));
 }
 
 try {
@@ -32,12 +32,12 @@ try {
 
 if (!is_array($record)) {
     http_response_code(404);
-    exit(ui_notice('Registro maestro no encontrado.', 'danger'));
+    exit(ui_notice('Registro no encontrado.', 'danger'));
 }
 
 if ((int)$record['activo'] !== 1) {
     http_response_code(409);
-    exit(ui_notice('El registro maestro ya se encuentra inactivo.', 'warning'));
+    exit(ui_notice('El registro ya se encuentra inactivo.', 'warning'));
 }
 
 if (($entity === 'vehiculo' && (string)$record['estado'] === 'ASIGNADO')
@@ -73,7 +73,7 @@ if ($entity === 'vehiculo') {
     $summaryRightLabel = 'Dirección';
     $summaryRightVal = (string)$record['direccion'];
 } else {
-    $summaryLeftLabel = ucfirst($meta['label']);
+    $summaryLeftLabel = utf8_ucfirst($meta['label']);
     $summaryLeftVal = (string)$record['nombre'];
     $summaryRightLabel = 'Descripción';
     $summaryRightVal = (string)($record['descripcion'] ?: 'Sin descripción');

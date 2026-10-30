@@ -47,14 +47,14 @@ Los selectores de catálogos amplios o críticos (clientes, vehículos, conducto
 - **THEN** el desplegable se posiciona por encima del modal sin recortarse, filtra resultados autorizados y asigna el identificador técnico requerido por el formulario
 - **AND** al cerrar y reabrir el modal múltiples veces no se duplican instancias ni se producen errores en la consola JavaScript.
 
-### Requirement: Fechas en zona horaria de Costa Rica y lenguaje natural
-Toda la interfaz SHALL presentar textos y estados en español comprensible sin guiones bajos ni referencias internas a procedimientos SQL o `UTC`, convirtiendo las marcas temporales almacenadas en UTC (`SYSUTCDATETIME()`) a la zona horaria `America/Costa_Rica` con formato legible (`dd/mm/aaaa, hh:mm a. m./p. m.`) y utilizando calendarios Flatpickr en español con formato visible `dd/mm/aaaa` e inicio de semana en lunes.
+### Requirement: Fechas en zona horaria de Costa Rica, codificación UTF-8 extremo a extremo y lenguaje natural
+Toda la interfaz SHALL operar en UTF-8 de extremo a extremo (SQL Server `PDO_SQLSRV`, PHP, HTML, fragmentos HTMX y JSON) sin pérdida de caracteres ni doble codificación, presentar textos, permisos y estados en español comprensible sin guiones bajos ni referencias internas a procedimientos SQL o `UTC`, convertir las marcas temporales almacenadas en UTC (`SYSUTCDATETIME()`) a la zona horaria `America/Costa_Rica` con formato legible (`dd/mm/aaaa, hh:mm a. m./p. m.`) y utilizar calendarios Flatpickr en español con formato visible `dd/mm/aaaa` e inicio de semana en lunes.
 
-#### Scenario: Visualización de marcas temporales y estados operativos
-- **GIVEN** registros de solicitudes, viajes, entregas, usuarios o auditoría cuyas fechas provienen de SQL Server en UTC y cuyos estados son códigos como `PENDIENTE_ASIGNACION` o `ENTREGA_FALLIDA`
-- **WHEN** se presentan en tablas, tarjetas o detalles
+#### Scenario: Visualización de marcas temporales, permisos en español con tildes y estados operativos
+- **GIVEN** registros de solicitudes, viajes, entregas, usuarios, permisos o historial de actividad cuyas fechas provienen de SQL Server en UTC, cuyos textos contienen caracteres en español (`á é í ó ú Á É Í Ó Ú ñ Ñ ü ¿ ¡`) y cuyos estados son códigos como `PENDIENTE_ASIGNACION` o `ENTREGA_FALLIDA`
+- **WHEN** se presentan en páginas completas, fragmentos HTMX o respuestas JSON
 - **THEN** las fechas se muestran convertidas a `America/Costa_Rica` (por ejemplo, `27/10/2026, 10:36 p. m.`) sin el sufijo `UTC`
-- **AND** los estados se muestran con etiquetas amigables como «Pendiente de asignación» y «Entrega fallida».
+- **AND** las tildes, eñes y signos de apertura se muestran íntegros sin secuencias corruptas (`Ã`, `Â`, `â`, ``), usando denominaciones claras como «Flota y catálogos», «Consultar historial de actividad: Ver historial de actividad», «Pendiente de asignación» y «Entrega fallida».
 
 #### Scenario: Selección de fechas en filtros y formularios
 - **GIVEN** un filtro de rango de fechas o un campo de fecha requerida/programada

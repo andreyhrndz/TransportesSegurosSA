@@ -12,8 +12,8 @@ GO
 
 MERGE dbo.permisos AS target
 USING (VALUES
-    (N'CLIENTES_EDITAR', N'Editar clientes', N'Actualizar contacto y campos del subtipo sin cambiar identificación ni subtipo'),
-    (N'CLIENTES_DESACTIVAR', N'Desactivar clientes', N'Desactivar clientes sin borrarlos ni afectar solicitudes terminales')
+    (N'CLIENTES_EDITAR', N'Editar clientes', N'Actualizar datos de contacto e información del cliente'),
+    (N'CLIENTES_DESACTIVAR', N'Desactivar clientes', N'Desactivar clientes preservando su historial de solicitudes')
 ) AS source(codigo, nombre, descripcion)
 ON target.codigo = source.codigo
 WHEN MATCHED THEN UPDATE SET

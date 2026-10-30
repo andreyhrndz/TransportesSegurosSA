@@ -270,8 +270,8 @@ $colCount = count($cfg['headers']) + ($canWrite ? 1 : 0);
                         </td>
                         <td>
                             <div class="cell-stack">
-                                <strong><?= e($row['capacidad_carga_kg']) ?> kg · <?= e($row['capacidad_volumen_m3'] !== null ? $row['capacidad_volumen_m3'] . ' m³' : 'Vol. N/D') ?></strong>
-                                <span><?= e($row['kilometraje_actual']) ?> km recorridos</span>
+                                <strong><?= e(format_number_str($row['capacidad_carga_kg'])) ?> kg · <?= e($row['capacidad_volumen_m3'] !== null ? format_number_str($row['capacidad_volumen_m3']) . ' m³' : 'Vol. N/D') ?></strong>
+                                <span><?= e(format_number_str($row['kilometraje_actual'])) ?> km recorridos</span>
                             </div>
                         </td>
                         <td><?= status_tag($row['estado']) ?></td>
@@ -300,7 +300,7 @@ $colCount = count($cfg['headers']) + ($canWrite ? 1 : 0);
                         <td><strong><?= e($row['nombre']) ?></strong></td>
                         <td><?= e($row['origen_nombre']) ?></td>
                         <td><?= e($row['destino_nombre']) ?></td>
-                        <td><?= e($row['distancia_km']) ?> km · <?= (int)$row['duracion_estimada_min'] ?> min</td>
+                        <td><?= e(format_number_str($row['distancia_km'])) ?> km · <?= (int)$row['duracion_estimada_min'] ?> min</td>
                         <td><?= status_tag($isActive ? 'ACTIVO' : 'INACTIVO') ?></td>
                     <?php else: ?>
                         <?php $rowId = (int)$row['ubicacion_id']; ?>

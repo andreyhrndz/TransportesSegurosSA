@@ -28,11 +28,13 @@ Transportes Seguros S.A. opera sobre PHP 8.4, Microsoft SQL Server 2025 (`PDO_SQ
 
 2. **Iconografía Lucide y Componentes PHP (`app/components.php`):**
    - `svg_icon(string $name, string $label = '', string $class = 'icon')` se amplía con el repertorio oficial de trazos vectoriales **Lucide** (`24x24`, `stroke-width="1.85"`, `stroke-linecap="round"`, `stroke-linejoin="round"`).
-   - Se agregan funciones de presentación reutilizables:
-     - `humanize_status(mixed $value): string` y `humanize_label(mixed $value): string` para traducir códigos (`PENDIENTE_ASIGNACION` → `Pendiente de asignación`, `ENTREGA_FALLIDA` → `Entrega fallida`, `EN_TRANSITO` → `En tránsito`, etc.).
+   - Se agregan funciones de presentación reutilizables y seguras en UTF-8:
+     - `humanize_status(mixed $value): string` y `humanize_label(mixed $value): string` para traducir códigos (`PENDIENTE_ASIGNACION` → `Pendiente de asignación`, `ENTREGA_FALLIDA` → `Entrega fallida`, `EN_TRANSITO` → `En tránsito`, nombres de tablas en auditoría, etc.) sin requerir parches superficiales de reemplazo de caracteres.
+     - `utf8_strtolower`, `utf8_strtoupper`, `utf8_ucfirst` y `format_number_str` para manipulación de texto multibyte y formato numérico limpio.
      - `user_initials(string $username): string` para generar las iniciales del avatar en el topbar.
      - `format_utc_datetime(mixed $value): string` que interpreta marcas temporales UTC de SQL Server y las convierte a `America/Costa_Rica` con formato `d/m/Y, g:i a. m./p. m.`.
      - `format_cr_date(mixed $value): string` para fechas de calendario (`YYYY-MM-DD` → `dd/mm/aaaa`).
+   - En `app/bootstrap.php` se fija `ini_set('default_charset', 'UTF-8')`, cabecera por defecto `Content-Type: text/html; charset=utf-8` y `PDO::SQLSRV_ATTR_ENCODING => PDO::SQLSRV_ENCODING_UTF8`. En los scripts SQL de inicialización se aseguran literales Unicode `N'...'` y un script de reparación/reversión verificable (`sql/test-environment/08_utf8_and_language_repair_test.sql` y `08_rollback_utf8_and_language_repair_test.sql`) para `TransportesSegurosSA_Test`.
 
 3. **Combobox Buscables e Integración Remota (`public/assets/js/app.js` + `lista.php`):**
    - Los selectores con atributo `data-combobox` se inicializan con **Tom Select**.
@@ -52,7 +54,7 @@ Transportes Seguros S.A. opera sobre PHP 8.4, Microsoft SQL Server 2025 (`PDO_SQ
 ## Risks / Trade-offs
 
 - **[Política CSP estricta]** → Alojar `tom-select`, `flatpickr` y `chart.js` localmente en `public/assets/vendor/` y evitar scripts inline.
-- **[Compatibilidad con las 14 suites de prueba]** → Mantener intactos los `name` de todos los inputs, los `value` de `<option>`, los textos de confirmación de escritura y las rutas HTTP; verificar cada fase ejecutando la suite completa contra `TransportesSegurosSA_Test`.
+- **[Compatibilidad con las suites de prueba]** → Mantener intactos los `name` de todos los inputs, los `value` de `<option>`, los textos de confirmación de escritura y las rutas HTTP; verificar cada fase ejecutando las 14 suites de regresión más `tests/utf8_encoding_and_language_test.php` contra `TransportesSegurosSA_Test`.
 
 ## Migration Plan
 
@@ -60,5 +62,5 @@ Ejecución estructurada en 5 fases con commits locales atómicos:
 - **Fase A:** Tokens CSS, tipografía, iconografía Lucide, sidebar colapsable, topbar con menú de cuenta y layout compartido + Login.
 - **Fase B:** Activos locales versionados (Tom Select, Flatpickr, Chart.js), biblioteca de componentes, calendarios en español, combobox con búsqueda remota autorizada, modales y ciclo de vida HTMX.
 - **Fase C:** Rediseño de Panel general (Dashboard) y Reportes con gráficos Chart.js respaldados por datos reales.
-- **Fase D:** Migración visual completa de Clientes, Solicitudes, Viajes, Entregas/Incidencias/Documentos, Usuarios/Permisos y Flota/Maestros.
-- **Fase E:** Verificación visual en laptop (`1366x768` y `1440x900`) con Playwright, validación de consola sin errores JS, regresión de las 14 suites automatizadas y validación estricta de OpenSpec.
+- **Fase D:** Migración visual completa de Clientes, Solicitudes, Viajes, Entregas/Incidencias/Documentos, Usuarios/Permisos y Flota y catálogos.
+- **Fase E:** Garantía UTF-8 extremo a extremo, estandarización de lenguaje en español para Costa Rica, verificación visual en laptop (`1366x768` y `1440x900`) con Playwright, validación de consola sin errores JS, regresión de las 15 suites automatizadas y validación estricta de OpenSpec.

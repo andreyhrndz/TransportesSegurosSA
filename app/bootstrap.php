@@ -2,6 +2,8 @@
 /** Funciones compartidas fuera de public/. */
 declare(strict_types=1);
 
+ini_set('default_charset', 'UTF-8');
+
 function is_https(): bool
 {
     return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['SERVER_PORT'] ?? '') === '443');
@@ -46,7 +48,8 @@ function send_security_headers(): void
     if (headers_sent()) {
         return;
     }
-    // ASVS 3.2.1, 3.4.4-3.4.6: limitar interpretación y contenido ejecutable.
+    // ASVS 3.2.1, 3.4.4-3.4.6: limitar interpretación y contenido ejecutable, asegurando UTF-8 de extremo a extremo.
+    header('Content-Type: text/html; charset=utf-8');
     header('X-Content-Type-Options: nosniff');
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('X-Frame-Options: DENY');
@@ -92,11 +95,15 @@ function db(): PDO
     try {
         $database = configured_database_name();
         $dsn = "sqlsrv:Server={$server};Database={$database};Encrypt=yes;TrustServerCertificate=yes";
-        $pdo = new PDO($dsn, null, null, [
+        $options = [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES => false,
-        ]);
+        ];
+        if (defined('PDO::SQLSRV_ATTR_ENCODING') && defined('PDO::SQLSRV_ENCODING_UTF8')) {
+            $options[PDO::SQLSRV_ATTR_ENCODING] = PDO::SQLSRV_ENCODING_UTF8;
+        }
+        $pdo = new PDO($dsn, null, null, $options);
         return $pdo;
     } catch (PDOException|LogicException $ex) {
         // ASVS 16.3.4: registrar el detalle solo del lado del servidor.

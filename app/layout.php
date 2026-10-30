@@ -93,7 +93,7 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
                     <a class="sidebar-link <?= $activo === 'usuarios' ? 'active' : '' ?>" href="/usuarios.php" <?= $activo === 'usuarios' ? 'aria-current="page"' : '' ?> data-tooltip="Usuarios y permisos"><?= svg_icon('users') ?><span class="sidebar-link-text">Usuarios y permisos</span></a>
                 <?php endif; ?>
                 <?php if ($puedeFlota): ?>
-                    <a class="sidebar-link <?= $activo === 'flota' ? 'active' : '' ?>" href="/flota.php" <?= $activo === 'flota' ? 'aria-current="page"' : '' ?> data-tooltip="Flota y maestros"><?= svg_icon('fleet') ?><span class="sidebar-link-text">Flota y maestros</span></a>
+                    <a class="sidebar-link <?= $activo === 'flota' ? 'active' : '' ?>" href="/flota.php" <?= $activo === 'flota' ? 'aria-current="page"' : '' ?> data-tooltip="Flota y catálogos"><?= svg_icon('fleet') ?><span class="sidebar-link-text">Flota y catálogos</span></a>
                 <?php endif; ?>
                 </div>
             </div>

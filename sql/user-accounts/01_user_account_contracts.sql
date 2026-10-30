@@ -12,7 +12,7 @@ GO
 
 MERGE dbo.permisos AS target
 USING (VALUES
-    (N'USUARIOS_VER', N'Consultar usuarios', N'Consultar cuentas y permisos individuales sin hashes'),
+    (N'USUARIOS_VER', N'Consultar usuarios', N'Consultar cuentas de usuario y sus permisos asignados'),
     (N'USUARIOS_GESTIONAR_CUENTAS', N'Gestionar cuentas de usuario', N'Crear, editar, activar o desactivar cuentas y restablecer contraseñas')
 ) AS source(codigo, nombre, descripcion)
 ON target.codigo = source.codigo

@@ -241,7 +241,7 @@ layout_start('dashboard', 'Panel general', 'Resumen de operaciones, estado del s
         <a class="quick-action-card" href="/flota.php">
             <span class="kpi-icon-badge"><?= svg_icon('fleet') ?></span>
             <div>
-                <strong>Flota y maestros</strong>
+                <strong>Flota y catálogos</strong>
                 <span>Unidades, conductores, rutas y sedes</span>
             </div>
         </a>

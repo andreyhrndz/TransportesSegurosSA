@@ -118,11 +118,11 @@ function render_user_detail_panels(
                     <tr>
                         <td>
                             <div class="cell-stack">
-                                <strong><?= e(normalize_spanish_text($permission['nombre'])) ?></strong>
+                                <strong><?= e($permission['nombre']) ?></strong>
                                 <span><code><?= e($code) ?></code></span>
                             </div>
                         </td>
-                        <td><?= e(normalize_spanish_text($permission['descripcion'] ?: 'Sin descripción')) ?></td>
+                        <td><?= e($permission['descripcion'] ?: 'Sin descripción') ?></td>
                         <td>
                             <?php if ($grant): ?>
                                 <div class="cell-stack">

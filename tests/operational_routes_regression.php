@@ -22,7 +22,7 @@ try {
     for($i=0;$i<25;$i++){ $socket=@fsockopen('127.0.0.1',$port); if($socket!==false){fclose($socket);break;}usleep(100000);}
     $base="http://127.0.0.1:{$port}";$cookie="{$sessionName}={$sessionId}";
 
-    foreach(['/clientes.php'=>'Clientes','/usuarios.php'=>'Usuarios y permisos','/solicitudes.php'=>'Solicitudes','/viajes.php'=>'Viajes','/entregas.php'=>'Entregas','/flota.php'=>'Flota y maestros'] as $path=>$title){
+    foreach(['/clientes.php'=>'Clientes','/usuarios.php'=>'Usuarios y permisos','/solicitudes.php'=>'Solicitudes','/viajes.php'=>'Viajes','/entregas.php'=>'Entregas','/flota.php'=>'Flota y catálogos'] as $path=>$title){
         [$status,$body]=routes_request($base.$path,$cookie);
         routes_assert($status===200,"{$path} debe responder 200 con sesión autorizada.");
         routes_assert(str_contains($body,$title),"{$path} debe renderizar su contenido real.");

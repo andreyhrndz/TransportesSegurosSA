@@ -26,7 +26,7 @@ if ($isEdit) {
     $id = filter_var($idParam, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
     if ($id === false) {
         http_response_code(404);
-        exit(ui_notice('Registro maestro no encontrado.', 'danger'));
+        exit(ui_notice('Registro no encontrado.', 'danger'));
     }
 
     try {
@@ -37,12 +37,12 @@ if ($isEdit) {
 
     if (!is_array($record)) {
         http_response_code(404);
-        exit(ui_notice('Registro maestro no encontrado.', 'danger'));
+        exit(ui_notice('Registro no encontrado.', 'danger'));
     }
 
     if ((int)$record['activo'] !== 1) {
         http_response_code(409);
-        exit(ui_notice('No se puede editar un registro maestro inactivo.', 'warning'));
+        exit(ui_notice('No se puede editar un registro inactivo.', 'warning'));
     }
 
     if ($entity === 'vehiculo' && (string)$record['estado'] === 'ASIGNADO') {
@@ -60,7 +60,7 @@ $activeLocations = [];
 if ($entity === 'ruta') {
     if (!has_permission('UBICACIONES_VER')) {
         http_response_code(403);
-        exit(ui_notice('Se requiere permiso de consulta de ubicaciones (UBICACIONES_VER) para configurar rutas.', 'danger'));
+        exit(ui_notice('Se requiere permiso para consultar ubicaciones antes de configurar rutas.', 'danger'));
     }
     try {
         $activeLocations = read_procedure_list(

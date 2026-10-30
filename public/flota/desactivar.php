@@ -38,13 +38,13 @@ try {
     $stmt->closeCursor();
 } catch (PDOException $exception) {
     operation_sql_error($exception, [
-        50501 => 'No tienes permiso para desactivar este dato maestro.',
+        50501 => 'No tienes permiso para desactivar este registro.',
         50502 => 'Selecciona un registro válido.',
-        50503 => 'El registro maestro solicitado no existe.',
+        50503 => 'El registro solicitado no existe.',
         50505 => 'No se puede desactivar porque está comprometido en viajes activos, rutas activas, solicitudes abiertas o incidencias pendientes.',
-        50506 => 'El registro maestro ya se encuentra inactivo.',
+        50506 => 'El registro ya se encuentra inactivo.',
     ]);
 }
 
-$label = ucfirst($meta['label']);
+$label = utf8_ucfirst($meta['label']);
 operation_modal_success("{$label} desactivado correctamente.", 'maestroActualizado', '/flota.php?seccion=' . $meta['section']);

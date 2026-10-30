@@ -71,7 +71,7 @@ function master_entity_meta(string $entity): array
 
     $key = strtolower(trim($entity));
     if (!isset($catalog[$key])) {
-        throw new InvalidArgumentException('Tipo de dato maestro no reconocido.');
+        throw new InvalidArgumentException('Tipo de registro no reconocido.');
     }
 
     return $catalog[$key];

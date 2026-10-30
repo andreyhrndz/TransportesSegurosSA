@@ -21,7 +21,7 @@ USING (VALUES
     (N'CATALOGOS_VER', N'Consultar catálogos', N'Consultar tipos de mercancía, incidencia y documento'),
     (N'SOLICITUDES_VER', N'Consultar solicitudes', N'Consultar solicitudes y mercancías asociadas'),
     (N'NOTIFICACIONES_VER', N'Consultar notificaciones', N'Consultar historial de envío de notificaciones'),
-    (N'USUARIOS_VER', N'Consultar usuarios', N'Consultar cuentas y permisos individuales sin hashes')
+    (N'USUARIOS_VER', N'Consultar usuarios', N'Consultar cuentas de usuario y sus permisos asignados')
 ) AS source(codigo, nombre, descripcion)
 ON target.codigo = source.codigo
 WHEN MATCHED THEN UPDATE SET
@@ -44,9 +44,9 @@ BEGIN
     DECLARE @offset BIGINT;
 
     IF dbo.fn_tiene_permiso(@usuario_id, N'CLIENTES_VER') = 0
-        THROW 50103, 'No tiene permiso para consultar clientes.', 1;
+        THROW 50103, N'No tiene permiso para consultar clientes.', 1;
     IF @pagina < 1 OR @por_pagina NOT BETWEEN 1 AND 100
-        THROW 50102, 'Paginación inválida.', 1;
+        THROW 50102, N'Paginación inválida.', 1;
 
     SET @buscar = NULLIF(LTRIM(RTRIM(@buscar)), N'');
     SET @offset = CONVERT(BIGINT, @pagina - 1) * @por_pagina;
@@ -100,9 +100,9 @@ BEGIN
     DECLARE @usuario_id INT = TRY_CONVERT(INT, SESSION_CONTEXT(N'usuario_id'));
 
     IF dbo.fn_tiene_permiso(@usuario_id, N'CLIENTES_VER') = 0
-        THROW 50103, 'No tiene permiso para consultar clientes.', 1;
+        THROW 50103, N'No tiene permiso para consultar clientes.', 1;
     IF @cliente_id IS NULL OR @cliente_id < 1
-        THROW 50102, 'Identificador de cliente inválido.', 1;
+        THROW 50102, N'Identificador de cliente inválido.', 1;
 
     SELECT
         c.cliente_id, c.identificacion, c.correo, c.telefono, c.direccion, c.activo, c.fecha_registro,
@@ -115,7 +115,7 @@ BEGIN
     WHERE c.cliente_id = @cliente_id;
 
     IF @@ROWCOUNT = 0
-        THROW 50101, 'Cliente no encontrado.', 1;
+        THROW 50101, N'Cliente no encontrado.', 1;
 END;
 GO
 
@@ -132,9 +132,9 @@ BEGIN
     DECLARE @offset BIGINT;
 
     IF dbo.fn_tiene_permiso(@usuario_id, N'UBICACIONES_VER') = 0
-        THROW 50103, 'No tiene permiso para consultar ubicaciones.', 1;
+        THROW 50103, N'No tiene permiso para consultar ubicaciones.', 1;
     IF @pagina < 1 OR @por_pagina NOT BETWEEN 1 AND 100
-        THROW 50102, 'Paginación inválida.', 1;
+        THROW 50102, N'Paginación inválida.', 1;
 
     SET @buscar = NULLIF(LTRIM(RTRIM(@buscar)), N'');
     SET @offset = CONVERT(BIGINT, @pagina - 1) * @por_pagina;
@@ -161,7 +161,7 @@ BEGIN
     DECLARE @usuario_id INT = TRY_CONVERT(INT, SESSION_CONTEXT(N'usuario_id'));
 
     IF dbo.fn_tiene_permiso(@usuario_id, N'CATALOGOS_VER') = 0
-        THROW 50103, 'No tiene permiso para consultar catálogos.', 1;
+        THROW 50103, N'No tiene permiso para consultar catálogos.', 1;
 
     SELECT tipo_mercancia_id, nombre, descripcion, activo
     FROM dbo.tipos_mercancia
@@ -186,11 +186,11 @@ BEGIN
     DECLARE @offset BIGINT;
 
     IF dbo.fn_tiene_permiso(@usuario_id, N'SOLICITUDES_VER') = 0
-        THROW 50103, 'No tiene permiso para consultar solicitudes.', 1;
+        THROW 50103, N'No tiene permiso para consultar solicitudes.', 1;
     IF @pagina < 1 OR @por_pagina NOT BETWEEN 1 AND 100 OR (@desde IS NOT NULL AND @hasta IS NOT NULL AND @desde > @hasta)
-        THROW 50102, 'Filtros o paginación inválidos.', 1;
+        THROW 50102, N'Filtros o paginación inválidos.', 1;
     IF @estado IS NOT NULL AND @estado NOT IN ('REGISTRADA', 'PENDIENTE_ASIGNACION', 'ASIGNADA', 'EN_TRANSITO', 'ENTREGADA', 'ENTREGA_FALLIDA', 'CANCELADA')
-        THROW 50102, 'Estado de solicitud inválido.', 1;
+        THROW 50102, N'Estado de solicitud inválido.', 1;
 
     SET @buscar = NULLIF(LTRIM(RTRIM(@buscar)), N'');
     SET @offset = CONVERT(BIGINT, @pagina - 1) * @por_pagina;
@@ -240,9 +240,9 @@ BEGIN
     DECLARE @usuario_id INT = TRY_CONVERT(INT, SESSION_CONTEXT(N'usuario_id'));
 
     IF dbo.fn_tiene_permiso(@usuario_id, N'SOLICITUDES_VER') = 0
-        THROW 50103, 'No tiene permiso para consultar solicitudes.', 1;
+        THROW 50103, N'No tiene permiso para consultar solicitudes.', 1;
     IF @solicitud_id IS NULL OR @solicitud_id < 1
-        THROW 50102, 'Identificador de solicitud inválido.', 1;
+        THROW 50102, N'Identificador de solicitud inválido.', 1;
 
     SELECT
         s.solicitud_id, s.codigo_solicitud, s.estado, s.prioridad_calculada, s.prioridad_actual,
@@ -259,7 +259,7 @@ BEGIN
     WHERE s.solicitud_id = @solicitud_id;
 
     IF @@ROWCOUNT = 0
-        THROW 50101, 'Solicitud no encontrada.', 1;
+        THROW 50101, N'Solicitud no encontrada.', 1;
 
     SELECT m.mercancia_id, m.tipo_mercancia_id, tm.nombre AS tipo_mercancia, m.descripcion, m.peso_kg, m.volumen_m3, m.observaciones
     FROM dbo.mercancias AS m
@@ -291,11 +291,11 @@ BEGIN
     DECLARE @offset BIGINT;
 
     IF dbo.fn_tiene_permiso(@usuario_id, N'NOTIFICACIONES_VER') = 0
-        THROW 50103, 'No tiene permiso para consultar notificaciones.', 1;
+        THROW 50103, N'No tiene permiso para consultar notificaciones.', 1;
     IF @pagina < 1 OR @por_pagina NOT BETWEEN 1 AND 100 OR (@desde IS NOT NULL AND @hasta IS NOT NULL AND @desde > @hasta)
-        THROW 50102, 'Filtros o paginación inválidos.', 1;
+        THROW 50102, N'Filtros o paginación inválidos.', 1;
     IF @estado_envio IS NOT NULL AND @estado_envio NOT IN ('PENDIENTE', 'ENVIADA', 'ERROR')
-        THROW 50102, 'Estado de envío inválido.', 1;
+        THROW 50102, N'Estado de envío inválido.', 1;
 
     SET @offset = CONVERT(BIGINT, @pagina - 1) * @por_pagina;
     SELECT @total_registros = COUNT(*)
@@ -329,9 +329,9 @@ BEGIN
     DECLARE @offset BIGINT;
 
     IF dbo.fn_tiene_permiso(@usuario_id, N'USUARIOS_VER') = 0
-        THROW 50103, 'No tiene permiso para consultar usuarios.', 1;
+        THROW 50103, N'No tiene permiso para consultar usuarios.', 1;
     IF @pagina < 1 OR @por_pagina NOT BETWEEN 1 AND 100
-        THROW 50102, 'Paginación inválida.', 1;
+        THROW 50102, N'Paginación inválida.', 1;
 
     SET @buscar = NULLIF(LTRIM(RTRIM(@buscar)), N'');
     SET @offset = CONVERT(BIGINT, @pagina - 1) * @por_pagina;
@@ -357,16 +357,16 @@ BEGIN
     DECLARE @actor_id INT = TRY_CONVERT(INT, SESSION_CONTEXT(N'usuario_id'));
 
     IF dbo.fn_tiene_permiso(@actor_id, N'USUARIOS_VER') = 0
-        THROW 50103, 'No tiene permiso para consultar usuarios.', 1;
+        THROW 50103, N'No tiene permiso para consultar usuarios.', 1;
     IF @usuario_id IS NULL OR @usuario_id < 1
-        THROW 50102, 'Identificador de usuario inválido.', 1;
+        THROW 50102, N'Identificador de usuario inválido.', 1;
 
     SELECT usuario_id, nombre_usuario, correo_acceso, activo, fecha_creacion, ultimo_acceso
     FROM dbo.usuarios
     WHERE usuario_id = @usuario_id;
 
     IF @@ROWCOUNT = 0
-        THROW 50101, 'Usuario no encontrado.', 1;
+        THROW 50101, N'Usuario no encontrado.', 1;
 
     SELECT p.permiso_id, p.codigo, p.nombre, p.descripcion, p.activo, up.fecha_asignacion
     FROM dbo.usuarios_permisos AS up

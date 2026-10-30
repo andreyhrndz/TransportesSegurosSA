@@ -48,7 +48,7 @@ layout_start('entregas', $sections[$section][0], $descriptions[$section]);
     <?php endforeach; ?>
 </nav>
 
-<section class="toolbar-panel" aria-label="Filtros y acciones de <?= e(strtolower($sections[$section][0])) ?>">
+<section class="toolbar-panel" aria-label="Filtros y acciones de <?= e(utf8_strtolower($sections[$section][0])) ?>">
     <form class="filter-form" id="entregas-filtros" hx-get="/entregas/lista.php" hx-target="#entregas-resultado" hx-trigger="change, keyup changed delay:350ms from:input" hx-include="this">
         <input type="hidden" name="seccion" value="<?= e($section) ?>">
         <?php if ($section === 'documentos'): ?>
