@@ -1,28 +1,23 @@
 ## 1. Contratos SQL
 
-- [x] 1.1 Confirmar catálogo, objetos y política de hash realmente desplegados (catálogo y columna confirmados; política de hash pendiente de aprobación).
-- [ ] 1.2 Diseñar permisos `USUARIOS_VER` y `USUARIOS_GESTIONAR_CUENTAS` idempotentes.
-- [ ] 1.3 Implementar las cuatro firmas propuestas con entradas, salida y códigos 50412–50420 documentados.
+- [x] 1.1 Confirmar catálogo, objetos y política de hash bcrypt desplegados en `TransportesSegurosSA_Test`.
+- [x] 1.2 Diseñar e instalar permisos `USUARIOS_VER` y `USUARIOS_GESTIONAR_CUENTAS` idempotentes en `TransportesSegurosSA_Test`.
+- [x] 1.3 Implementar las cuatro firmas de cuenta y `sp_revocar_permiso_seguro` con códigos 50412–50420 documentados.
 
 ## 2. Seguridad
 
-- [ ] 2.1 Verificar actor, unicidad, hash y exclusión de hash en resultados.
-- [ ] 2.2 Proteger auto-desactivación y la última cuenta administradora activa bajo transacción.
-- [ ] 2.3 Probar concesión/revocación individual mediante los SP existentes.
+- [x] 2.1 Verificar actor, unicidad, formato bcrypt de 60 caracteres y exclusión total de hash en resultados y auditoría.
+- [x] 2.2 Proteger auto-desactivación, auto-revocación crítica y última cuenta administradora activa bajo transacción con `UPDLOCK, HOLDLOCK`.
+- [x] 2.3 Probar concesión/revocación individual delegando en `sp_conceder_permiso` y `sp_revocar_permiso` existentes.
 
 ## 3. Verificación
 
-- [ ] 3.1 Probar autorizado, denegado, duplicado, hash inválido y usuario inexistente.
-- [ ] 3.2 Probar cuenta propia y última cuenta administradora.
-- [ ] 3.3 Validar el change y registrar evidencia SQL.
+- [x] 3.1 Probar autorizado, denegado, duplicado, hash inválido y usuario inexistente.
+- [x] 3.2 Probar cuenta propia y última cuenta administradora en desactivación y revocación.
+- [x] 3.3 Validar el change y registrar evidencia SQL.
 
-## Evidencia y bloqueo de aprobación
+## Evidencia de ejecución en Test
 
-- Test tiene `USUARIOS_VER` y `USUARIOS_GESTIONAR_PERMISOS`, los contratos de lectura y los SP
-  `sp_conceder_permiso(@usuario_destino,@codigo)` / `sp_revocar_permiso(@usuario_destino,@codigo)`.
-  No tiene `USUARIOS_GESTIONAR_CUENTAS` ni SP de alta, edición, estado o restablecimiento.
-- `usuarios` conserva unicidad de nombre/correo y `password_hash NVARCHAR(255)`, pero el esquema
-  no define una política de algoritmo/versionado. Producto y DBA deben aprobar bcrypt/Argon2id,
-  la regla de última cuenta gestora y si la auto-revocación de permisos críticos se prohíbe.
-- No se ejecutó DDL ni DML de cuentas; por ello 1.2–3.3 siguen pendientes salvo la constatación
-  de objetos existente de 1.1.
+- Instalado exclusivamente en `TransportesSegurosSA_Test`: `sql/user-accounts/01_user_account_contracts.sql` y `sql/test-environment/06_grant_user_account_permissions_test.sql`. `TransportesSegurosSA` no fue modificada.
+- Reversión preparada en `sql/user-accounts/02_rollback_user_account_contracts.sql` y `sql/test-environment/06_revoke_user_account_permissions_test.sql`.
+- Pruebas ejecutadas y revertidas con `ROLLBACK`: `sql/user-accounts/03_contract_tests.sql` y `tests/user_accounts_integration_test.php` (compatibilidad `password_hash`/`password_verify`, exclusión de `password_hash`, errores 50410 y 50412–50420, y trazabilidad sin secretos en `dbo.auditorias` para los SP nuevos; `sp_conceder_permiso` original se mantiene intacto sin auditoría propia).
