@@ -11,27 +11,27 @@ El procedimiento de edición SHALL verificar `CLIENTES_EDITAR`, conservar el sub
 - **WHEN** una edición autorizada intenta cambiar una identificación
 - **THEN** el contrato no acepta ese campo y no modifica la identificación existente.
 
-### Requirement: Desactivación bloqueada hasta aprobar su regla
-El change SHALL mantener la desactivación fuera del frontend y sin despliegue hasta que producto y DBA aprueben explícitamente la regla para solicitudes no terminales. La propuesta actual es verificar `CLIENTES_DESACTIVAR`, marcar sólo `activo=0` y rechazar solicitudes `REGISTRADA`, `PENDIENTE_ASIGNACION`, `ASIGNADA` o `EN_TRANSITO`; no es un contrato definitivo.
+### Requirement: Desactivación segura ante solicitudes no terminales
+El procedimiento de desactivación SHALL verificar `CLIENTES_DESACTIVAR`, marcar únicamente `activo=0` sin borrar registros y rechazar la operación cuando el cliente tenga solicitudes en estado `REGISTRADA`, `PENDIENTE_ASIGNACION`, `ASIGNADA` o `EN_TRANSITO`. El despliegue permanece restringido a `TransportesSegurosSA_Test` hasta aprobación definitiva para la base original.
 
-#### Scenario: Falta aprobación de negocio o DBA
-- **WHEN** no existe aprobación documentada de la regla de solicitudes activas
-- **THEN** no se ejecuta el script propuesto ni se muestra una acción de desactivación.
+#### Scenario: Cliente con solicitud activa
+- **WHEN** un actor con `CLIENTES_DESACTIVAR` solicita desactivar un cliente que posee solicitudes no terminales
+- **THEN** el procedimiento rechaza la operación con el código `50220` sin alterar el cliente ni las solicitudes.
 
-#### Scenario: Regla aprobada en un despliegue posterior
-- **WHEN** producto y DBA aprueban la propuesta sin cambios y un cliente tiene solicitudes no terminales
-- **THEN** el contrato aprobado rechaza la operación sin alterar las solicitudes.
+#### Scenario: Cliente con historial únicamente terminal
+- **WHEN** un actor con `CLIENTES_DESACTIVAR` desactiva un cliente activo cuyas solicitudes están en estado terminal o inexistentes
+- **THEN** el procedimiento actualiza `activo=0` y conserva intacto el historial referencial.
 
 ### Requirement: Campos editables definidos
 Los procedimientos SHALL conservar identificación y subtipo; sólo actualizarán contacto/dirección común y los campos del subtipo definidos en el diseño, tras validar correo, longitudes y obligatoriedad.
 
 #### Scenario: Cambio de subtipo implícito
 - **WHEN** una edición intenta modificar un cliente físico como jurídico o alterar su identificación
-- **THEN** el procedimiento rechaza la solicitud sin modificar el cliente.
+- **THEN** el procedimiento rechaza la solicitud con `50218` sin modificar el cliente.
 
 ### Requirement: Integridad y trazabilidad
-Los procedimientos SHALL ejecutarse transaccionalmente y SHALL dejar evidencia de la operación cuando la auditoría aplicable esté habilitada.
+Los procedimientos SHALL ejecutarse transaccionalmente y SHALL registrar evidencia real en `dbo.auditorias` para cada edición o desactivación exitosa.
 
 #### Scenario: Fallo de validación
 - **WHEN** falla una validación durante una modificación
-- **THEN** la transacción revierte y no queda un cliente parcialmente actualizado.
+- **THEN** la transacción revierte y no queda un cliente parcialmente actualizado ni evento falso de auditoría.
