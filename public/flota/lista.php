@@ -72,7 +72,7 @@ if ($section === 'catalogos') {
         ],
     ];
     ?>
-    <div class="detail-grid">
+    <div class="catalog-grid detail-grid">
         <?php foreach ($catalogPanels as $panel): ?>
             <?php
             $filteredRows = $panel['rows'];
@@ -84,9 +84,9 @@ if ($section === 'catalogos') {
                 ));
             }
             ?>
-            <section class="panel-box">
-                <div class="panel-box-header">
-                    <h3 class="panel-box-title"><?= e($panel['title']) ?></h3>
+            <section class="panel-box catalog-card">
+                <div class="panel-box-header catalog-card-header">
+                    <h3 class="panel-box-title catalog-card-title"><?= e($panel['title']) ?></h3>
                     <?php if ($canManageCatalogs): ?>
                         <button class="button is-small is-primary" type="button" hx-get="/flota/form.php?entidad=<?= e($panel['entity']) ?>" hx-target="#modal-contenido">
                             <?= svg_icon('plus') ?><span>Nuevo</span>
@@ -94,26 +94,26 @@ if ($section === 'catalogos') {
                     <?php endif; ?>
                 </div>
                 <?php if (!$filteredRows): ?>
-                    <p class="has-text-grey">Sin registros para los filtros seleccionados.</p>
+                    <p class="has-text-grey p-4">Sin registros para los filtros seleccionados.</p>
                 <?php else: ?>
                     <div class="table-container">
-                        <table class="table is-fullwidth is-hoverable">
+                        <table class="table is-fullwidth is-hoverable catalog-table">
                             <tbody>
                                 <?php foreach ($filteredRows as $row): ?>
                                     <?php $itemId = (int)$row[$panel['id_key']]; ?>
                                     <?php $isActive = (int)$row['activo'] === 1; ?>
                                     <tr>
-                                        <td>
+                                        <td class="catalog-info-cell">
                                             <div class="cell-stack">
-                                                <div>
-                                                    <strong><?= e($row['nombre']) ?></strong>
+                                                <div class="catalog-item-title-row">
+                                                    <strong class="catalog-item-name"><?= e($row['nombre']) ?></strong>
                                                     <span class="ml-2"><?= status_tag($isActive ? 'ACTIVO' : 'INACTIVO') ?></span>
                                                 </div>
-                                                <span><?= e($row['descripcion'] ?: 'Sin descripción') ?></span>
+                                                <span class="catalog-item-desc"><?= e($row['descripcion'] ?: 'Sin descripción') ?></span>
                                             </div>
                                         </td>
                                         <?php if ($canManageCatalogs && $isActive): ?>
-                                            <td>
+                                            <td class="catalog-actions-cell">
                                                 <div class="row-actions">
                                                     <button class="button is-small button-secondary" type="button" hx-get="/flota/form.php?entidad=<?= e($panel['entity']) ?>&id=<?= $itemId ?>" hx-target="#modal-contenido" aria-label="Editar <?= e($row['nombre']) ?>"><?= svg_icon('edit') ?><span>Editar</span></button>
                                                     <button class="button is-small button-secondary" type="button" hx-get="/flota/desactivar_form.php?entidad=<?= e($panel['entity']) ?>&id=<?= $itemId ?>" hx-target="#modal-contenido" aria-label="Desactivar <?= e($row['nombre']) ?>"><?= svg_icon('deactivate') ?><span>Desactivar</span></button>
