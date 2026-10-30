@@ -24,21 +24,24 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
 <body>
 <div class="app-shell">
     <aside class="sidebar" id="sidebar" aria-label="Navegación principal">
-        <div class="brand"><span class="brand-icon" aria-hidden="true">TS</span><div><strong>Transportes Seguros</strong><span>Administración logística</span></div></div>
-        <nav class="menu-list">
+        <div class="brand"><span class="brand-mark" aria-hidden="true"><?= svg_icon('brand') ?></span><div><strong>Transportes Seguros</strong><span>Administración logística</span></div></div>
+        <nav class="sidebar-navigation">
+            <p class="nav-section-label">Principal</p>
+            <div class="menu-list">
             <?php if ($puedeReportes): ?>
                 <a class="sidebar-link <?= $activo === 'dashboard' ? 'active' : '' ?>" href="/"><?= svg_icon('dashboard') ?><span>Panel general</span></a>
             <?php endif; ?>
             <?php if ($puedeClientes): ?>
                 <a class="sidebar-link <?= $activo === 'clientes' ? 'active' : '' ?>" href="/clientes.php"><?= svg_icon('clients') ?><span>Clientes</span></a>
             <?php endif; ?>
+            </div>
         </nav>
-        <div class="sidebar-bottom"><strong>Transportes Seguros S.A.</strong></div>
+        <div class="sidebar-bottom"><span class="sidebar-status" aria-hidden="true"></span>Acceso protegido</div>
     </aside>
     <div class="main-area">
         <header class="topbar">
             <button class="icon-button sidebar-toggle" type="button" aria-controls="sidebar" aria-expanded="false" data-sidebar-toggle><?= svg_icon('menu', 'Abrir navegación') ?></button>
-            <div class="mobile-brand">Transportes Seguros S.A.</div>
+            <div class="mobile-brand">Transportes Seguros</div>
             <div class="topbar-right"><span class="user-badge"><?= e($usuario['nombre_usuario']) ?></span><form action="/auth/logout.php" method="post"><input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>"><button class="button button-secondary is-small" type="submit"><?= svg_icon('logout') ?><span>Cerrar sesión</span></button></form></div>
         </header>
         <main class="main-content">

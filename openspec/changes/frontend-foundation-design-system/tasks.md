@@ -29,11 +29,17 @@
 
 - [ ] 5.1 Probar escritorio, tablet y móvil; registrar tamaños evaluados y defectos corregidos.
 - [ ] 5.2 Verificar teclado/foco, contraste, mensajes y accesibilidad de controles.
-- [ ] 5.3 Ejecutar `openspec validate frontend-foundation-design-system --strict`, documentar pruebas/limitaciones y dejar el change listo para revisión (sin archivarlo).
+- [x] 5.3 Ejecutar `openspec validate frontend-foundation-design-system --strict`, documentar pruebas/limitaciones y dejar el change listo para revisión (sin archivarlo).
 
 ## Evidencia y limitaciones
 
 - Sintaxis PHP de todas las rutas de app/ y public/: correcta con PHP 8.4.
 - openspec validate frontend-foundation-design-system --strict: correcto.
+- Pruebas HTTP locales sin credenciales: el formulario de login conserva cookie/CSRF entre
+  GET y POST y el favicon no modifica la sesión (`php tests/session_csrf_regression.php`).
+  La sintaxis de JavaScript también fue validada con `node --check`.
 - Corrección puntual del login: nombre de producto en panel petróleo con blanco; contraste calculado 9.42:1.
-- El servidor de desarrollo no pudo mantenerse accesible desde el sandbox de Codex; las pruebas visuales de escritorio/tablet/móvil y los flujos que leen o escriben la base operativa quedan pendientes de un entorno de pruebas autorizado. Por ello 1.2, 4.1, 4.2, 5.1, 5.2 y 5.3 siguen abiertas.
+- El servidor local sí respondió para pruebas HTTP, pero el host de automatización de Chrome no
+  estuvo disponible para capturas o inspección visual. Las pruebas de escritorio/tablet/móvil y
+  los flujos autenticados que leen o escriben la base operativa siguen pendientes de un entorno
+  de pruebas autorizado. Por ello 1.2, 4.1, 4.2, 5.1 y 5.2 siguen abiertas.

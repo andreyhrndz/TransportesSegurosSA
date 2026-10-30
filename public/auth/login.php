@@ -70,7 +70,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 </head>
 <body class="login-page">
 <div class="login-side">
-    <div class="login-logo"><span class="brand-icon" aria-hidden="true">TS</span><strong>Transportes Seguros S.A.</strong></div>
+    <div class="login-logo"><span class="brand-mark" aria-hidden="true"><?= svg_icon('brand') ?></span><strong>Transportes Seguros S.A.</strong></div>
     <div class="login-claim"><h1>Gestión logística con información centralizada.</h1><p>Consulta el estado de la operación y administra clientes desde un único espacio de trabajo.</p></div>
 </div>
 <div class="login-panel">

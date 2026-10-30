@@ -5,6 +5,7 @@ declare(strict_types=1);
 function svg_icon(string $name, string $label = ''): string
 {
     $paths = [
+        'brand' => '<path d="M7 4h10l3 4-8 12L4 8z"/><path d="M7 4l5 4 5-4M12 8v12"/>',
         'menu' => '<path d="M4 7h16M4 12h16M4 17h16"/>',
         'dashboard' => '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/>',
         'clients' => '<circle cx="9" cy="8" r="3"/><path d="M3.5 20c.7-3.1 2.6-5 5.5-5s4.8 1.9 5.5 5M16 8h4M18 6v4M16 16h4"/>',
@@ -30,4 +31,21 @@ function ui_notice(string $message, string $variant = 'info'): string
 function empty_state(string $title, string $description): string
 {
     return '<section class="empty-state" aria-live="polite">' . svg_icon('empty') . '<h2>' . e($title) . '</h2><p>' . e($description) . '</p></section>';
+}
+
+function format_utc_datetime(mixed $value): string
+{
+    if ($value === null || $value === '') {
+        return 'Sin fecha';
+    }
+
+    try {
+        $date = $value instanceof DateTimeInterface
+            ? DateTimeImmutable::createFromInterface($value)
+            : new DateTimeImmutable((string)$value, new DateTimeZone('UTC'));
+
+        return $date->setTimezone(new DateTimeZone('UTC'))->format('d/m/Y H:i') . ' UTC';
+    } catch (Exception) {
+        return 'Fecha no disponible';
+    }
 }

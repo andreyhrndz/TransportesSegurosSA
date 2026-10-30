@@ -37,7 +37,7 @@ layout_start('dashboard', 'Panel general', 'Resumen operativo actualizado desde 
         <?= empty_state('Aún no hay solicitudes', 'Las solicitudes recientes aparecerán aquí cuando existan registros.') ?>
     <?php else: ?>
         <div class="table-container"><table class="table is-fullwidth is-hoverable"><thead><tr><th>Código</th><th>Estado</th><th>Prioridad</th><th>Fecha (UTC)</th></tr></thead><tbody>
-        <?php foreach ($recientes as $s): ?><tr><td><strong><?= e($s['codigo_solicitud']) ?></strong></td><td><span class="tag is-light"><?= e($s['estado']) ?></span></td><td><?= e($s['prioridad_actual']) ?></td><td><?= e($s['fecha_solicitud']) ?></td></tr><?php endforeach; ?>
+        <?php foreach ($recientes as $s): ?><tr><td><strong><?= e($s['codigo_solicitud']) ?></strong></td><td><span class="tag is-light"><?= e($s['estado']) ?></span></td><td><?= e($s['prioridad_actual']) ?></td><td><?= e(format_utc_datetime($s['fecha_solicitud'])) ?></td></tr><?php endforeach; ?>
         </tbody></table></div>
     <?php endif; ?>
 </section>
