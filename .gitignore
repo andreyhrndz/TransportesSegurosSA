@@ -4,5 +4,7 @@
 *.log
 *.bak
 .phpunit.result.cache
-vendor/
+/vendor/
+!public/assets/vendor/
+!public/assets/vendor/**
 node_modules/
