@@ -296,30 +296,34 @@ code {
     transition: opacity var(--transition-fast);
 }
 
-.menu-list {
+.menu-list,
+.sidebar .menu-list {
     display: flex;
     flex-direction: column;
-    gap: 0.28rem;
+    gap: 0.3rem;
 }
 
+.menu-list a.sidebar-link,
 .sidebar-link {
     position: relative;
-    display: flex;
+    display: flex !important;
     align-items: center;
     gap: 0.88rem;
     min-height: 42px;
-    padding: 0.58rem 0.85rem;
-    border-radius: var(--radius-md);
-    color: var(--color-text-muted);
+    padding: 0.58rem 0.85rem !important;
+    border-radius: var(--radius-md) !important;
+    color: var(--color-text-muted) !important;
     font-size: 0.91rem;
     font-weight: 500;
     line-height: 1.25;
     transition: background-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast);
 }
 
+.menu-list a.sidebar-link .icon,
 .sidebar-link .icon {
     width: 1.22rem;
     height: 1.22rem;
+    margin: 0 !important;
     color: var(--color-text-muted);
     transition: color var(--transition-fast);
 }
@@ -330,22 +334,26 @@ code {
     text-overflow: ellipsis;
 }
 
+.menu-list a.sidebar-link:hover,
 .sidebar-link:hover {
-    background: rgba(100, 143, 255, 0.08);
-    color: var(--color-text);
+    background: rgba(100, 143, 255, 0.08) !important;
+    color: var(--color-text) !important;
 }
 
+.menu-list a.sidebar-link:hover .icon,
 .sidebar-link:hover .icon {
     color: var(--color-primary-hover);
 }
 
+.menu-list a.sidebar-link.active,
 .sidebar-link.active {
-    background: linear-gradient(90deg, rgba(100, 143, 255, 0.18) 0%, rgba(100, 143, 255, 0.06) 100%);
-    color: var(--color-text);
+    background: linear-gradient(90deg, rgba(100, 143, 255, 0.18) 0%, rgba(100, 143, 255, 0.06) 100%) !important;
+    color: var(--color-text) !important;
     font-weight: 600;
     box-shadow: inset 0 0 0 1px rgba(100, 143, 255, 0.22);
 }
 
+.menu-list a.sidebar-link.active .icon,
 .sidebar-link.active .icon {
     color: var(--color-primary);
 }
@@ -433,11 +441,12 @@ code {
         display: none;
     }
 
+    .app-shell.is-sidebar-collapsed .menu-list a.sidebar-link,
     .app-shell.is-sidebar-collapsed .sidebar-link,
     .app-shell.is-sidebar-collapsed .sidebar-collapse-btn {
         justify-content: center;
-        padding-left: 0;
-        padding-right: 0;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
     }
 
     .app-shell.is-sidebar-collapsed .collapse-icon-open {
@@ -992,10 +1001,28 @@ code {
     flex: 1 1 auto;
 }
 
+.filter-form .input-with-icon {
+    width: auto;
+    flex: 1 1 280px;
+    max-width: 440px;
+}
+
+.filter-form > .input,
+.filter-form > input.flatpickr-input {
+    width: auto;
+    flex: 0 1 200px;
+}
+
 .filter-form .input,
 .filter-form .select,
 .filter-form .ts-wrapper {
     min-width: 190px;
+}
+
+.combobox-filter-wrap {
+    min-width: 320px;
+    flex: 1 1 320px;
+    max-width: 480px;
 }
 
 .tabs-bar {

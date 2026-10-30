@@ -89,12 +89,12 @@ layout_start('flota', 'Flota y maestros', 'Administra vehículos, conductores, r
     <?php endforeach; ?>
 </nav>
 
-<section class="toolbar-panel" aria-label="Filtros y acciones de <?= e(mb_strtolower($activeConfig['label'], 'UTF-8')) ?>">
+<section class="toolbar-panel" aria-label="Filtros y acciones de <?= e(strtolower($activeConfig['label'])) ?>">
     <form class="filter-form" id="flota-filtros" hx-get="/flota/lista.php" hx-target="#flota-resultado" hx-trigger="keyup changed delay:350ms from:input, change" hx-include="this">
         <input type="hidden" name="seccion" value="<?= e($section) ?>">
         <div class="input-with-icon">
             <?= svg_icon('search', '', 'input-icon') ?>
-            <input class="input" id="flota-buscar" type="search" name="buscar" maxlength="120" placeholder="Filtrar <?= mb_strtolower(e($activeConfig['label']), 'UTF-8') ?>…" autocomplete="off" aria-label="Buscar en <?= e($activeConfig['label']) ?>" aria-controls="flota-resultado">
+            <input class="input" id="flota-buscar" type="search" name="buscar" maxlength="120" placeholder="Filtrar <?= e(strtolower($activeConfig['label'])) ?>…" autocomplete="off" aria-label="Buscar en <?= e($activeConfig['label']) ?>" aria-controls="flota-resultado">
         </div>
 
         <?php if (in_array($section, ['vehiculos', 'conductores'], true)): ?>

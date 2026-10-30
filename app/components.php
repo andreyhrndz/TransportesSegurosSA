@@ -217,8 +217,8 @@ function humanize_status(mixed $value): string
         return $dictionary[$upper];
     }
 
-    $cleaned = str_replace('_', ' ', mb_strtolower($raw, 'UTF-8'));
-    return mb_strtoupper(mb_substr($cleaned, 0, 1, 'UTF-8'), 'UTF-8') . mb_substr($cleaned, 1, null, 'UTF-8');
+    $cleaned = str_replace('_', ' ', strtolower($raw));
+    return ucfirst($cleaned);
 }
 
 function status_tag(mixed $value): string
@@ -243,7 +243,25 @@ function user_initials(string $username): string
     $parts = preg_split('/[\s._-]+/', $clean) ?: [];
     $parts = array_values(array_filter($parts, static fn(string $p): bool => $p !== ''));
     if (count($parts) >= 2) {
-        return mb_strtoupper(mb_substr($parts[0], 0, 1, 'UTF-8') . mb_substr($parts[1], 0, 1, 'UTF-8'), 'UTF-8');
+        $chars0 = preg_split('//u', $parts[0], -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        $chars1 = preg_split('//u', $parts[1], -1, PREG_SPLIT_NO_EMPTY) ?: [];
+        return strtoupper(($chars0[0] ?? '') . ($chars1[0] ?? ''));
     }
-    return mb_strtoupper(mb_substr($clean, 0, 2, 'UTF-8'), 'UTF-8');
+    $chars = preg_split('//u', $clean, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    return strtoupper(($chars[0] ?? '') . ($chars[1] ?? ''));
 }
+
+function normalize_spanish_text(mixed $value): string
+{
+    $text = (string)$value;
+    return strtr($text, [
+        'Ã¡' => 'á',
+        'Ã©' => 'é',
+        'Ã­' => 'í',
+        'Ã³' => 'ó',
+        'Ãº' => 'ú',
+        'Ã±' => 'ñ',
+        'Ãa' => 'ía',
+    ]);
+}
+

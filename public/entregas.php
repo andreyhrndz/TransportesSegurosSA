@@ -48,11 +48,11 @@ layout_start('entregas', $sections[$section][0], $descriptions[$section]);
     <?php endforeach; ?>
 </nav>
 
-<section class="toolbar-panel" aria-label="Filtros y acciones de <?= e(mb_strtolower($sections[$section][0], 'UTF-8')) ?>">
+<section class="toolbar-panel" aria-label="Filtros y acciones de <?= e(strtolower($sections[$section][0])) ?>">
     <form class="filter-form" id="entregas-filtros" hx-get="/entregas/lista.php" hx-target="#entregas-resultado" hx-trigger="change, keyup changed delay:350ms from:input" hx-include="this">
         <input type="hidden" name="seccion" value="<?= e($section) ?>">
         <?php if ($section === 'documentos'): ?>
-            <div style="min-width: 320px;">
+            <div class="combobox-filter-wrap">
                 <select id="documentos-solicitud" name="solicitud_id" data-combobox data-allow-clear="true" <?= has_permission('SOLICITUDES_VER') ? 'data-remote-url="/solicitudes/lista.php"' : '' ?> data-placeholder="Buscar solicitud por código o cliente…" aria-label="Solicitud">
                     <option value="">Selecciona una solicitud para ver sus documentos…</option>
                     <?php foreach ($solicitudesDocumentos as $sol): ?>
