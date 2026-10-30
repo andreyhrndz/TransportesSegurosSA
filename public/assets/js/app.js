@@ -4,16 +4,28 @@
     const aviso = document.getElementById('aviso-temporal');
     const sidebar = document.getElementById('sidebar');
     const sidebarToggle = document.querySelector('[data-sidebar-toggle]');
+    const backdrop = document.getElementById('sidebar-backdrop');
+    const appShell = document.getElementById('app-shell');
     let timer;
     let previousFocus = null;
 
+    const FOCUSABLE_SELECTOR = 'button:not([disabled]), [href], input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    function getFocusableElements(container) {
+        if (!container) return [];
+        return Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR))
+            .filter((el) => el.offsetParent !== null || el.getClientRects().length > 0);
+    }
+
     function firstFocusable(container) {
-        return container?.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        const list = getFocusableElements(container);
+        return list.length ? list[0] : null;
     }
 
     function cerrarModal() {
-        if (!modal || modal.innerHTML === '') return;
+        if (!modal || modal.innerHTML.trim() === '') return;
         modal.innerHTML = '';
+        if (appShell) appShell.removeAttribute('aria-hidden');
         previousFocus?.focus();
         previousFocus = null;
     }
@@ -21,7 +33,15 @@
     function abrirModal() {
         if (!modal) return;
         previousFocus = document.activeElement;
-        requestAnimationFrame(() => firstFocusable(modal)?.focus());
+        if (appShell) appShell.setAttribute('aria-hidden', 'true');
+        requestAnimationFrame(() => {
+            const autofocusEl = modal.querySelector('[autofocus]');
+            if (autofocusEl && typeof autofocusEl.focus === 'function') {
+                autofocusEl.focus();
+            } else {
+                firstFocusable(modal)?.focus();
+            }
+        });
     }
 
     function mostrarAviso(texto, error = false) {
@@ -38,11 +58,17 @@
         const open = typeof force === 'boolean' ? force : !sidebar.classList.contains('is-open');
         sidebar.classList.toggle('is-open', open);
         sidebarToggle.setAttribute('aria-expanded', String(open));
+        if (backdrop) {
+            backdrop.hidden = !open;
+            backdrop.setAttribute('aria-hidden', String(!open));
+        }
+        document.body.classList.toggle('sidebar-locked', open);
     }
 
     document.addEventListener('click', (event) => {
         if (event.target.closest('[data-close-modal]')) cerrarModal();
         if (event.target.closest('[data-sidebar-toggle]')) toggleSidebar();
+        if (event.target.closest('[data-sidebar-close]')) toggleSidebar(false);
         const addMerchandise = event.target.closest('[data-add-mercancia]');
         if (addMerchandise) {
             const list = document.querySelector('[data-mercancias-lista]');
@@ -63,8 +89,30 @@
 
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
-            if (modal?.innerHTML) cerrarModal();
+            if (modal?.innerHTML.trim()) cerrarModal();
             else toggleSidebar(false);
+            return;
+        }
+
+        if (event.key === 'Tab' && modal && modal.innerHTML.trim() !== '') {
+            const focusables = getFocusableElements(modal);
+            if (focusables.length === 0) {
+                event.preventDefault();
+                return;
+            }
+            const firstEl = focusables[0];
+            const lastEl = focusables[focusables.length - 1];
+            if (event.shiftKey) {
+                if (document.activeElement === firstEl || !modal.contains(document.activeElement)) {
+                    lastEl.focus();
+                    event.preventDefault();
+                }
+            } else {
+                if (document.activeElement === lastEl || !modal.contains(document.activeElement)) {
+                    firstEl.focus();
+                    event.preventDefault();
+                }
+            }
         }
     });
 

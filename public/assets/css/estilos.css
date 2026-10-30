@@ -32,7 +32,9 @@
 body { min-height: 100vh; background: var(--color-canvas); color: var(--color-ink); font-family: var(--font-sans); }
 button, input, select, textarea { font: inherit; }
 a { color: var(--color-primary-strong); }
-:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; box-shadow: var(--focus-ring); }
+.skip-link { position: absolute; top: -100px; left: 1rem; padding: var(--space-2) var(--space-4); background: var(--color-primary-strong); color: #ffffff; border-radius: var(--radius-sm); font-weight: 700; text-decoration: none; z-index: 100; transition: top .15s ease; }
+.skip-link:focus { top: 1rem; outline: 2px solid #ffffff; box-shadow: var(--focus-ring); }
 .icon { display: inline-block; width: 1.1em; height: 1.1em; flex: 0 0 auto; vertical-align: -.18em; }
 
 .app-shell { min-height: 100vh; display: flex; }
@@ -156,6 +158,9 @@ a { color: var(--color-primary-strong); }
 .login-box { width: min(100%, 27rem); padding: var(--space-6); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); }
 .login-mobile-logo { display: none; margin-bottom: var(--space-5); color: var(--color-primary-strong); font-weight: 800; }
 
+.sidebar-backdrop { position: fixed; inset: 0; background: rgb(20 35 40 / .48); z-index: 15; backdrop-filter: blur(2px); }
+body.sidebar-locked { overflow: hidden; }
+
 @media (max-width: 960px) {
   .sidebar { transform: translateX(-102%); transition: transform .18s ease; }
   .sidebar.is-open { transform: translateX(0); }
@@ -176,13 +181,14 @@ a { color: var(--color-primary-strong); }
   .login-panel { min-height: 100vh; padding: var(--space-4); }
   .login-box { padding: var(--space-5); }
   .login-mobile-logo { display: block; }
-  .table-container { overflow-x: auto; }
+  .table-container { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .stat-grid { grid-template-columns: 1fr; }
   .clients-toolbar, .pagination-wrap { align-items: stretch; flex-direction: column; }
   .clients-toolbar .buttons { width: 100%; }
   .clients-toolbar .button { flex: 1; }
   .panel-white { padding: var(--space-4); }
   .filter-grid, .detail-grid { grid-template-columns: 1fr; }
+  .button, .input, .select select, .sidebar-link, .icon-button { min-height: 2.75rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }

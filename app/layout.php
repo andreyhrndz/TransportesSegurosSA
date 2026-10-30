@@ -28,7 +28,8 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
     <script src="/assets/js/app.js" defer></script>
 </head>
 <body>
-<div class="app-shell">
+<a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+<div class="app-shell" id="app-shell">
     <aside class="sidebar" id="sidebar" aria-label="Navegación principal">
         <div class="brand"><span class="brand-mark" aria-hidden="true"><?= svg_icon('brand') ?></span><div><strong>Transportes Seguros</strong><span>Administración logística</span></div></div>
         <nav class="sidebar-navigation">
@@ -78,7 +79,7 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
             <div class="mobile-brand">Transportes Seguros</div>
             <div class="topbar-right"><span class="user-badge"><?= e($usuario['nombre_usuario']) ?></span><form action="/auth/logout.php" method="post"><input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>"><button class="button button-secondary is-small" type="submit"><?= svg_icon('logout') ?><span>Cerrar sesión</span></button></form></div>
         </header>
-        <main class="main-content">
+        <main class="main-content" id="main-content">
             <div class="page-intro"><div><h1 class="title is-3"><?= e($titulo) ?></h1><p class="page-subtitle"><?= e($descripcion) ?></p></div></div>
 <?php
 }
@@ -89,6 +90,7 @@ function layout_end(): void
         </main>
     </div>
 </div>
+<div class="sidebar-backdrop" id="sidebar-backdrop" data-sidebar-close hidden aria-hidden="true"></div>
 <div id="modal-contenido" aria-live="polite"></div>
 <div id="aviso-temporal" class="toast" role="status" aria-live="polite" hidden></div>
 </body>
