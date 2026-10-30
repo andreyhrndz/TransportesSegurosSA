@@ -8,7 +8,7 @@ require_once __DIR__ . '/../app/layout.php';
 layout_start('solicitudes', 'Solicitudes', 'Consulta solicitudes, destinatarios previstos y mercancías registradas.');
 ?>
 <section class="panel-white">
-    <div class="panel-heading-custom"><div><h2 class="title is-5">Solicitudes de transporte</h2><p>Filtra por código, cliente, estado o período.</p></div></div>
+    <div class="panel-heading-custom"><div><h2 class="title is-5">Solicitudes de transporte</h2><p>Filtra por código, cliente, estado o período.</p></div><?php if(has_permission('SOLICITUDES_CREAR')):?><button class="button is-primary" hx-get="/solicitudes/form.php" hx-target="#modal-contenido"><?= svg_icon('plus') ?><span>Nueva solicitud</span></button><?php endif;?></div>
     <form class="filter-grid" id="solicitudes-filtros" hx-get="/solicitudes/lista.php" hx-target="#solicitudes-resultado" hx-trigger="keyup changed delay:350ms from:input, change" hx-include="this">
         <div class="field mb-0"><label class="label" for="solicitud-buscar">Buscar</label><div class="control"><input class="input" id="solicitud-buscar" type="search" name="buscar" maxlength="120" placeholder="Código, cliente o destinatario"></div></div>
         <div class="field mb-0"><label class="label" for="solicitud-estado">Estado</label><div class="control select is-fullwidth"><select id="solicitud-estado" name="estado"><option value="">Todos</option><option>REGISTRADA</option><option>PENDIENTE_ASIGNACION</option><option>ASIGNADA</option><option>EN_TRANSITO</option><option>ENTREGADA</option><option>ENTREGA_FALLIDA</option><option>CANCELADA</option></select></div></div>

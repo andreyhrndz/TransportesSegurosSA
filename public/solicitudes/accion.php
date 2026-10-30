@@ -1,0 +1,8 @@
+<?php
+declare(strict_types=1);
+require_once __DIR__ . '/../../app/bootstrap.php'; require_once __DIR__ . '/../../app/operational_writes.php';
+$action=(string)($_POST['accion']??''); $permission=['prioridad'=>'SOLICITUDES_AJUSTAR_PRIORIDAD','cancelar'=>'SOLICITUDES_CANCELAR'][$action]??null;
+if ($permission===null) { operation_error('Acción no disponible.',404); } require_operation_post($permission);
+try { $id=operation_id($_POST['solicitud_id']??null); if($action==='prioridad'){ $priority=strtoupper((string)($_POST['prioridad']??'')); if(!in_array($priority,['NORMAL','ALTA','URGENTE'],true)){throw new InvalidArgumentException('Selecciona una prioridad válida.');}$text=operation_text($_POST['justificacion']??null,500);$sql='EXEC dbo.sp_ajustar_prioridad @solicitud_id=?,@prioridad=?,@justificacion=?;';$params=[$id,$priority,$text];$success='Prioridad actualizada correctamente.'; } else {$text=operation_text($_POST['motivo']??null,500);$sql='EXEC dbo.sp_cancelar_solicitud @solicitud_id=?,@motivo=?;';$params=[$id,$text];$success='Solicitud cancelada correctamente.';} } catch(InvalidArgumentException $exception){operation_error($exception->getMessage());}
+try{$stmt=db()->prepare($sql);$stmt->execute($params);$stmt->closeCursor();}catch(PDOException $exception){operation_sql_error($exception,$action==='prioridad'?[50210=>'Selecciona una prioridad válida.',50211=>'La justificación es obligatoria.',50212=>'La solicitud no admite ajuste de prioridad.']:[50214=>'El motivo de cancelación es obligatorio.',50215=>'La solicitud ya está asignada o no admite cancelación.']);}
+operation_success($success,'solicitudActualizada','/solicitudes/detalle.php?id='.$id);
