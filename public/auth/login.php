@@ -59,10 +59,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 }
 ?>
 <!DOCTYPE html>
-<html lang="es" data-theme="light">
+<html lang="es" data-theme="dark">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="color-scheme" content="dark">
     <title>Iniciar sesión — Transportes Seguros S.A.</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
@@ -70,20 +71,71 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 </head>
 <body class="login-page">
 <div class="login-side">
-    <div class="login-logo"><span class="brand-mark" aria-hidden="true"><?= svg_icon('brand') ?></span><strong>Transportes Seguros S.A.</strong></div>
-    <div class="login-claim"><h1>Gestión logística con información centralizada.</h1><p>Consulta el estado de la operación y administra clientes desde un único espacio de trabajo.</p></div>
+    <div class="login-logo">
+        <strong>Transportes Seguros S.A.</strong>
+        <span>Centro de Operaciones Logísticas</span>
+    </div>
+    <div class="login-claim">
+        <span class="login-badge">Plataforma Empresarial</span>
+        <h1>Coordinación logística con visibilidad operativa en tiempo real.</h1>
+        <p>Gestiona clientes, solicitudes de transporte, viajes en ruta, flota vehicular y comprobación de entregas desde una consola centralizada.</p>
+        <div class="login-highlights">
+            <div class="login-highlight-item">
+                <?= svg_icon('trips') ?>
+                <div>
+                    <strong>Despacho y seguimiento de viajes</strong>
+                    <span>Control de paradas, asignaciones y estados de ruta en Costa Rica.</span>
+                </div>
+            </div>
+            <div class="login-highlight-item">
+                <?= svg_icon('deliveries') ?>
+                <div>
+                    <strong>Entregas e incidencias verificadas</strong>
+                    <span>Registro documental y atención oportuna de eventos operativos.</span>
+                </div>
+            </div>
+            <div class="login-highlight-item">
+                <?= svg_icon('shield') ?>
+                <div>
+                    <strong>Acceso seguro por permisos</strong>
+                    <span>Trazabilidad completa de operaciones por cuenta autorizada.</span>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="login-footer-note">Transportes Seguros S.A. · Costa Rica</div>
 </div>
 <div class="login-panel">
     <div class="login-box">
-        <div class="login-mobile-logo">Transportes Seguros S.A.</div>
-        <h1 class="title is-3">Iniciar sesión</h1>
-        <p class="mb-5 has-text-grey">Accede con tus credenciales registradas.</p>
+        <div class="login-mobile-logo">
+            <strong>Transportes Seguros S.A.</strong>
+            <span>Operaciones Logísticas</span>
+        </div>
+        <div class="login-box-header">
+            <h1 class="title is-3">Iniciar sesión</h1>
+            <p class="login-subtitle">Ingresa tus credenciales corporativas para continuar.</p>
+        </div>
         <?php if ($error !== ''): ?><?= ui_notice($error, 'danger') ?><?php endif; ?>
-        <form action="/auth/login.php" method="post">
+        <form action="/auth/login.php" method="post" class="login-form">
             <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-            <div class="field"><label class="label" for="usuario">Usuario o correo</label><div class="control"><input id="usuario" class="input" name="usuario" autocomplete="username" maxlength="150" required autofocus></div></div>
-            <div class="field"><label class="label" for="password">Contraseña</label><div class="control"><input id="password" class="input" name="password" type="password" autocomplete="current-password" maxlength="1024" required></div></div>
-            <button class="button is-primary is-fullwidth mt-5" type="submit">Entrar</button>
+            <div class="field">
+                <label class="label" for="usuario">Usuario o correo electrónico</label>
+                <div class="control input-with-icon">
+                    <?= svg_icon('user', '', 'input-icon') ?>
+                    <input id="usuario" class="input" name="usuario" placeholder="Ej. admin o correo@empresa.cr" autocomplete="username" maxlength="150" required autofocus>
+                </div>
+            </div>
+            <div class="field">
+                <label class="label" for="password">Contraseña</label>
+                <div class="control input-with-icon">
+                    <?= svg_icon('lock', '', 'input-icon') ?>
+                    <input id="password" class="input" name="password" type="password" placeholder="Ingresa tu contraseña" autocomplete="current-password" maxlength="1024" required>
+                </div>
+            </div>
+            <button class="button is-primary is-fullwidth mt-5" type="submit">
+                <span>Entrar al panel</span>
+                <?= svg_icon('chevron-right') ?>
+            </button>
         </form>
     </div>
 </div>
