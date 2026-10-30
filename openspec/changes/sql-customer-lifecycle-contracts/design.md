@@ -18,6 +18,7 @@
 ## Risks / Trade-offs
 
 - [Regla nueva frente a scripts de referencia] → requiere aprobación DBA/producto antes de desplegar; hasta entonces el frontend no ofrece desactivación.
+- [Auditoría no disponible] → el inventario actual no contiene trigger de clientes; no se promete trazabilidad adicional sin un change SQL aprobado.
 - [Carrera de unicidad] → constraint existente y mapeo de 2601/2627.
 
 ## Migration Plan

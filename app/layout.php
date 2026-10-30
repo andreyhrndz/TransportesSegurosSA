@@ -4,13 +4,14 @@ declare(strict_types=1);
 function layout_start(string $activo, string $titulo, string $descripcion): void
 {
     $usuario = require_login();
-    $puedeClientes = has_permission('CLIENTES_CREAR');
+    $puedeClientes = has_permission('CLIENTES_VER');
     $puedeReportes = has_permission('REPORTES_VER');
     $puedeAuditoria = has_permission('AUDITORIA_VER');
     $puedeSolicitudes = has_permission('SOLICITUDES_VER');
     $puedeViajes = has_permission('VIAJES_VER');
     $puedeEntregas = has_any_permission(['ENTREGAS_VER', 'INCIDENCIAS_VER', 'DOCUMENTOS_VER', 'NOTIFICACIONES_VER']);
     $puedeFlota = has_any_permission(['FLOTAS_VER', 'RUTAS_VER', 'UBICACIONES_VER', 'CATALOGOS_VER']);
+    $puedeUsuarios = has_permission('USUARIOS_VER');
 ?>
 <!DOCTYPE html>
 <html lang="es" data-theme="light">
@@ -57,10 +58,15 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
             <?php endif; ?>
             </div>
             <?php endif; ?>
-            <?php if ($puedeFlota): ?>
+            <?php if ($puedeFlota || $puedeUsuarios): ?>
             <p class="nav-section-label nav-section-spaced">Administración</p>
             <div class="menu-list">
+                <?php if ($puedeUsuarios): ?>
+                <a class="sidebar-link <?= $activo === 'usuarios' ? 'active' : '' ?>" href="/usuarios.php"><?= svg_icon('clients') ?><span>Usuarios y permisos</span></a>
+                <?php endif; ?>
+                <?php if ($puedeFlota): ?>
                 <a class="sidebar-link <?= $activo === 'flota' ? 'active' : '' ?>" href="/flota.php"><?= svg_icon('fleet') ?><span>Flota y maestros</span></a>
+                <?php endif; ?>
             </div>
             <?php endif; ?>
         </nav>

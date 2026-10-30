@@ -51,6 +51,10 @@ operational_assert($audit['total'] >= count($audit['rows']), 'El contrato de aud
 $details = read_procedure_sets('EXEC dbo.sp_obtener_solicitud @solicitud_id=1;', []);
 operational_assert(isset($details[0][0]['codigo_solicitud']), 'El detalle de solicitud no devolvió su cabecera.');
 operational_assert(isset($details[1]), 'El detalle de solicitud no devolvió mercancías.');
+$customerDetails = read_procedure_sets('EXEC dbo.sp_obtener_cliente @cliente_id=1;', []);
+operational_assert(isset($customerDetails[0][0]['tipo_cliente']), 'El detalle de cliente no devolvió el subtipo.');
+$userDetails = read_procedure_sets('EXEC dbo.sp_obtener_usuario @usuario_id=1;', []);
+operational_assert(isset($userDetails[0][0]['correo_acceso']) && !array_key_exists('password_hash', $userDetails[0][0]), 'El detalle de usuario expuso un secreto o no devolvió identidad.');
 $tripDetails = read_procedure_sets('EXEC dbo.sp_obtener_viaje @viaje_id=1;', []);
 operational_assert(isset($tripDetails[0][0]['codigo_viaje']), 'El detalle de viaje no devolvió su cabecera.');
 
