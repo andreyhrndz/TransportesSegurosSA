@@ -43,6 +43,22 @@
     document.addEventListener('click', (event) => {
         if (event.target.closest('[data-close-modal]')) cerrarModal();
         if (event.target.closest('[data-sidebar-toggle]')) toggleSidebar();
+        const addMerchandise = event.target.closest('[data-add-mercancia]');
+        if (addMerchandise) {
+            const list = document.querySelector('[data-mercancias-lista]');
+            const template = document.getElementById('mercancia-row-template');
+            const max = Number(addMerchandise.dataset.maxItems || 20);
+            if (!list || !template || list.querySelectorAll('[data-mercancia-row]').length >= max) return;
+            const fragment = template.content.cloneNode(true);
+            const index = list.querySelectorAll('[data-mercancia-row]').length;
+            fragment.querySelectorAll('[name]').forEach((field) => { field.name = field.name.replace('__index__', String(index)); });
+            list.appendChild(fragment);
+        }
+        const removeMerchandise = event.target.closest('[data-remove-mercancia]');
+        if (removeMerchandise) {
+            const list = document.querySelector('[data-mercancias-lista]');
+            if (list?.querySelectorAll('[data-mercancia-row]').length > 1) removeMerchandise.closest('[data-mercancia-row]')?.remove();
+        }
     });
 
     document.addEventListener('keydown', (event) => {
@@ -50,6 +66,19 @@
             if (modal?.innerHTML) cerrarModal();
             else toggleSidebar(false);
         }
+    });
+
+    document.addEventListener('change', (event) => {
+        const state = event.target.closest('[data-entrega-estado]');
+        if (!state) return;
+        const form = state.closest('form');
+        const successFields = form?.querySelector('[data-entrega-exito]');
+        const failureFields = form?.querySelector('[data-entrega-fallo]');
+        const delivered = state.value === 'ENTREGADA';
+        if (successFields) successFields.hidden = !delivered;
+        if (failureFields) failureFields.hidden = delivered;
+        successFields?.querySelectorAll('input').forEach((field) => { field.required = delivered && ['receptor_nombre', 'comprobante_url'].includes(field.name); });
+        failureFields?.querySelectorAll('textarea').forEach((field) => { field.required = !delivered && field.name === 'motivo_fallo'; });
     });
 
     // HTMX no intercambia 4xx por defecto. CSRF y autorización muestran un aviso seguro.

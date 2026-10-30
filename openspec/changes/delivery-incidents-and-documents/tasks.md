@@ -1,15 +1,15 @@
 ## 1. Consulta y acceso
 
 - [x] 1.1 Confirmar contratos de lectura de entregas, solicitudes, incidencias, tipos y documentos.
-- [ ] 1.2 Aplicar permisos `ENTREGAS_REGISTRAR`, `INCIDENCIAS_*` y `DOCUMENTOS_REGISTRAR` por acción.
+- [x] 1.2 Aplicar permisos `ENTREGAS_REGISTRAR`, `INCIDENCIAS_*` y `DOCUMENTOS_REGISTRAR` por acción.
 - [ ] 1.3 Implementar detalle que separe destinatario esperado y receptor efectivo.
 - [x] 1.4 Implementar historial de notificaciones de sólo lectura si el contrato `NOTIFICACIONES_VER` está desplegado.
 
 ## 2. Operaciones
 
-- [ ] 2.1 Implementar registro de entrega en tránsito con campos condicionales de éxito/fallo.
-- [ ] 2.2 Implementar alta y resolución de incidencias mediante los SP existentes.
-- [ ] 2.3 Implementar registro de documento como metadato/referencia URL, sin subida de archivos.
+- [x] 2.1 Implementar registro de entrega en tránsito con campos condicionales de éxito/fallo.
+- [x] 2.2 Implementar alta y resolución de incidencias mediante los SP existentes.
+- [x] 2.3 Implementar registro de documento como metadato/referencia URL, sin subida de archivos.
 
 ## 3. Verificación
 
@@ -24,4 +24,13 @@
   procedimientos `sp_listar_*` de Test, con permiso individual por sección. Los comprobantes y
   referencias sólo se enlazan cuando la URL tiene esquema permitido; no se descargan ni ejecutan.
 - Notificaciones es exclusivamente historial y no invoca servicios de envío, reintento o borrado.
-  Las acciones de entrega, incidencias y documentos no se habilitaron en esta tanda.
+
+## Evidencia de implementación local
+
+- `public/entregas/` registra resultados terminales desde una asignación en tránsito, con campos
+  condicionales y URL HTTP(S); también registra/resuelve incidencias y almacena sólo referencias
+  documentales, nunca binarios.
+- La prueba PDO transaccional comprueba éxito sin comprobante rechazado, entrega única exitosa,
+  alta/resolución de incidencia y documento, con rollback completo en Test.
+- El contrato no provee detalle de entrega por solicitud que una en una misma vista destinatario
+  esperado y receptor efectivo; por ello 1.3 y las tareas de cobertura adicional permanecen pendientes.
