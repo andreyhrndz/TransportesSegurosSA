@@ -37,10 +37,10 @@ $displayName = $isPhysical
 function render_customer_detail_card(array $customer, int $id, bool $isPhysical, bool $isActive, bool $canEdit, bool $canDeactivate, string $displayName): void
 {
 ?>
-<div class="panel-heading-custom">
+<div class="panel-box-header">
     <div>
-        <h2 class="title is-5"><?= e($displayName) ?></h2>
-        <p><?= e($isPhysical ? 'Cliente físico' : 'Cliente jurídico') ?></p>
+        <h2 class="title is-5 mb-1"><?= e($displayName) ?></h2>
+        <p class="panel-box-subtitle"><?= e($isPhysical ? 'Persona física' : 'Persona jurídica') ?></p>
     </div>
     <div class="buttons">
         <?php if ($canEdit): ?>
@@ -49,24 +49,24 @@ function render_customer_detail_card(array $customer, int $id, bool $isPhysical,
         <?php if ($canDeactivate && $isActive): ?>
             <button class="button is-danger" type="button" hx-get="/clientes/desactivar_form.php?id=<?= $id ?>" hx-target="#modal-contenido"><?= svg_icon('deactivate') ?><span>Desactivar</span></button>
         <?php endif; ?>
-        <a class="button button-secondary" href="/clientes.php">Cancelar</a>
+        <a class="button button-secondary" href="/clientes.php"><?= svg_icon('arrow-left') ?><span>Volver</span></a>
     </div>
 </div>
 <dl class="detail-grid">
     <div class="detail-field"><dt>Identificación (inmutable)</dt><dd><strong><?= e($customer['identificacion']) ?></strong></dd></div>
     <div class="detail-field"><dt>Estado</dt><dd><?= status_tag($isActive ? 'ACTIVO' : 'INACTIVO') ?></dd></div>
-    <div class="detail-field"><dt>Registro</dt><dd><?= e(format_utc_datetime($customer['fecha_registro'])) ?></dd></div>
-    <div class="detail-field"><dt>Correo electrónico</dt><dd><?= e($customer['correo']) ?></dd></div>
-    <div class="detail-field"><dt>Teléfono</dt><dd><?= e($customer['telefono'] ?: 'No registrado') ?></dd></div>
-    <div class="detail-field"><dt>Dirección</dt><dd><?= e($customer['direccion'] ?: 'No registrada') ?></dd></div>
+    <div class="detail-field"><dt>Fecha de registro</dt><dd><strong><?= e(format_utc_datetime($customer['fecha_registro'])) ?></strong></dd></div>
+    <div class="detail-field"><dt>Correo electrónico</dt><dd><strong><?= e($customer['correo']) ?></strong></dd></div>
+    <div class="detail-field"><dt>Teléfono</dt><dd><strong><?= e($customer['telefono'] ?: 'No registrado') ?></strong></dd></div>
+    <div class="detail-field"><dt>Dirección</dt><dd><strong><?= e($customer['direccion'] ?: 'No registrada') ?></strong></dd></div>
     <?php if ($isPhysical): ?>
-        <div class="detail-field"><dt>Nombre</dt><dd><?= e($customer['nombre']) ?></dd></div>
-        <div class="detail-field"><dt>Primer apellido</dt><dd><?= e($customer['primer_apellido']) ?></dd></div>
-        <div class="detail-field"><dt>Segundo apellido</dt><dd><?= e($customer['segundo_apellido'] ?: 'No registrado') ?></dd></div>
+        <div class="detail-field"><dt>Nombre</dt><dd><strong><?= e($customer['nombre']) ?></strong></dd></div>
+        <div class="detail-field"><dt>Primer apellido</dt><dd><strong><?= e($customer['primer_apellido']) ?></strong></dd></div>
+        <div class="detail-field"><dt>Segundo apellido</dt><dd><strong><?= e($customer['segundo_apellido'] ?: 'No registrado') ?></strong></dd></div>
     <?php else: ?>
-        <div class="detail-field"><dt>Razón social</dt><dd><?= e($customer['razon_social']) ?></dd></div>
-        <div class="detail-field"><dt>Nombre comercial</dt><dd><?= e($customer['nombre_comercial'] ?: 'No registrado') ?></dd></div>
-        <div class="detail-field"><dt>Representante legal</dt><dd><?= e($customer['representante_legal'] ?: 'No registrado') ?></dd></div>
+        <div class="detail-field"><dt>Razón social</dt><dd><strong><?= e($customer['razon_social']) ?></strong></dd></div>
+        <div class="detail-field"><dt>Nombre comercial</dt><dd><strong><?= e($customer['nombre_comercial'] ?: 'No registrado') ?></strong></dd></div>
+        <div class="detail-field"><dt>Representante legal</dt><dd><strong><?= e($customer['representante_legal'] ?: 'No registrado') ?></strong></dd></div>
     <?php endif; ?>
 </dl>
 <p class="help mt-5">La identificación y el subtipo (físico o jurídico) son inmutables. Los clientes no se eliminan físicamente para conservar la integridad de sus solicitudes e historial.</p>
@@ -80,9 +80,9 @@ if (($_GET['parcial'] ?? '') === '1' && is_htmx_request()) {
 }
 
 require_once __DIR__ . '/../../app/layout.php';
-layout_start('clientes', 'Detalle de cliente', 'Ficha administrativa con edición autorizada y desactivación no destructiva.');
+layout_start('clientes', 'Detalle de cliente', 'Ficha administrativa con edición autorizada y desactivación preservando el historial.');
 ?>
-<section class="panel-white" id="cliente-detalle-panel" hx-get="/clientes/detalle.php?id=<?= (int)$id ?>&parcial=1" hx-trigger="clienteActualizado from:body" hx-swap="innerHTML">
+<section class="panel-box" id="cliente-detalle-panel" hx-get="/clientes/detalle.php?id=<?= (int)$id ?>&parcial=1" hx-trigger="clienteActualizado from:body" hx-swap="innerHTML">
     <?php render_customer_detail_card($customer, (int)$id, $isPhysical, $isActive, $canEdit, $canDeactivate, $displayName); ?>
 </section>
 <?php layout_end(); ?>

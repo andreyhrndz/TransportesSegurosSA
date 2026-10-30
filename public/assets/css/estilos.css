@@ -2058,3 +2058,77 @@ span.flatpickr-weekday {
         scroll-behavior: auto !important;
     }
 }
+
+/* ==========================================================================
+   ELEMENTOS COMPLEMENTARIOS DE DETALLE Y MODALES
+   ========================================================================== */
+
+.modal-card.modal-card-wide {
+    width: min(860px, calc(100vw - 2rem));
+}
+
+.readonly-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--space-3);
+    padding: 0.9rem 1.05rem;
+    margin-bottom: 1.15rem;
+    background: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+}
+
+.readonly-summary span,
+.detail-field dt {
+    display: block;
+    color: var(--color-text-muted);
+    font-size: 0.76rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 0.25rem;
+}
+
+.readonly-summary strong,
+.detail-field dd {
+    margin: 0;
+    color: var(--color-text);
+    font-size: 0.95rem;
+    font-weight: 600;
+}
+
+.required {
+    color: var(--color-accent);
+    margin-left: 0.15rem;
+}
+
+.table-link {
+    color: var(--color-primary);
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.table-link:hover {
+    color: var(--color-primary-hover);
+    text-decoration: underline;
+}
+
+.toast.toast-error {
+    border-color: var(--color-danger-border);
+    border-left-color: var(--color-danger);
+}
+
+.is-sr-only {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+}
+

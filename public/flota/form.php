@@ -172,12 +172,12 @@ $todayUtc = gmdate('Y-m-d');
                                 <div class="select is-fullwidth">
                                     <?php $vehState = (string)($record['estado'] ?? 'DISPONIBLE'); ?>
                                     <select id="veh-estado" name="estado" required>
-                                        <option value="DISPONIBLE" <?= $vehState === 'DISPONIBLE' ? 'selected' : '' ?>>DISPONIBLE</option>
-                                        <option value="MANTENIMIENTO" <?= $vehState === 'MANTENIMIENTO' ? 'selected' : '' ?>>MANTENIMIENTO</option>
-                                        <option value="FUERA_SERVICIO" <?= $vehState === 'FUERA_SERVICIO' ? 'selected' : '' ?>>FUERA_SERVICIO</option>
+                                        <option value="DISPONIBLE" <?= $vehState === 'DISPONIBLE' ? 'selected' : '' ?>>Disponible</option>
+                                        <option value="MANTENIMIENTO" <?= $vehState === 'MANTENIMIENTO' ? 'selected' : '' ?>>En mantenimiento</option>
+                                        <option value="FUERA_SERVICIO" <?= $vehState === 'FUERA_SERVICIO' ? 'selected' : '' ?>>Fuera de servicio</option>
                                     </select>
                                 </div>
-                                <p class="help">El estado ASIGNADO lo gestiona exclusivamente la planificación de viajes.</p>
+                                <p class="help">El estado Asignado se actualiza automáticamente desde la planificación de viajes.</p>
                             </div>
                         </div>
                     </div>
@@ -226,7 +226,7 @@ $todayUtc = gmdate('Y-m-d');
                         <div class="column">
                             <div class="field">
                                 <label class="label" for="cond-vencimiento">Vencimiento de licencia <span class="required">*</span></label>
-                                <input class="input" id="cond-vencimiento" name="fecha_vencimiento_licencia" type="date" min="<?= e($todayUtc) ?>" value="<?= e($record['fecha_vencimiento_licencia'] ?? '') ?>" required>
+                                <input class="input" id="cond-vencimiento" name="fecha_vencimiento_licencia" type="text" data-datepicker="date" min="<?= e($todayUtc) ?>" value="<?= e($record['fecha_vencimiento_licencia'] ?? '') ?>" placeholder="dd/mm/aaaa" required>
                             </div>
                         </div>
                     </div>
@@ -253,8 +253,8 @@ $todayUtc = gmdate('Y-m-d');
                                 <div class="select is-fullwidth">
                                     <?php $condState = (string)($record['estado_operativo'] ?? 'DISPONIBLE'); ?>
                                     <select id="cond-estado" name="estado_operativo" required>
-                                        <option value="DISPONIBLE" <?= $condState === 'DISPONIBLE' ? 'selected' : '' ?>>DISPONIBLE</option>
-                                        <option value="INACTIVO" <?= $condState === 'INACTIVO' ? 'selected' : '' ?>>INACTIVO</option>
+                                        <option value="DISPONIBLE" <?= $condState === 'DISPONIBLE' ? 'selected' : '' ?>>Disponible</option>
+                                        <option value="INACTIVO" <?= $condState === 'INACTIVO' ? 'selected' : '' ?>>Inactivo</option>
                                     </select>
                                 </div>
                             </div>
@@ -263,17 +263,15 @@ $todayUtc = gmdate('Y-m-d');
                             <div class="field">
                                 <label class="label" for="cond-usuario">Cuenta de usuario vinculada (opcional)</label>
                                 <?php if ($activeUsers): ?>
-                                    <div class="select is-fullwidth">
-                                        <?php $selectedUid = (int)($record['usuario_id'] ?? 0); ?>
-                                        <select id="cond-usuario" name="usuario_id">
-                                            <option value="">Sin cuenta vinculada</option>
-                                            <?php foreach ($activeUsers as $u): ?>
-                                                <option value="<?= (int)$u['usuario_id'] ?>" <?= $selectedUid === (int)$u['usuario_id'] ? 'selected' : '' ?>>
-                                                    <?= e($u['nombre_usuario'] . ' · ' . $u['correo_acceso']) ?>
-                                                </option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
+                                    <?php $selectedUid = (int)($record['usuario_id'] ?? 0); ?>
+                                    <select id="cond-usuario" name="usuario_id" data-combobox data-allow-clear="true" data-remote-url="/usuarios/lista.php" data-placeholder="Buscar cuenta de usuario…">
+                                        <option value="">Sin cuenta vinculada</option>
+                                        <?php foreach ($activeUsers as $u): ?>
+                                            <option value="<?= (int)$u['usuario_id'] ?>" data-subtext="<?= e($u['correo_acceso']) ?>" <?= $selectedUid === (int)$u['usuario_id'] ? 'selected' : '' ?>>
+                                                <?= e($u['nombre_usuario'] . ' · ' . $u['correo_acceso']) ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
                                 <?php else: ?>
                                     <input class="input" id="cond-usuario" name="usuario_id" type="number" min="1" placeholder="ID opcional" value="<?= e($record['usuario_id'] ?? '') ?>">
                                 <?php endif; ?>
@@ -291,29 +289,25 @@ $todayUtc = gmdate('Y-m-d');
                         <div class="column">
                             <div class="field">
                                 <label class="label" for="ruta-origen">Ubicación de origen <span class="required">*</span></label>
-                                <div class="select is-fullwidth">
-                                    <?php $origId = (int)($record['origen_id'] ?? 0); ?>
-                                    <select id="ruta-origen" name="origen_id" required>
-                                        <option value="">Selecciona</option>
-                                        <?php foreach ($activeLocations as $loc): ?>
-                                            <option value="<?= (int)$loc['ubicacion_id'] ?>" <?= $origId === (int)$loc['ubicacion_id'] ? 'selected' : '' ?>><?= e($loc['nombre']) ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
+                                <?php $origId = (int)($record['origen_id'] ?? 0); ?>
+                                <select id="ruta-origen" name="origen_id" data-combobox data-remote-url="/flota/lista.php?seccion=ubicaciones" data-placeholder="Buscar ubicación de origen…" required>
+                                    <option value="">Selecciona ubicación…</option>
+                                    <?php foreach ($activeLocations as $loc): ?>
+                                        <option value="<?= (int)$loc['ubicacion_id'] ?>" data-subtext="<?= e($loc['direccion'] ?? '') ?>" <?= $origId === (int)$loc['ubicacion_id'] ? 'selected' : '' ?>><?= e($loc['nombre']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
                         </div>
                         <div class="column">
                             <div class="field">
                                 <label class="label" for="ruta-destino">Ubicación de destino <span class="required">*</span></label>
-                                <div class="select is-fullwidth">
-                                    <?php $destId = (int)($record['destino_id'] ?? 0); ?>
-                                    <select id="ruta-destino" name="destino_id" required>
-                                        <option value="">Selecciona</option>
-                                        <?php foreach ($activeLocations as $loc): ?>
-                                            <option value="<?= (int)$loc['ubicacion_id'] ?>" <?= $destId === (int)$loc['ubicacion_id'] ? 'selected' : '' ?>><?= e($loc['nombre']) ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
+                                <?php $destId = (int)($record['destino_id'] ?? 0); ?>
+                                <select id="ruta-destino" name="destino_id" data-combobox data-remote-url="/flota/lista.php?seccion=ubicaciones" data-placeholder="Buscar ubicación de destino…" required>
+                                    <option value="">Selecciona ubicación…</option>
+                                    <?php foreach ($activeLocations as $loc): ?>
+                                        <option value="<?= (int)$loc['ubicacion_id'] ?>" data-subtext="<?= e($loc['direccion'] ?? '') ?>" <?= $destId === (int)$loc['ubicacion_id'] ? 'selected' : '' ?>><?= e($loc['nombre']) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -333,7 +327,7 @@ $todayUtc = gmdate('Y-m-d');
                         </div>
                     </div>
                     <?php if ($isEdit): ?>
-                        <p class="help">Si la ruta ya cuenta con viajes registrados, SQL Server conservará protegidos su origen y destino históricos.</p>
+                        <p class="help">Si la ruta ya cuenta con viajes registrados, se conservarán protegidos su origen y destino históricos.</p>
                     <?php endif; ?>
 
                 <?php elseif ($entity === 'ubicacion'): ?>

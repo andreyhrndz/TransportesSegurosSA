@@ -12,6 +12,7 @@ $sections = [
         'write' => 'FLOTAS_GESTIONAR',
         'entity' => 'vehiculo',
         'new_label' => 'Nuevo vehículo',
+        'icon' => 'fleet',
     ],
     'conductores' => [
         'label' => 'Conductores',
@@ -20,6 +21,7 @@ $sections = [
         'write' => 'FLOTAS_GESTIONAR',
         'entity' => 'conductor',
         'new_label' => 'Nuevo conductor',
+        'icon' => 'user',
     ],
     'rutas' => [
         'label' => 'Rutas',
@@ -28,6 +30,7 @@ $sections = [
         'write' => 'RUTAS_GESTIONAR',
         'entity' => 'ruta',
         'new_label' => 'Nueva ruta',
+        'icon' => 'trips',
     ],
     'ubicaciones' => [
         'label' => 'Ubicaciones',
@@ -36,6 +39,7 @@ $sections = [
         'write' => 'UBICACIONES_GESTIONAR',
         'entity' => 'ubicacion',
         'new_label' => 'Nueva ubicación',
+        'icon' => 'map-pin',
     ],
     'catalogos' => [
         'label' => 'Catálogos',
@@ -44,6 +48,7 @@ $sections = [
         'write' => 'CATALOGOS_GESTIONAR',
         'entity' => '',
         'new_label' => '',
+        'icon' => 'layers',
     ],
 ];
 
@@ -73,72 +78,69 @@ $canWrite = has_permission($activeConfig['write']);
 require_once __DIR__ . '/../app/layout.php';
 layout_start('flota', 'Flota y maestros', 'Administra vehículos, conductores, rutas, ubicaciones y catálogos respetando la disponibilidad operativa.');
 ?>
-<section class="panel-white">
-    <nav class="module-tabs" aria-label="Secciones de flota y maestros">
-        <?php foreach ($sections as $key => $cfg): ?>
-            <?php if (has_permission($cfg['read'])): ?>
-                <a class="<?= $section === $key ? 'active' : '' ?>" href="/flota.php?seccion=<?= e($key) ?>"><?= e($cfg['label']) ?></a>
-            <?php endif; ?>
-        <?php endforeach; ?>
-    </nav>
-
-    <div class="panel-heading-custom">
-        <div>
-            <h2 class="title is-5"><?= e($activeConfig['label']) ?></h2>
-            <p><?= e($activeConfig['subtitle']) ?></p>
-        </div>
-        <?php if ($canWrite && $activeConfig['entity'] !== ''): ?>
-            <div class="buttons">
-                <button class="button is-primary" type="button" hx-get="/flota/form.php?entidad=<?= urlencode($activeConfig['entity']) ?>" hx-target="#modal-contenido">
-                    <?= svg_icon('plus') ?><span><?= e($activeConfig['new_label']) ?></span>
-                </button>
-            </div>
+<nav class="tabs-bar" aria-label="Secciones de flota y maestros">
+    <?php foreach ($sections as $key => $cfg): ?>
+        <?php if (has_permission($cfg['read'])): ?>
+            <a class="tab-chip <?= $section === $key ? 'active' : '' ?>" href="/flota.php?seccion=<?= e($key) ?>">
+                <?= svg_icon($cfg['icon']) ?>
+                <span><?= e($cfg['label']) ?></span>
+            </a>
         <?php endif; ?>
-    </div>
+    <?php endforeach; ?>
+</nav>
 
-    <form class="filter-grid" id="flota-filtros" hx-get="/flota/lista.php" hx-target="#flota-resultado" hx-trigger="keyup changed delay:350ms from:input, change" hx-include="this">
+<section class="toolbar-panel" aria-label="Filtros y acciones de <?= e(mb_strtolower($activeConfig['label'], 'UTF-8')) ?>">
+    <form class="filter-form" id="flota-filtros" hx-get="/flota/lista.php" hx-target="#flota-resultado" hx-trigger="keyup changed delay:350ms from:input, change" hx-include="this">
         <input type="hidden" name="seccion" value="<?= e($section) ?>">
-        <div class="field mb-0">
-            <label class="label" for="flota-buscar">Buscar</label>
-            <div class="control has-icons-left">
-                <input class="input" id="flota-buscar" type="search" name="buscar" maxlength="120" placeholder="Filtrar <?= strtolower(e($activeConfig['label'])) ?>" autocomplete="off" aria-controls="flota-resultado">
-                <span class="icon is-small is-left"><?= svg_icon('search') ?></span>
-            </div>
+        <div class="input-with-icon">
+            <?= svg_icon('search', '', 'input-icon') ?>
+            <input class="input" id="flota-buscar" type="search" name="buscar" maxlength="120" placeholder="Filtrar <?= mb_strtolower(e($activeConfig['label']), 'UTF-8') ?>…" autocomplete="off" aria-label="Buscar en <?= e($activeConfig['label']) ?>" aria-controls="flota-resultado">
         </div>
 
         <?php if (in_array($section, ['vehiculos', 'conductores'], true)): ?>
-            <div class="field mb-0">
-                <label class="label" for="flota-estado">Estado operativo</label>
-                <div class="control select is-fullwidth">
-                    <select id="flota-estado" name="estado">
-                        <option value="">Todos</option>
-                        <option value="DISPONIBLE">DISPONIBLE</option>
-                        <option value="ASIGNADO">ASIGNADO</option>
-                        <?php if ($section === 'vehiculos'): ?>
-                            <option value="MANTENIMIENTO">MANTENIMIENTO</option>
-                            <option value="FUERA_SERVICIO">FUERA_SERVICIO</option>
-                        <?php else: ?>
-                            <option value="INACTIVO">INACTIVO</option>
-                        <?php endif; ?>
-                    </select>
-                </div>
+            <div class="select">
+                <select id="flota-estado" name="estado" aria-label="Estado operativo">
+                    <option value="">Todos los estados operativos</option>
+                    <option value="DISPONIBLE">Disponible</option>
+                    <option value="ASIGNADO">Asignado</option>
+                    <?php if ($section === 'vehiculos'): ?>
+                        <option value="MANTENIMIENTO">En mantenimiento</option>
+                        <option value="FUERA_SERVICIO">Fuera de servicio</option>
+                    <?php else: ?>
+                        <option value="INACTIVO">Inactivo</option>
+                    <?php endif; ?>
+                </select>
             </div>
         <?php endif; ?>
 
-        <div class="field mb-0">
-            <label class="label" for="flota-activo">Condición de registro</label>
-            <div class="control select is-fullwidth">
-                <select id="flota-activo" name="activo">
-                    <option value="">Todos</option>
-                    <option value="1">Activos</option>
-                    <option value="0">Inactivos</option>
-                </select>
-            </div>
+        <div class="select">
+            <select id="flota-activo" name="activo" aria-label="Condición de registro">
+                <option value="">Todos los registros</option>
+                <option value="1">Activos</option>
+                <option value="0">Inactivos</option>
+            </select>
         </div>
     </form>
 
-    <div id="flota-resultado" hx-get="/flota/lista.php?seccion=<?= e($section) ?>" hx-trigger="load, maestroActualizado from:body" hx-include="#flota-filtros" hx-swap="innerHTML">
-        <div class="is-skeleton" aria-label="Cargando <?= strtolower(e($activeConfig['label'])) ?>"></div>
-    </div>
+    <?php if ($canWrite && $activeConfig['entity'] !== ''): ?>
+        <div class="buttons">
+            <button class="button is-primary" type="button" hx-get="/flota/form.php?entidad=<?= urlencode($activeConfig['entity']) ?>" hx-target="#modal-contenido">
+                <?= svg_icon('plus') ?>
+                <span><?= e($activeConfig['new_label']) ?></span>
+            </button>
+        </div>
+    <?php endif; ?>
+</section>
+
+<section class="<?= $section === 'catalogos' ? '' : 'panel-box table-panel' ?>">
+    <?php if ($section !== 'catalogos'): ?>
+        <div class="panel-box-header">
+            <div>
+                <h2 class="panel-box-title"><?= e($activeConfig['label']) ?></h2>
+                <p class="panel-box-subtitle"><?= e($activeConfig['subtitle']) ?></p>
+            </div>
+        </div>
+    <?php endif; ?>
+    <div id="flota-resultado" hx-get="/flota/lista.php?seccion=<?= e($section) ?>" hx-trigger="load, maestroActualizado from:body" hx-include="#flota-filtros" hx-swap="innerHTML"></div>
 </section>
 <?php layout_end(); ?>

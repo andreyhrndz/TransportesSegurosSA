@@ -3,9 +3,31 @@ declare(strict_types=1);
 require_once __DIR__ . '/../app/bootstrap.php';
 require_permission('VIAJES_VER');
 require_once __DIR__ . '/../app/layout.php';
-layout_start('viajes', 'Viajes', 'Consulta recursos asignados, rutas, paradas y solicitudes por viaje.');
+layout_start('viajes', 'Viajes', 'Planificación y seguimiento de despachos, unidades, rutas, paradas y órdenes asociadas.');
 ?>
-<section class="panel-white"><div class="panel-heading-custom"><div><h2 class="title is-5">Planificación de viajes</h2><p>Información operativa disponible según el contrato de lectura.</p></div><?php if(has_permission('VIAJES_CREAR')):?><button class="button is-primary" hx-get="/viajes/form.php" hx-target="#modal-contenido"><?= svg_icon('plus') ?><span>Nuevo viaje</span></button><?php endif;?></div>
-<form class="filter-grid" id="viajes-filtros" hx-get="/viajes/lista.php" hx-target="#viajes-resultado" hx-trigger="change" hx-include="this"><div class="field mb-0"><label class="label" for="viaje-estado">Estado</label><div class="control select is-fullwidth"><select id="viaje-estado" name="estado"><option value="">Todos</option><option>PLANIFICADO</option><option>EN_CURSO</option><option>FINALIZADO</option><option>CANCELADO</option></select></div></div><div class="field mb-0"><label class="label" for="viaje-desde">Desde</label><div class="control"><input class="input" id="viaje-desde" type="date" name="desde"></div></div><div class="field mb-0"><label class="label" for="viaje-hasta">Hasta</label><div class="control"><input class="input" id="viaje-hasta" type="date" name="hasta"></div></div></form>
-<div id="viajes-resultado" hx-get="/viajes/lista.php" hx-trigger="load"><div class="is-skeleton" aria-label="Cargando viajes"></div></div></section>
+<section class="toolbar-panel" aria-label="Filtros y creación de viajes">
+    <form class="filter-form" id="viajes-filtros" hx-get="/viajes/lista.php" hx-target="#viajes-resultado" hx-trigger="change" hx-include="this">
+        <div class="select">
+            <select id="viaje-estado" name="estado" aria-label="Estado del viaje">
+                <option value="">Todos los estados</option>
+                <option value="PLANIFICADO">Planificado</option>
+                <option value="EN_CURSO">En curso</option>
+                <option value="FINALIZADO">Finalizado</option>
+                <option value="CANCELADO">Cancelado</option>
+            </select>
+        </div>
+        <input class="input" id="viaje-desde" type="text" name="desde" data-datepicker="date" placeholder="Desde (dd/mm/aaaa)" aria-label="Fecha desde">
+        <input class="input" id="viaje-hasta" type="text" name="hasta" data-datepicker="date" placeholder="Hasta (dd/mm/aaaa)" aria-label="Fecha hasta">
+    </form>
+    <?php if (has_permission('VIAJES_CREAR')): ?>
+        <button class="button is-primary" type="button" hx-get="/viajes/form.php" hx-target="#modal-contenido">
+            <?= svg_icon('plus') ?>
+            <span>Nuevo viaje</span>
+        </button>
+    <?php endif; ?>
+</section>
+
+<section class="panel-box table-panel">
+    <div id="viajes-resultado" hx-get="/viajes/lista.php" hx-trigger="load"></div>
+</section>
 <?php layout_end(); ?>

@@ -52,14 +52,14 @@ function render_user_detail_panels(
     array $assignedById
 ): void {
 ?>
-<section class="panel-white">
-    <div class="panel-heading-custom">
+<section class="panel-box">
+    <div class="panel-box-header">
         <div>
-            <h2 class="title is-5">
+            <h2 class="title is-5 mb-1">
                 <?= e($user['nombre_usuario']) ?>
                 <?php if ($isSelf): ?><span class="status-tag status-tag-info ml-2">Sesión actual</span><?php endif; ?>
             </h2>
-            <p>Las contraseñas y sus hashes criptográficos nunca se consultan ni se muestran.</p>
+            <p class="panel-box-subtitle">Información de la cuenta y estado de acceso.</p>
         </div>
         <div class="buttons">
             <?php if ($canManageAccounts): ?>
@@ -71,25 +71,25 @@ function render_user_detail_panels(
                     <button class="button is-primary" type="button" hx-get="/usuarios/estado_form.php?id=<?= $id ?>&accion=activar" hx-target="#modal-contenido"><?= svg_icon('activate') ?><span>Activar</span></button>
                 <?php endif; ?>
             <?php endif; ?>
-            <a class="button button-secondary" href="/usuarios.php">Cancelar</a>
+            <a class="button button-secondary" href="/usuarios.php"><?= svg_icon('arrow-left') ?><span>Volver</span></a>
         </div>
     </div>
     <dl class="detail-grid">
         <div class="detail-field"><dt>Correo de acceso</dt><dd><strong><?= e($user['correo_acceso']) ?></strong></dd></div>
         <div class="detail-field"><dt>Estado</dt><dd><?= status_tag($isActive ? 'ACTIVO' : 'INACTIVO') ?></dd></div>
-        <div class="detail-field"><dt>Creación</dt><dd><?= e(format_utc_datetime($user['fecha_creacion'])) ?></dd></div>
-        <div class="detail-field"><dt>Último acceso</dt><dd><?= e(format_utc_datetime($user['ultimo_acceso'])) ?></dd></div>
+        <div class="detail-field"><dt>Creación</dt><dd><strong><?= e(format_utc_datetime($user['fecha_creacion'])) ?></strong></dd></div>
+        <div class="detail-field"><dt>Último acceso</dt><dd><strong><?= e(format_utc_datetime($user['ultimo_acceso'])) ?></strong></dd></div>
     </dl>
     <?php if ($isSelf && $canManageAccounts): ?>
         <p class="help mt-4">Tu propia cuenta activa está protegida contra auto-desactivación para evitar bloqueos administrativos.</p>
     <?php endif; ?>
 </section>
 
-<section class="panel-white mt-5">
-    <div class="panel-heading-custom">
+<section class="panel-box table-panel">
+    <div class="panel-box-header">
         <div>
-            <h2 class="title is-5">Permisos individuales</h2>
-            <p>Asignación directa por código mediante contratos autorizados, sin roles intermedios.</p>
+            <h2 class="panel-box-title">Permisos individuales</h2>
+            <p class="panel-box-subtitle">Asignación directa de capacidades operativas y administrativas.</p>
         </div>
     </div>
     <div class="table-container">
@@ -117,21 +117,25 @@ function render_user_detail_panels(
                     ?>
                     <tr>
                         <td>
-                            <strong><?= e($code) ?></strong><br>
-                            <small class="has-text-grey"><?= e($permission['nombre']) ?></small>
+                            <div class="cell-stack">
+                                <strong><?= e($permission['nombre']) ?></strong>
+                                <span><code><?= e($code) ?></code></span>
+                            </div>
                         </td>
                         <td><?= e($permission['descripcion'] ?: 'Sin descripción') ?></td>
                         <td>
                             <?php if ($grant): ?>
-                                <?= status_tag('ASIGNADO') ?><br>
-                                <small class="has-text-grey"><?= e(format_utc_datetime($grant['fecha_asignacion'])) ?></small>
+                                <div class="cell-stack">
+                                    <div><?= status_tag('ASIGNADO') ?></div>
+                                    <span><?= e(format_utc_datetime($grant['fecha_asignacion'])) ?></span>
+                                </div>
                             <?php else: ?>
-                                <?= status_tag('NO ASIGNADO') ?>
+                                <?= status_tag('SIN_ASIGNAR') ?>
                             <?php endif; ?>
                         </td>
                         <?php if ($canManagePermissions): ?>
                             <td>
-                                <div class="table-actions">
+                                <div class="row-actions">
                                     <?php if (!$grant): ?>
                                         <button class="button is-small button-secondary" type="button" hx-get="/usuarios/permiso_form.php?id=<?= $id ?>&codigo=<?= urlencode($code) ?>&accion=conceder" hx-target="#modal-contenido"><?= svg_icon('shield') ?><span>Asignar</span></button>
                                     <?php elseif ($selfProtected): ?>
@@ -147,7 +151,6 @@ function render_user_detail_panels(
             </tbody>
         </table>
     </div>
-    <p class="help mt-4">Nota de trazabilidad: las operaciones sobre cuentas, concesión y revocación de permisos registran metadatos sin secretos en auditoría mediante contratos SQL seguros.</p>
 </section>
 <?php
 }
