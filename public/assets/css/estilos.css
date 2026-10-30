@@ -69,6 +69,16 @@ a { color: var(--color-primary-strong); }
 .button.is-primary:hover, .button.is-primary:focus-visible { background: var(--color-primary-strong); border-color: var(--color-primary-strong); color: #fff; }
 .button-secondary { background: var(--color-surface); border-color: var(--color-border); color: var(--color-ink); }
 .button-secondary:hover { background: var(--color-surface-muted); border-color: var(--color-border); }
+.button.is-danger, .button-danger { background: var(--color-danger); border-color: var(--color-danger); color: #fff; }
+.button.is-danger:hover, .button.is-danger:focus-visible, .button-danger:hover, .button-danger:focus-visible { background: #7f3540; border-color: #7f3540; color: #fff; }
+.required { color: var(--color-danger); font-weight: 700; }
+.table-actions { display: flex; align-items: center; justify-content: flex-end; gap: var(--space-2); flex-wrap: nowrap; }
+.readonly-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); margin-bottom: var(--space-4); padding: var(--space-3) var(--space-4); background: var(--color-surface-muted); border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+.readonly-summary div { display: grid; gap: .15rem; min-width: 0; }
+.readonly-summary span { color: var(--color-ink-soft); font-size: .76rem; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; }
+.readonly-summary strong { color: var(--color-ink); font-size: .92rem; overflow-wrap: anywhere; }
+.modal-card-wide { width: min(100%, 44rem); }
+.is-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 .icon-button { display: inline-grid; width: 2.75rem; height: 2.75rem; place-items: center; padding: 0; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-ink); }
 .input, .select select, .textarea { min-height: 2.75rem; border-color: #b9c9ce; border-radius: var(--radius-sm); box-shadow: none; color: var(--color-ink); }
 .input:focus, .select select:focus, .textarea:focus { border-color: var(--color-primary); box-shadow: var(--focus-ring); }

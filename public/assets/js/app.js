@@ -89,7 +89,7 @@
             event.detail.shouldSwap = false;
             return;
         }
-        if ([403, 409, 422].includes(status)) {
+        if ([403, 404, 409, 422].includes(status)) {
             event.detail.shouldSwap = true;
             event.detail.isError = false;
         }
@@ -100,6 +100,12 @@
     document.body.addEventListener('clienteCreado', () => {
         cerrarModal();
         mostrarAviso('Cliente registrado correctamente.');
+    });
+    document.body.addEventListener('tssaNotice', (event) => {
+        cerrarModal();
+        if (event.detail?.message) {
+            mostrarAviso(String(event.detail.message), Boolean(event.detail.error));
+        }
     });
     document.body.addEventListener('htmx:sendError', () => mostrarAviso('No se pudo contactar al servidor.', true));
     document.body.addEventListener('htmx:timeout', () => mostrarAviso('La solicitud tardó demasiado.', true));

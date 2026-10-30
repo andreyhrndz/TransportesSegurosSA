@@ -17,7 +17,7 @@ function require_operation_post(string $permission): void
         header('Allow: POST');
         operation_error('Método no permitido.', 405);
     }
-    // ASVS 3.5.1: cada mutación exige el token asociado a la sesión autenticada.
+    // ASVS 3.5.1, 3.5.3: cada mutación POST exige el token asociado a la sesión autenticada.
     if (!valid_csrf($_POST['csrf_token'] ?? null)) {
         error_log('TSSA security: invalid CSRF token on operational write');
         operation_error('El formulario caducó. Recarga la página y vuelve a intentarlo.', 403);
@@ -43,6 +43,19 @@ function operation_text(mixed $value, int $maxLength, bool $required = true): ?s
         throw new InvalidArgumentException('Revisa los datos ingresados.');
     }
     return $text;
+}
+
+function operation_email(mixed $value, int $maxLength = 150, bool $required = true): ?string
+{
+    // ASVS 2.2.1, 2.2.2: validación de formato y longitud de correo en capa servidor.
+    $email = trim((string)$value);
+    if ($email === '' && !$required) {
+        return null;
+    }
+    if (!valid_text($email, $maxLength, $required) || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+        throw new InvalidArgumentException('Ingresa un correo electrónico válido.');
+    }
+    return $email;
 }
 
 function operation_future_datetime(mixed $value): string
@@ -71,14 +84,35 @@ function operation_reference_url(mixed $value): string
 function operation_sql_error(PDOException $exception, array $messages = []): never
 {
     $number = (int)($exception->errorInfo[1] ?? 0);
-    // ASVS 16.2.5/16.3.3: se registra sólo el código, nunca datos de formulario ni SQL.
+    // ASVS 16.2.5/16.3.3: se registra sólo el código, nunca datos de formulario, contraseñas ni SQL.
     error_log('TSSA security: operational write rejected with SQL code ' . $number);
     $message = $messages[$number] ?? match ($number) {
         2601, 2627 => 'Ya existe un registro con esos datos.',
-        50103 => 'No tienes permiso para realizar esta acción.',
+        50101 => 'El registro solicitado no existe.',
+        50103, 50201, 50202, 50216, 50217, 50407, 50410, 50412, 50501 => 'No tienes permiso para realizar esta acción.',
         default => 'No se pudo completar la operación. Verifica el estado actual e inténtalo nuevamente.',
     };
-    operation_error($message, in_array($number, [2601, 2627, 50311, 50324, 50405], true) ? 409 : 422);
+
+    $forbiddenCodes = [50103, 50201, 50202, 50216, 50217, 50407, 50410, 50412, 50501];
+    $notFoundCodes = [50101, 50415, 50503];
+    $conflictCodes = [
+        2601, 2627, 547,
+        50220, 50221,
+        50311, 50324, 50405, 50409,
+        50416, 50417, 50418, 50419, 50420,
+        50504, 50505, 50506,
+    ];
+
+    $status = 422;
+    if (in_array($number, $forbiddenCodes, true)) {
+        $status = 403;
+    } elseif (in_array($number, $notFoundCodes, true)) {
+        $status = 404;
+    } elseif (in_array($number, $conflictCodes, true)) {
+        $status = 409;
+    }
+
+    operation_error($message, $status);
 }
 
 function operation_success(string $message, string $event, string $redirect): never
@@ -91,6 +125,25 @@ function operation_success(string $message, string $event, string $redirect): ne
     }
     header('Content-Type: text/html; charset=UTF-8');
     exit(ui_notice($message, 'success'));
+}
+
+function operation_modal_success(string $message, string $event, string $fallbackRedirect): never
+{
+    if (is_htmx_request()) {
+        $triggerPayload = json_encode([
+            $event => true,
+            'tssaNotice' => [
+                'message' => $message,
+                'error' => false,
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        header('HX-Trigger-After-Settle: ' . $triggerPayload);
+        header('Content-Type: text/html; charset=UTF-8');
+        exit(ui_notice($message, 'success'));
+    }
+
+    header('Location: ' . $fallbackRedirect, true, 303);
+    exit;
 }
 
 /** @return array<int, array<string, mixed>> */

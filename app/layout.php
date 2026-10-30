@@ -62,7 +62,7 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
             <p class="nav-section-label nav-section-spaced">Administración</p>
             <div class="menu-list">
                 <?php if ($puedeUsuarios): ?>
-                <a class="sidebar-link <?= $activo === 'usuarios' ? 'active' : '' ?>" href="/usuarios.php"><?= svg_icon('clients') ?><span>Usuarios y permisos</span></a>
+                <a class="sidebar-link <?= $activo === 'usuarios' ? 'active' : '' ?>" href="/usuarios.php"><?= svg_icon('users') ?><span>Usuarios y permisos</span></a>
                 <?php endif; ?>
                 <?php if ($puedeFlota): ?>
                 <a class="sidebar-link <?= $activo === 'flota' ? 'active' : '' ?>" href="/flota.php"><?= svg_icon('fleet') ?><span>Flota y maestros</span></a>
