@@ -45,6 +45,9 @@ foreach ([
     operational_assert(read_procedure_sets($sql, []) !== [], 'Un catalogo operativo no devolvio un conjunto de resultados.');
 }
 
+$audit = read_procedure_list('DECLARE @total_registros INT; EXEC dbo.sp_listar_auditorias @entidad=NULL,@registro_id=NULL,@desde=NULL,@hasta=NULL,@pagina=1,@por_pagina=10,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;', []);
+operational_assert($audit['total'] >= count($audit['rows']), 'El contrato de auditoria devolvio un total invalido.');
+
 $details = read_procedure_sets('EXEC dbo.sp_obtener_solicitud @solicitud_id=1;', []);
 operational_assert(isset($details[0][0]['codigo_solicitud']), 'El detalle de solicitud no devolvió su cabecera.');
 operational_assert(isset($details[1]), 'El detalle de solicitud no devolvió mercancías.');

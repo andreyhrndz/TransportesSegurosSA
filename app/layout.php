@@ -6,6 +6,7 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
     $usuario = require_login();
     $puedeClientes = has_permission('CLIENTES_CREAR');
     $puedeReportes = has_permission('REPORTES_VER');
+    $puedeAuditoria = has_permission('AUDITORIA_VER');
     $puedeSolicitudes = has_permission('SOLICITUDES_VER');
     $puedeViajes = has_permission('VIAJES_VER');
     $puedeEntregas = has_any_permission(['ENTREGAS_VER', 'INCIDENCIAS_VER', 'DOCUMENTOS_VER', 'NOTIFICACIONES_VER']);
@@ -34,6 +35,9 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
             <div class="menu-list">
             <?php if ($puedeReportes): ?>
                 <a class="sidebar-link <?= $activo === 'dashboard' ? 'active' : '' ?>" href="/"><?= svg_icon('dashboard') ?><span>Panel general</span></a>
+            <?php endif; ?>
+            <?php if ($puedeReportes || $puedeAuditoria): ?>
+                <a class="sidebar-link <?= $activo === 'reportes' ? 'active' : '' ?>" href="/reportes.php"><?= svg_icon('dashboard') ?><span>Reportes</span></a>
             <?php endif; ?>
             <?php if ($puedeClientes): ?>
                 <a class="sidebar-link <?= $activo === 'clientes' ? 'active' : '' ?>" href="/clientes.php"><?= svg_icon('clients') ?><span>Clientes</span></a>

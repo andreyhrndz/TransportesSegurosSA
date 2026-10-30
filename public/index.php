@@ -9,26 +9,43 @@ if (is_string($requestedPath) && preg_match('/\.(?:avif|bmp|css|gif|ico|jpe?g|js
 }
 
 require_once __DIR__ . '/../app/bootstrap.php';
+require_once __DIR__ . '/../app/read_queries.php';
 require_permission('REPORTES_VER');
 require_once __DIR__ . '/../app/layout.php';
 
-// Solo lecturas; el panel no modifica la base operativa.
-$stats = db()->query("SELECT
- (SELECT COUNT(*) FROM dbo.clientes WHERE activo=1) AS clientes,
- (SELECT COUNT(*) FROM dbo.solicitudes) AS solicitudes,
- (SELECT COUNT(*) FROM dbo.viajes WHERE estado IN ('PLANIFICADO','EN_CURSO')) AS viajes,
- (SELECT COUNT(*) FROM dbo.entregas WHERE estado='ENTREGADA') AS entregas")->fetch();
-$recientes = db()->query("SELECT TOP (5) codigo_solicitud, estado, prioridad_actual, fecha_solicitud FROM dbo.solicitudes ORDER BY fecha_solicitud DESC, solicitud_id DESC")->fetchAll();
+// Sólo contratos de lectura confirmados; el panel no modifica la base operativa.
+$stats = [];
+$recientes = [];
+try {
+    if (has_permission('CLIENTES_VER')) {
+        $stats['clientes'] = read_procedure_list('DECLARE @total_registros INT; EXEC dbo.sp_listar_clientes @buscar=NULL,@solo_activos=1,@pagina=1,@por_pagina=1,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;', [])['total'];
+    }
+    if (has_permission('SOLICITUDES_VER')) {
+        $solicitudes = read_procedure_list('DECLARE @total_registros INT; EXEC dbo.sp_listar_solicitudes @buscar=NULL,@estado=NULL,@cliente_id=NULL,@desde=NULL,@hasta=NULL,@pagina=1,@por_pagina=5,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;', []);
+        $stats['solicitudes'] = $solicitudes['total'];
+        $recientes = $solicitudes['rows'];
+    }
+    if (has_permission('VIAJES_VER')) {
+        $planificados = read_procedure_list("DECLARE @total_registros INT; EXEC dbo.sp_listar_viajes @estado=N'PLANIFICADO',@desde=NULL,@hasta=NULL,@pagina=1,@por_pagina=1,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;", [])['total'];
+        $enCurso = read_procedure_list("DECLARE @total_registros INT; EXEC dbo.sp_listar_viajes @estado=N'EN_CURSO',@desde=NULL,@hasta=NULL,@pagina=1,@por_pagina=1,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;", [])['total'];
+        $stats['viajes'] = $planificados + $enCurso;
+    }
+    if (has_permission('ENTREGAS_VER')) {
+        $stats['entregas'] = read_procedure_list("DECLARE @total_registros INT; EXEC dbo.sp_listar_entregas @estado=N'ENTREGADA',@viaje_id=NULL,@desde=NULL,@hasta=NULL,@pagina=1,@por_pagina=1,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;", [])['total'];
+    }
+} catch (PDOException) {
+    read_error_response('No se pudo actualizar el resumen operativo.');
+}
 
-layout_start('dashboard', 'Panel general', 'Resumen operativo actualizado desde la base de datos.');
+layout_start('dashboard', 'Panel general', 'Resumen operativo desde contratos de lectura autorizados.');
 ?>
 <section class="dashboard-summary" aria-labelledby="resumen-operativo">
     <h2 id="resumen-operativo" class="is-sr-only">Indicadores operativos</h2>
     <div class="stat-grid">
-        <article class="stat-card"><span>Clientes activos</span><strong><?= (int)$stats['clientes'] ?></strong><small>Personas y empresas</small></article>
-        <article class="stat-card"><span>Solicitudes registradas</span><strong><?= (int)$stats['solicitudes'] ?></strong><small>Histórico operativo</small></article>
-        <article class="stat-card"><span>Viajes activos</span><strong><?= (int)$stats['viajes'] ?></strong><small>Planificados o en curso</small></article>
-        <article class="stat-card"><span>Entregas exitosas</span><strong><?= (int)$stats['entregas'] ?></strong><small>Resultados confirmados</small></article>
+        <article class="stat-card"><span>Clientes activos</span><strong><?= array_key_exists('clientes', $stats) ? (int)$stats['clientes'] : '—' ?></strong><small>Personas y empresas</small></article>
+        <article class="stat-card"><span>Solicitudes registradas</span><strong><?= array_key_exists('solicitudes', $stats) ? (int)$stats['solicitudes'] : '—' ?></strong><small>Histórico operativo</small></article>
+        <article class="stat-card"><span>Viajes activos</span><strong><?= array_key_exists('viajes', $stats) ? (int)$stats['viajes'] : '—' ?></strong><small>Planificados o en curso</small></article>
+        <article class="stat-card"><span>Entregas exitosas</span><strong><?= array_key_exists('entregas', $stats) ? (int)$stats['entregas'] : '—' ?></strong><small>Resultados confirmados</small></article>
     </div>
 </section>
 <section class="panel-white" aria-labelledby="solicitudes-recientes">
