@@ -37,6 +37,14 @@ foreach ($contracts as [$name, $sql]) {
     operational_assert($result['total'] >= count($result['rows']), "El contrato {$name} devolvió un total inválido.");
 }
 
+foreach ([
+    'EXEC dbo.sp_listar_tipos_mercancia @solo_activos=1;',
+    'EXEC dbo.sp_listar_tipos_incidencia @solo_activos=1;',
+    'EXEC dbo.sp_listar_tipos_documento @solo_activos=1;',
+] as $sql) {
+    operational_assert(read_procedure_sets($sql, []) !== [], 'Un catalogo operativo no devolvio un conjunto de resultados.');
+}
+
 $details = read_procedure_sets('EXEC dbo.sp_obtener_solicitud @solicitud_id=1;', []);
 operational_assert(isset($details[0][0]['codigo_solicitud']), 'El detalle de solicitud no devolvió su cabecera.');
 operational_assert(isset($details[1]), 'El detalle de solicitud no devolvió mercancías.');
