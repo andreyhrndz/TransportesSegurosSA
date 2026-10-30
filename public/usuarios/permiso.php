@@ -27,7 +27,7 @@ if (!$isGrant && (int)$currentUser['usuario_id'] === $usuarioId && is_critical_a
 
 try {
     if ($isGrant) {
-        $stmt = db()->prepare('EXEC dbo.sp_conceder_permiso @usuario_destino=?, @codigo=?;');
+        $stmt = db()->prepare('EXEC dbo.sp_conceder_permiso_seguro @usuario_destino=?, @codigo=?;');
     } else {
         $stmt = db()->prepare('EXEC dbo.sp_revocar_permiso_seguro @usuario_destino=?, @codigo=?;');
     }

@@ -147,7 +147,7 @@ function render_user_detail_panels(
             </tbody>
         </table>
     </div>
-    <p class="help mt-4">Nota de trazabilidad: las operaciones sobre cuentas y revocaciones registran metadatos sin secretos en auditoría; la concesión individual invoca `sp_conceder_permiso` original, que no genera fila en `dbo.auditorias`.</p>
+    <p class="help mt-4">Nota de trazabilidad: las operaciones sobre cuentas, concesión y revocación de permisos registran metadatos sin secretos en auditoría mediante contratos SQL seguros.</p>
 </section>
 <?php
 }

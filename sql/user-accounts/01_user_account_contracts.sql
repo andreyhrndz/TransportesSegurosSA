@@ -354,6 +354,74 @@ BEGIN
 END;
 GO
 
+CREATE OR ALTER PROCEDURE dbo.sp_conceder_permiso_seguro
+    @usuario_destino INT,
+    @codigo NVARCHAR(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- ASVS 8.2.1, 8.3.1: exige USUARIOS_GESTIONAR_PERMISOS y registra auditoría real de la asignación.
+    DECLARE @actor_id INT = TRY_CONVERT(INT, SESSION_CONTEXT(N'usuario_id'));
+    IF dbo.fn_tiene_permiso(@actor_id, N'USUARIOS_GESTIONAR_PERMISOS') = 0
+        THROW 50407, 'Sin permiso para gestionar permisos.', 1;
+
+    IF @usuario_destino IS NULL OR @usuario_destino < 1
+        THROW 50415, 'Usuario no encontrado.', 1;
+
+    SET @codigo = NULLIF(LTRIM(RTRIM(@codigo)), N'');
+    IF @codigo IS NULL
+        THROW 50408, 'El codigo de permiso no existe.', 1;
+
+    DECLARE @started_tran BIT = CASE WHEN @@TRANCOUNT = 0 THEN 1 ELSE 0 END;
+    IF @started_tran = 1
+        BEGIN TRANSACTION;
+    ELSE
+        SAVE TRANSACTION sp_cnc_seg;
+
+    BEGIN TRY
+        IF NOT EXISTS (
+            SELECT 1
+            FROM dbo.usuarios WITH (UPDLOCK, HOLDLOCK)
+            WHERE usuario_id = @usuario_destino
+        )
+            THROW 50415, 'Usuario no encontrado.', 1;
+
+        -- Delegar la inserción en sp_conceder_permiso (valida existencia de permiso y no duplicidad)
+        EXEC dbo.sp_conceder_permiso
+            @usuario_destino = @usuario_destino,
+            @codigo = @codigo;
+
+        INSERT INTO dbo.auditorias
+        (
+            usuario_id, entidad, registro_id, accion,
+            valores_anteriores, valores_nuevos
+        )
+        VALUES
+        (
+            @actor_id,
+            N'usuarios_permisos',
+            CONCAT(CONVERT(NVARCHAR(30), @usuario_destino), N':', @codigo),
+            'INSERT',
+            NULL,
+            @codigo
+        );
+
+        IF @started_tran = 1
+            COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF XACT_STATE() = -1 AND @started_tran = 1
+            ROLLBACK TRANSACTION;
+        ELSE IF @started_tran = 1 AND @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        ELSE IF @started_tran = 0 AND XACT_STATE() = 1
+            ROLLBACK TRANSACTION sp_cnc_seg;
+        THROW;
+    END CATCH;
+END;
+GO
+
 CREATE OR ALTER PROCEDURE dbo.sp_revocar_permiso_seguro
     @usuario_destino INT,
     @codigo NVARCHAR(100)

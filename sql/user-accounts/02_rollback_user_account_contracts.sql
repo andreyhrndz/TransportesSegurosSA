@@ -11,6 +11,7 @@ IF DB_NAME() <> N'TransportesSegurosSA_Test'
 GO
 
 DROP PROCEDURE IF EXISTS dbo.sp_revocar_permiso_seguro;
+DROP PROCEDURE IF EXISTS dbo.sp_conceder_permiso_seguro;
 DROP PROCEDURE IF EXISTS dbo.sp_restablecer_password;
 DROP PROCEDURE IF EXISTS dbo.sp_cambiar_estado_usuario;
 DROP PROCEDURE IF EXISTS dbo.sp_actualizar_usuario;
