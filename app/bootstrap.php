@@ -12,6 +12,28 @@ function is_htmx_request(): bool
     return ($_SERVER['HTTP_HX_REQUEST'] ?? '') === 'true';
 }
 
+function configured_database_name(): string
+{
+    // ASVS 1.2.4: el nombre de base no se interpola desde entrada libre; sólo
+    // se admiten los destinos locales conocidos para evitar cambiar el DSN.
+    $database = trim((string)(getenv('TSSA_DB_DATABASE') ?: 'TransportesSegurosSA'));
+    if (!in_array($database, ['TransportesSegurosSA', 'TransportesSegurosSA_Test'], true)) {
+        throw new LogicException('Configuración de base de datos no permitida.');
+    }
+
+    return $database;
+}
+
+function require_test_database(PDO $connection): void
+{
+    // ASVS 16.5.3: las pruebas de escritura deben fallar cerradas si no están
+    // conectadas a la copia aislada esperada.
+    $effectiveDatabase = (string)$connection->query('SELECT DB_NAME()')->fetchColumn();
+    if ($effectiveDatabase !== 'TransportesSegurosSA_Test') {
+        throw new LogicException('Las pruebas de escritura requieren TransportesSegurosSA_Test.');
+    }
+}
+
 function session_cookie_name(): string
 {
     // ASVS 3.3.1-3.3.3: aislar la cookie de esta aplicación; el prefijo
@@ -67,16 +89,16 @@ function db(): PDO
     }
 
     $server = getenv('TSSA_DB_SERVER') ?: 'localhost';
-    $database = 'TransportesSegurosSA';
-    $dsn = "sqlsrv:Server={$server};Database={$database};Encrypt=yes;TrustServerCertificate=yes";
     try {
+        $database = configured_database_name();
+        $dsn = "sqlsrv:Server={$server};Database={$database};Encrypt=yes;TrustServerCertificate=yes";
         $pdo = new PDO($dsn, null, null, [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES => false,
         ]);
         return $pdo;
-    } catch (PDOException $ex) {
+    } catch (PDOException|LogicException $ex) {
         // ASVS 16.3.4: registrar el detalle solo del lado del servidor.
         error_log('TSSA: no se pudo conectar a SQL Server: ' . $ex->getMessage());
         http_response_code(503);

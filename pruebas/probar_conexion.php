@@ -9,7 +9,11 @@
 // Debe coincidir con el servidor usado en SSMS.
 $servidor = 'localhost';
 
-$baseDatos = 'TransportesSegurosSA';
+$baseDatos = getenv('TSSA_DB_DATABASE') ?: 'TransportesSegurosSA';
+if (!in_array($baseDatos, ['TransportesSegurosSA', 'TransportesSegurosSA_Test'], true)) {
+    fwrite(STDERR, "Base de datos no permitida para esta prueba.\n");
+    exit(1);
+}
 
 try {
 
