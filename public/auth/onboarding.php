@@ -24,6 +24,8 @@ if ($tokenRaw === '' || strlen($tokenRaw) !== 64 || !ctype_xdigit($tokenRaw)) {
         if ($resultado !== 'valida') {
             if ($resultado === 'expirada') {
                 $errorMsg = 'Este enlace de invitación ha expirado (su validez era de 24 horas). Solicita a un administrador que te reenvíe la invitación.';
+            } elseif ($resultado === 'revocada') {
+                $errorMsg = 'Este enlace de invitación ha sido revocado por el administrador. Solicita una nueva invitación si requieres acceso.';
             } elseif ($resultado === 'completada') {
                 $errorMsg = 'Esta invitación ya fue completada previamente.';
             } else {
@@ -152,68 +154,9 @@ if ($tokenRaw === '' || strlen($tokenRaw) !== 64 || !ctype_xdigit($tokenRaw)) {
                     <?= svg_icon('chevron-right') ?>
                 </button>
             </form>
-
-            <script>
-            (function() {
-                var btnHacienda = document.getElementById('btn-onb-hacienda');
-                var inputId = document.getElementById('onb-identificacion');
-                var inputNombre = document.getElementById('onb-nombre');
-                var inputApe1 = document.getElementById('onb-primer-apellido');
-                var inputApe2 = document.getElementById('onb-segundo-apellido');
-                var helpEl = document.getElementById('onb-hacienda-help');
-                var token = <?= json_encode($tokenRaw) ?>;
-
-                if (btnHacienda && inputId) {
-                    btnHacienda.addEventListener('click', function() {
-                        var cedula = (inputId.value || '').trim();
-                        if (!cedula) {
-                            helpEl.textContent = 'Ingrese un número de cédula para consultar.';
-                            helpEl.className = 'help is-warning';
-                            inputId.focus();
-                            return;
-                        }
-                        btnHacienda.classList.add('is-loading');
-                        helpEl.textContent = 'Consultando Ministerio de Hacienda de Costa Rica...';
-                        helpEl.className = 'help is-info';
-
-                        fetch('/api/hacienda.php?identificacion=' + encodeURIComponent(cedula) + '&token=' + encodeURIComponent(token))
-                            .then(function(res) { return res.json(); })
-                            .then(function(data) {
-                                btnHacienda.classList.remove('is-loading');
-                                if (data && data.status === 'encontrado' && data.datos) {
-                                    var d = data.datos;
-                                    var nombreCompleto = d.nombre || '';
-                                    var partes = nombreCompleto.split(/\s+/).filter(Boolean);
-                                    if (partes.length >= 3) {
-                                        var ape2 = partes.pop();
-                                        var ape1 = partes.pop();
-                                        inputNombre.value = partes.join(' ');
-                                        inputApe1.value = ape1;
-                                        inputApe2.value = ape2;
-                                    } else if (partes.length === 2) {
-                                        inputNombre.value = partes[0];
-                                        inputApe1.value = partes[1];
-                                    } else {
-                                        inputNombre.value = nombreCompleto;
-                                    }
-                                    helpEl.textContent = 'Datos obtenidos desde Hacienda: ' + nombreCompleto;
-                                    helpEl.className = 'help is-success';
-                                } else {
-                                    helpEl.textContent = (data && data.mensaje) ? data.mensaje : 'Identificación no encontrada en Hacienda. Ingrese los datos manualmente.';
-                                    helpEl.className = 'help is-warning';
-                                }
-                            })
-                            .catch(function(err) {
-                                btnHacienda.classList.remove('is-loading');
-                                helpEl.textContent = 'No se pudo conectar con el servicio de Hacienda. Ingrese sus datos manualmente.';
-                                helpEl.className = 'help is-danger';
-                            });
-                    });
-                }
-            })();
-            </script>
         <?php endif; ?>
     </div>
 </div>
+<script src="/assets/js/app.js" defer></script>
 </body>
 </html>

@@ -654,4 +654,353 @@
             invPanel?.classList.remove('is-hidden');
         }
     });
+
+    /* ======================================================================
+       HACIENDA & FORMULARIOS (DELEGACIÓN CENTRALIZADA SIN INLINE SCRIPTS)
+       ====================================================================== */
+
+    function descomponerNombreCR(nombreCompleto) {
+        const partes = String(nombreCompleto || '').trim().split(/\s+/).filter(Boolean);
+        if (partes.length >= 3) {
+            return {
+                primerApellido: partes[0],
+                segundoApellido: partes[1],
+                nombre: partes.slice(2).join(' ')
+            };
+        } else if (partes.length === 2) {
+            return {
+                primerApellido: partes[0],
+                segundoApellido: '',
+                nombre: partes[1]
+            };
+        } else if (partes.length === 1) {
+            return {
+                primerApellido: '',
+                segundoApellido: '',
+                nombre: partes[0]
+            };
+        }
+        return { primerApellido: '', segundoApellido: '', nombre: '' };
+    }
+
+    function setHaciendaAviso(el, tipo, texto) {
+        if (!el) return;
+        if (!texto) {
+            el.hidden = true;
+            el.innerHTML = '';
+            el.textContent = '';
+            return;
+        }
+        el.hidden = false;
+        const alertClass = tipo === 'success'
+            ? 'notification-success'
+            : (tipo === 'warning' ? 'notification-warning' : (tipo === 'danger' ? 'notification-danger' : 'notification-info'));
+        el.className = 'notification ' + alertClass + ' p-2 mt-2';
+        el.textContent = texto;
+    }
+
+    // Delegación de clic para botones de consulta a Hacienda
+    document.addEventListener('click', (event) => {
+        const btn = event.target.closest('#btn-consultar-hacienda-cli, #btn-consultar-hacienda-edit, #btn-consultar-hacienda-dest, #btn-onb-hacienda, [data-hacienda-btn]');
+        if (!btn) return;
+        event.preventDefault();
+
+        // Determinar contexto según el ID del botón o atributos
+        const isCli = btn.id === 'btn-consultar-hacienda-cli';
+        const isEdit = btn.id === 'btn-consultar-hacienda-edit';
+        const isDest = btn.id === 'btn-consultar-hacienda-dest';
+        const isOnb = btn.id === 'btn-onb-hacienda';
+
+        let idVal = '';
+        let avisoEl = null;
+
+        if (isCli) {
+            idVal = (document.getElementById('identificacion')?.value || '').trim();
+            avisoEl = document.getElementById('hacienda-cli-aviso');
+        } else if (isEdit) {
+            idVal = (document.getElementById('edit-identificacion-val')?.textContent || document.getElementById('edit-identificacion')?.value || '').trim();
+            avisoEl = document.getElementById('hacienda-edit-aviso');
+        } else if (isDest) {
+            idVal = (document.getElementById('destinatario-id')?.value || '').trim();
+            avisoEl = document.getElementById('hacienda-dest-aviso');
+        } else if (isOnb) {
+            idVal = (document.getElementById('onb-identificacion')?.value || '').trim();
+            avisoEl = document.getElementById('onb-hacienda-help');
+        } else {
+            const form = btn.closest('form');
+            idVal = (form?.querySelector('[name="identificacion"]')?.value || '').trim();
+            avisoEl = form?.querySelector('[data-hacienda-aviso]');
+        }
+
+        if (!idVal) {
+            if (isOnb && avisoEl) {
+                avisoEl.textContent = 'Ingresa una identificación antes de consultar.';
+                avisoEl.className = 'help has-text-warning';
+            } else {
+                setHaciendaAviso(avisoEl, 'warning', 'Ingresa una identificación antes de consultar.');
+            }
+            return;
+        }
+
+        // Estado visual de consulta en progreso
+        btn.disabled = true;
+        btn.classList.add('is-loading');
+
+        if (isOnb && avisoEl) {
+            avisoEl.textContent = 'Consultando Ministerio de Hacienda de Costa Rica…';
+            avisoEl.className = 'help has-text-info';
+        } else {
+            setHaciendaAviso(avisoEl, 'info', 'Consultando Ministerio de Hacienda…');
+        }
+
+        let url = '/api/hacienda.php?identificacion=' + encodeURIComponent(idVal);
+        if (isOnb) {
+            const tokenInput = document.querySelector('form#form-onboarding input[name="token"]');
+            if (tokenInput?.value) {
+                url += '&token=' + encodeURIComponent(tokenInput.value);
+            }
+        }
+
+        fetch(url)
+            .then((res) => res.json())
+            .then((data) => {
+                btn.disabled = false;
+                btn.classList.remove('is-loading');
+
+                const rawNombre = data.nombre || data.datos?.nombre || '';
+
+                if (data.status === 'encontrado' && rawNombre) {
+                    if (isOnb) {
+                        const parsed = descomponerNombreCR(rawNombre);
+                        const inputNom = document.getElementById('onb-nombre');
+                        const inputAp1 = document.getElementById('onb-primer-apellido');
+                        const inputAp2 = document.getElementById('onb-segundo-apellido');
+                        if (inputNom) inputNom.value = parsed.nombre;
+                        if (inputAp1) inputAp1.value = parsed.primerApellido;
+                        if (inputAp2) inputAp2.value = parsed.segundoApellido;
+                        if (avisoEl) {
+                            avisoEl.textContent = 'Registro oficial encontrado: ' + rawNombre;
+                            avisoEl.className = 'help has-text-success';
+                        }
+                    } else if (isCli) {
+                        const inputRazon = document.getElementById('razon_social');
+                        const inputComercial = document.getElementById('nombre_comercial');
+                        const inputNom = document.getElementById('nombre');
+                        const inputAp1 = document.getElementById('primer_apellido');
+                        const inputAp2 = document.getElementById('segundo_apellido');
+
+                        if (inputRazon) {
+                            inputRazon.value = rawNombre;
+                            if (inputComercial && !inputComercial.value) inputComercial.value = rawNombre;
+                        } else if (inputNom) {
+                            const parsed = descomponerNombreCR(rawNombre);
+                            inputNom.value = parsed.nombre;
+                            if (inputAp1) inputAp1.value = parsed.primerApellido;
+                            if (inputAp2) inputAp2.value = parsed.segundoApellido;
+                        }
+                        setHaciendaAviso(avisoEl, 'success', 'Registro oficial encontrado: ' + rawNombre);
+                    } else if (isEdit) {
+                        const inputRazon = document.getElementById('edit-razon-social');
+                        const inputComercial = document.getElementById('edit-nombre-comercial');
+                        const inputNom = document.getElementById('edit-nombre');
+                        const inputAp1 = document.getElementById('edit-primer-apellido');
+                        const inputAp2 = document.getElementById('edit-segundo-apellido');
+
+                        if (inputRazon) {
+                            inputRazon.value = rawNombre;
+                            if (inputComercial && !inputComercial.value) inputComercial.value = rawNombre;
+                        } else if (inputNom) {
+                            const parsed = descomponerNombreCR(rawNombre);
+                            inputNom.value = parsed.nombre;
+                            if (inputAp1) inputAp1.value = parsed.primerApellido;
+                            if (inputAp2) inputAp2.value = parsed.segundoApellido;
+                        }
+                        setHaciendaAviso(avisoEl, 'success', 'Registro oficial encontrado: ' + rawNombre);
+                    } else if (isDest) {
+                        const inputNom = document.getElementById('destinatario-nombre');
+                        const inputAp1 = document.getElementById('destinatario-apellido1');
+                        const inputAp2 = document.getElementById('destinatario-apellido2');
+                        const parsed = descomponerNombreCR(rawNombre);
+
+                        if (inputNom) inputNom.value = parsed.nombre;
+                        if (inputAp1) inputAp1.value = parsed.primerApellido || 'Cliente';
+                        if (inputAp2) inputAp2.value = parsed.segundoApellido || '-';
+                        setHaciendaAviso(avisoEl, 'success', 'Registro oficial encontrado: ' + rawNombre);
+                    }
+                } else if (data.status === 'no_encontrado') {
+                    const msg = 'Identificación no registrada en Hacienda. Completa los datos manualmente.';
+                    if (isOnb && avisoEl) {
+                        avisoEl.textContent = msg;
+                        avisoEl.className = 'help has-text-warning';
+                    } else {
+                        setHaciendaAviso(avisoEl, 'warning', msg);
+                    }
+                } else if (data.status === 'limite_excedido') {
+                    const msg = 'Límite de consultas excedido temporalmente. Completa los datos manualmente.';
+                    if (isOnb && avisoEl) {
+                        avisoEl.textContent = msg;
+                        avisoEl.className = 'help has-text-warning';
+                    } else {
+                        setHaciendaAviso(avisoEl, 'warning', msg);
+                    }
+                } else {
+                    const msg = data.mensaje || 'Servicio de Hacienda no disponible. Completa los datos manualmente.';
+                    if (isOnb && avisoEl) {
+                        avisoEl.textContent = msg;
+                        avisoEl.className = 'help has-text-warning';
+                    } else {
+                        setHaciendaAviso(avisoEl, 'warning', msg);
+                    }
+                }
+            })
+            .catch(() => {
+                btn.disabled = false;
+                btn.classList.remove('is-loading');
+                const msg = 'No fue posible conectar con Hacienda. Completa los datos manualmente.';
+                if (isOnb && avisoEl) {
+                    avisoEl.textContent = msg;
+                    avisoEl.className = 'help has-text-danger';
+                } else {
+                    setHaciendaAviso(avisoEl, 'warning', msg);
+                }
+            });
+    });
+
+    /* ======================================================================
+       SOLICITUD: DESTINATARIO Y CAMBIO DE CLIENTE
+       ====================================================================== */
+
+    let clienteSolicitudCache = null;
+
+    function rellenarDestinatarioDesdeCliente() {
+        const radioMismo = document.getElementById('modo-mismo-cliente');
+        const radioTercero = document.getElementById('modo-tercero');
+        const labelMismo = document.getElementById('label-mismo-cliente');
+        const textoTercero = document.getElementById('texto-modo-tercero');
+        const inputId = document.getElementById('destinatario-id');
+        const inputNom = document.getElementById('destinatario-nombre');
+        const inputAp1 = document.getElementById('destinatario-apellido1');
+        const inputAp2 = document.getElementById('destinatario-apellido2');
+        const inputTel = document.getElementById('destinatario-telefono');
+        const btnHacienda = document.getElementById('btn-consultar-hacienda-dest');
+        const avisoHacienda = document.getElementById('hacienda-dest-aviso');
+
+        if (!clienteSolicitudCache) return;
+
+        if (clienteSolicitudCache.tipo_cliente === 'JURIDICA') {
+            if (labelMismo) labelMismo.style.display = 'none';
+            if (radioTercero) radioTercero.checked = true;
+            if (textoTercero) textoTercero.textContent = 'Persona física autorizada por la empresa';
+            if (inputNom) inputNom.value = '';
+            if (inputAp1) inputAp1.value = '';
+            if (inputAp2) inputAp2.value = '';
+            if (inputId) inputId.value = '';
+            if (inputTel) inputTel.value = clienteSolicitudCache.telefono || '';
+            [inputNom, inputAp1, inputAp2, inputId, inputTel].forEach((el) => { if (el) el.readOnly = false; });
+            if (btnHacienda) btnHacienda.disabled = false;
+            setHaciendaAviso(avisoHacienda, 'info', 'Para empresas jurídicas, registra la persona física autorizada para recibir.');
+        } else {
+            if (labelMismo) labelMismo.style.display = 'inline-flex';
+            if (textoTercero) textoTercero.textContent = 'Otra persona autorizada';
+            if (radioMismo && radioMismo.checked) {
+                if (inputId) inputId.value = clienteSolicitudCache.identificacion || '';
+                if (inputTel) inputTel.value = clienteSolicitudCache.telefono || '';
+                if (inputNom) inputNom.value = clienteSolicitudCache.nombre || '';
+                if (inputAp1) inputAp1.value = clienteSolicitudCache.primer_apellido || 'Cliente';
+                if (inputAp2) inputAp2.value = clienteSolicitudCache.segundo_apellido || 'Titular';
+                [inputNom, inputAp1, inputAp2, inputId, inputTel].forEach((el) => { if (el) el.readOnly = true; });
+                if (btnHacienda) btnHacienda.disabled = true;
+                setHaciendaAviso(avisoHacienda, '', '');
+            } else {
+                [inputNom, inputAp1, inputAp2, inputId, inputTel].forEach((el) => { if (el) el.readOnly = false; });
+                if (btnHacienda) btnHacienda.disabled = false;
+                setHaciendaAviso(avisoHacienda, '', '');
+            }
+        }
+    }
+
+    document.addEventListener('change', (event) => {
+        const target = event.target;
+        if (!target) return;
+
+        if (target.id === 'solicitud-cliente') {
+            const clienteId = target.value;
+            if (!clienteId) {
+                clienteSolicitudCache = null;
+                return;
+            }
+            fetch('/clientes/info.php?cliente_id=' + encodeURIComponent(clienteId))
+                .then((res) => (res.ok ? res.json() : null))
+                .then((data) => {
+                    if (data) {
+                        clienteSolicitudCache = data;
+                        rellenarDestinatarioDesdeCliente();
+                    }
+                })
+                .catch(() => {});
+            return;
+        }
+
+        if (target.id === 'modo-mismo-cliente') {
+            rellenarDestinatarioDesdeCliente();
+            return;
+        }
+
+        if (target.id === 'modo-tercero') {
+            const inputNom = document.getElementById('destinatario-nombre');
+            const inputAp1 = document.getElementById('destinatario-apellido1');
+            const inputAp2 = document.getElementById('destinatario-apellido2');
+            const inputId = document.getElementById('destinatario-id');
+            const inputTel = document.getElementById('destinatario-telefono');
+            const btnHacienda = document.getElementById('btn-consultar-hacienda-dest');
+            const avisoHacienda = document.getElementById('hacienda-dest-aviso');
+
+            [inputNom, inputAp1, inputAp2, inputId, inputTel].forEach((el) => { if (el) el.readOnly = false; });
+            if (btnHacienda) btnHacienda.disabled = false;
+            setHaciendaAviso(avisoHacienda, '', '');
+            return;
+        }
+
+        // Validación de consistencia en modal de asignación de paradas de viajes
+        if (['asignar-solicitud', 'parada-recogida', 'parada-entrega'].includes(target.id)) {
+            const selSol = document.getElementById('asignar-solicitud');
+            const selRec = document.getElementById('parada-recogida');
+            const selEnt = document.getElementById('parada-entrega');
+            const aviso = document.getElementById('asignar-validacion-aviso');
+
+            if (!selSol || !selRec || !selEnt || !aviso) return;
+            const optSol = selSol.options[selSol.selectedIndex];
+            const optRec = selRec.options[selRec.selectedIndex];
+            const optEnt = selEnt.options[selEnt.selectedIndex];
+
+            if (!optSol?.value || !optRec?.value || !optEnt?.value) {
+                aviso.hidden = true;
+                return;
+            }
+
+            const origenId = optSol.dataset.origen;
+            const destinoId = optSol.dataset.destino;
+            const ubicRecId = optRec.dataset.ubicacion;
+            const ubicEntId = optEnt.dataset.ubicacion;
+            const ordenRec = parseInt(optRec.dataset.orden || '0', 10);
+            const ordenEnt = parseInt(optEnt.dataset.orden || '0', 10);
+
+            if (ordenRec >= ordenEnt) {
+                aviso.hidden = false;
+                aviso.textContent = 'Inconsistencia de ruta: la parada de recogida debe ser anterior en el orden a la parada de entrega.';
+                return;
+            }
+            if (origenId && ubicRecId && origenId !== ubicRecId) {
+                aviso.hidden = false;
+                aviso.textContent = 'La ubicación de la parada de recogida no coincide con el origen de la solicitud.';
+                return;
+            }
+            if (destinoId && ubicEntId && destinoId !== ubicEntId) {
+                aviso.hidden = false;
+                aviso.textContent = 'La ubicación de la parada de entrega no coincide con el destino de la solicitud.';
+                return;
+            }
+            aviso.hidden = true;
+        }
+    });
 })();

@@ -156,55 +156,6 @@ $submitLabels = [
                     </div>
                     <div id="asignar-validacion-aviso" class="notification notification-warning p-2 mb-2" hidden></div>
                     <p class="help">Las paradas deben corresponder al origen y destino de la orden y respetar el orden secuencial del itinerario.</p>
-
-                    <script>
-                    (function() {
-                        const selSol = document.getElementById('asignar-solicitud');
-                        const selRec = document.getElementById('parada-recogida');
-                        const selEnt = document.getElementById('parada-entrega');
-                        const aviso = document.getElementById('asignar-validacion-aviso');
-
-                        function validarCompatibilidad() {
-                            if (!selSol || !selRec || !selEnt || !aviso) return;
-                            const optSol = selSol.options[selSol.selectedIndex];
-                            const optRec = selRec.options[selRec.selectedIndex];
-                            const optEnt = selEnt.options[selEnt.selectedIndex];
-
-                            if (!optSol?.value || !optRec?.value || !optEnt?.value) {
-                                aviso.hidden = true;
-                                return;
-                            }
-
-                            const origenId = optSol.dataset.origen;
-                            const destinoId = optSol.dataset.destino;
-                            const ubicRecId = optRec.dataset.ubicacion;
-                            const ubicEntId = optEnt.dataset.ubicacion;
-                            const ordenRec = parseInt(optRec.dataset.orden || '0', 10);
-                            const ordenEnt = parseInt(optEnt.dataset.orden || '0', 10);
-
-                            if (ordenRec >= ordenEnt) {
-                                aviso.hidden = false;
-                                aviso.textContent = 'Inconsistencia de ruta: la parada de recogida debe ser anterior en el orden a la parada de entrega.';
-                                return;
-                            }
-                            if (origenId && ubicRecId && origenId !== ubicRecId) {
-                                aviso.hidden = false;
-                                aviso.textContent = 'La ubicación de la parada de recogida no coincide con el origen de la solicitud.';
-                                return;
-                            }
-                            if (destinoId && ubicEntId && destinoId !== ubicEntId) {
-                                aviso.hidden = false;
-                                aviso.textContent = 'La ubicación de la parada de entrega no coincide con el destino de la solicitud.';
-                                return;
-                            }
-                            aviso.hidden = true;
-                        }
-
-                        selSol?.addEventListener('change', validarCompatibilidad);
-                        selRec?.addEventListener('change', validarCompatibilidad);
-                        selEnt?.addEventListener('change', validarCompatibilidad);
-                    })();
-                    </script>
                 <?php elseif ($action === 'cancelar'): ?>
                     <div class="notification notification-danger mb-4">
                         <p><strong>¿Confirmas la cancelación de este despacho?</strong></p>
