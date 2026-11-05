@@ -157,6 +157,7 @@ try {
     echo "Servidor HTTP local activo en {$base}\n";
 
     // Limpiar restos de usuarios efímeros de ejecuciones anteriores
+    $pdo->exec("UPDATE dbo.historial_estados_solicitud SET usuario_id = 1 WHERE usuario_id IN (SELECT usuario_id FROM dbo.usuarios WHERE nombre_usuario LIKE '__e2e%')");
     $pdo->exec("DELETE FROM dbo.usuarios_permisos WHERE usuario_id IN (SELECT usuario_id FROM dbo.usuarios WHERE nombre_usuario LIKE '__e2e%')");
     $pdo->exec("DELETE FROM dbo.auditorias WHERE usuario_id IN (SELECT usuario_id FROM dbo.usuarios WHERE nombre_usuario LIKE '__e2e%')");
     $pdo->exec("DELETE FROM dbo.usuarios WHERE nombre_usuario LIKE '__e2e%'");

@@ -116,6 +116,11 @@ if (session_status() === PHP_SESSION_ACTIVE) {
     session_write_close();
 }
 
+// Limpiar restos huérfanos de pruebas previas en Test
+$pdo->exec("DELETE FROM dbo.usuarios_permisos WHERE usuario_id IN (SELECT usuario_id FROM dbo.usuarios WHERE nombre_usuario LIKE 'http.%')");
+$pdo->exec("DELETE FROM dbo.auditorias WHERE usuario_id IN (SELECT usuario_id FROM dbo.usuarios WHERE nombre_usuario LIKE 'http.%')");
+$pdo->exec("DELETE FROM dbo.usuarios WHERE nombre_usuario LIKE 'http.%'");
+
 // Crear usuario lector (solo USUARIOS_VER) y gestor par (solo USUARIOS_VER + USUARIOS_GESTIONAR_PERMISOS)
 $insUser = $pdo->prepare('INSERT INTO dbo.usuarios (nombre_usuario, correo_acceso, password_hash, activo) OUTPUT INSERTED.usuario_id VALUES (?, ?, ?, 1)');
 
