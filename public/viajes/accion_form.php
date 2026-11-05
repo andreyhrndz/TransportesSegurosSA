@@ -11,6 +11,7 @@ $permissions = [
     'asignar' => 'VIAJES_ASIGNAR',
     'iniciar' => 'VIAJES_INICIAR',
     'finalizar' => 'VIAJES_FINALIZAR',
+    'cancelar' => 'VIAJES_CANCELAR',
 ];
 if ($id === false || !isset($permissions[$action])) {
     http_response_code(404);
@@ -56,12 +57,14 @@ $titles = [
     'asignar' => 'Asignar solicitud',
     'iniciar' => 'Iniciar viaje',
     'finalizar' => 'Finalizar viaje',
+    'cancelar' => 'Cancelar viaje',
 ];
 $submitLabels = [
     'parada' => 'Agregar',
     'asignar' => 'Asignar',
     'iniciar' => 'Iniciar',
     'finalizar' => 'Finalizar',
+    'cancelar' => 'Confirmar cancelación',
 ];
 ?>
 <div class="modal is-active" role="dialog" aria-modal="true" aria-labelledby="titulo-viaje-accion">
@@ -123,7 +126,7 @@ $submitLabels = [
                         <select id="asignar-solicitud" name="solicitud_id" data-combobox data-placeholder="Buscar solicitud por código o cliente…" required>
                             <option value="">Selecciona solicitud…</option>
                             <?php foreach ($solicitudes as $row): ?>
-                                <option value="<?= (int)$row['solicitud_id'] ?>" data-subtext="<?= e(($row['origen_nombre'] ?? '') . ' → ' . ($row['destino_nombre'] ?? '') . ' · ' . humanize_status($row['estado'])) ?>"><?= e($row['codigo_solicitud'] . ' · ' . ($row['cliente_nombre'] ?? humanize_status($row['estado']))) ?></option>
+                                <option value="<?= (int)$row['solicitud_id'] ?>" data-origen="<?= (int)($row['origen_id'] ?? 0) ?>" data-destino="<?= (int)($row['destino_id'] ?? 0) ?>" data-subtext="<?= e(($row['origen_nombre'] ?? '') . ' → ' . ($row['destino_nombre'] ?? '') . ' · ' . humanize_status($row['estado'])) ?>"><?= e($row['codigo_solicitud'] . ' · ' . ($row['cliente_nombre'] ?? humanize_status($row['estado']))) ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -134,7 +137,7 @@ $submitLabels = [
                                 <select id="parada-recogida" name="parada_recogida_id" data-combobox data-placeholder="Selecciona parada…" required>
                                     <option value="">Selecciona</option>
                                     <?php foreach ($paradas as $row): ?>
-                                        <option value="<?= (int)$row['parada_id'] ?>"><?= (int)$row['orden'] ?> · <?= e($row['ubicacion_nombre'] . ' (' . humanize_status($row['tipo_parada']) . ')') ?></option>
+                                        <option value="<?= (int)$row['parada_id'] ?>" data-ubicacion="<?= (int)$row['ubicacion_id'] ?>" data-orden="<?= (int)$row['orden'] ?>" data-tipo="<?= e($row['tipo_parada']) ?>"><?= (int)$row['orden'] ?> · <?= e($row['ubicacion_nombre'] . ' (' . humanize_status($row['tipo_parada']) . ')') ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
@@ -145,18 +148,77 @@ $submitLabels = [
                                 <select id="parada-entrega" name="parada_entrega_id" data-combobox data-placeholder="Selecciona parada…" required>
                                     <option value="">Selecciona</option>
                                     <?php foreach ($paradas as $row): ?>
-                                        <option value="<?= (int)$row['parada_id'] ?>"><?= (int)$row['orden'] ?> · <?= e($row['ubicacion_nombre'] . ' (' . humanize_status($row['tipo_parada']) . ')') ?></option>
+                                        <option value="<?= (int)$row['parada_id'] ?>" data-ubicacion="<?= (int)$row['ubicacion_id'] ?>" data-orden="<?= (int)$row['orden'] ?>" data-tipo="<?= e($row['tipo_parada']) ?>"><?= (int)$row['orden'] ?> · <?= e($row['ubicacion_nombre'] . ' (' . humanize_status($row['tipo_parada']) . ')') ?></option>
                                     <?php endforeach; ?>
                                 </select>
                             </div>
                         </div>
                     </div>
-                    <p class="help">Las paradas seleccionadas deben coincidir con el origen, destino y orden de la solicitud.</p>
+                    <div id="asignar-validacion-aviso" class="notification notification-warning p-2 mb-2" hidden></div>
+                    <p class="help">Las paradas deben corresponder al origen y destino de la orden y respetar el orden secuencial del itinerario.</p>
+
+                    <script>
+                    (function() {
+                        const selSol = document.getElementById('asignar-solicitud');
+                        const selRec = document.getElementById('parada-recogida');
+                        const selEnt = document.getElementById('parada-entrega');
+                        const aviso = document.getElementById('asignar-validacion-aviso');
+
+                        function validarCompatibilidad() {
+                            if (!selSol || !selRec || !selEnt || !aviso) return;
+                            const optSol = selSol.options[selSol.selectedIndex];
+                            const optRec = selRec.options[selRec.selectedIndex];
+                            const optEnt = selEnt.options[selEnt.selectedIndex];
+
+                            if (!optSol?.value || !optRec?.value || !optEnt?.value) {
+                                aviso.hidden = true;
+                                return;
+                            }
+
+                            const origenId = optSol.dataset.origen;
+                            const destinoId = optSol.dataset.destino;
+                            const ubicRecId = optRec.dataset.ubicacion;
+                            const ubicEntId = optEnt.dataset.ubicacion;
+                            const ordenRec = parseInt(optRec.dataset.orden || '0', 10);
+                            const ordenEnt = parseInt(optEnt.dataset.orden || '0', 10);
+
+                            if (ordenRec >= ordenEnt) {
+                                aviso.hidden = false;
+                                aviso.textContent = 'Inconsistencia de ruta: la parada de recogida debe ser anterior en el orden a la parada de entrega.';
+                                return;
+                            }
+                            if (origenId && ubicRecId && origenId !== ubicRecId) {
+                                aviso.hidden = false;
+                                aviso.textContent = 'La ubicación de la parada de recogida no coincide con el origen de la solicitud.';
+                                return;
+                            }
+                            if (destinoId && ubicEntId && destinoId !== ubicEntId) {
+                                aviso.hidden = false;
+                                aviso.textContent = 'La ubicación de la parada de entrega no coincide con el destino de la solicitud.';
+                                return;
+                            }
+                            aviso.hidden = true;
+                        }
+
+                        selSol?.addEventListener('change', validarCompatibilidad);
+                        selRec?.addEventListener('change', validarCompatibilidad);
+                        selEnt?.addEventListener('change', validarCompatibilidad);
+                    })();
+                    </script>
+                <?php elseif ($action === 'cancelar'): ?>
+                    <div class="notification notification-danger mb-4">
+                        <p><strong>¿Confirmas la cancelación de este despacho?</strong></p>
+                        <p class="mt-1">El viaje pasará a estado <code>CANCELADO</code>, las órdenes asociadas retornarán a <code>PENDIENTE_ASIGNACION</code> para ser reprogramadas, y el vehículo y conductor quedarán inmediatamente <code>DISPONIBLE</code>.</p>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="cancelar-motivo">Motivo o justificación</label>
+                        <textarea class="textarea" id="cancelar-motivo" name="motivo" rows="2" maxlength="500" placeholder="Ej. Cambio de ruta, mantenimiento o solicitud de la gerencia…"></textarea>
+                    </div>
                 <?php else: ?>
                     <p><?= $action === 'iniciar' ? 'Se pondrá el viaje en curso siempre que cuente con solicitudes asignadas.' : 'Se marcará el viaje como finalizado una vez que todas las solicitudes asociadas tengan resultado de entrega.' ?></p>
                 <?php endif; ?>
             </section>
-            <?= modal_footer($submitLabels[$action], $action === 'finalizar' ? 'is-danger' : 'is-primary') ?>
+            <?= modal_footer($submitLabels[$action], in_array($action, ['finalizar', 'cancelar'], true) ? 'is-danger' : 'is-primary') ?>
         </form>
     </div>
 </div>

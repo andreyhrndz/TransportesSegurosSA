@@ -31,8 +31,10 @@ try {
                 <div id="mensaje-viaje" role="alert"></div>
 
                 <div class="field">
-                    <label class="label" for="viaje-codigo">Código <span class="required">*</span></label>
-                    <input class="input" id="viaje-codigo" name="codigo" maxlength="30" placeholder="Ej. VIA-2026-0100" required autofocus>
+                    <label class="label">Código de viaje</label>
+                    <div class="control">
+                        <input class="input is-static has-text-subtle" type="text" value="Código asignado al guardar (automático)" readonly tabindex="-1">
+                    </div>
                 </div>
 
                 <div class="field">

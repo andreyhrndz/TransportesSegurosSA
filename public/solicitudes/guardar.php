@@ -8,7 +8,7 @@ require_operation_post('SOLICITUDES_CREAR');
 
 try {
     // ASVS 2.2.1/2.2.3: validación positiva antes de formar el lote parametrizado.
-    $codigo = operation_text($_POST['codigo'] ?? null, 30);
+    $codigo = operation_text($_POST['codigo'] ?? null, 30, false);
     $clienteId = operation_id($_POST['cliente_id'] ?? null); $origenId = operation_id($_POST['origen_id'] ?? null); $destinoId = operation_id($_POST['destino_id'] ?? null);
     if ($origenId === $destinoId) { throw new InvalidArgumentException('Origen y destino deben ser distintos.'); }
     $fecha = operation_future_datetime($_POST['fecha_entrega'] ?? null);

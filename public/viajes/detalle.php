@@ -33,8 +33,14 @@ layout_start('viajes', 'Viaje ' . (string)$viaje['codigo_viaje'], 'Detalle de un
         <?= svg_icon('arrow-left') ?>
         <span>Volver a viajes</span>
     </a>
-    <?php if ($viaje['estado'] === 'PLANIFICADO' && (has_permission('VIAJES_PARADAS') || has_permission('VIAJES_ASIGNAR') || has_permission('VIAJES_INICIAR'))): ?>
+    <?php if ($viaje['estado'] === 'PLANIFICADO' && (has_permission('VIAJES_PARADAS') || has_permission('VIAJES_ASIGNAR') || has_permission('VIAJES_INICIAR') || has_permission('VIAJES_CANCELAR'))): ?>
         <div class="buttons">
+            <?php if (has_permission('VIAJES_CANCELAR')): ?>
+                <button class="button button-secondary is-danger" type="button" hx-get="/viajes/accion_form.php?id=<?= (int)$id ?>&accion=cancelar" hx-target="#modal-contenido">
+                    <?= svg_icon('close') ?>
+                    <span>Cancelar viaje</span>
+                </button>
+            <?php endif; ?>
             <?php if (has_permission('VIAJES_PARADAS')): ?>
                 <button class="button button-secondary" type="button" hx-get="/viajes/accion_form.php?id=<?= (int)$id ?>&accion=parada" hx-target="#modal-contenido">
                     <?= svg_icon('map-pin') ?>
