@@ -11,6 +11,7 @@ function routes_request(string $url, string $cookie, bool $htmx = false, ?string
 putenv('TSSA_DB_DATABASE=TransportesSegurosSA_Test');
 $sessionName = 'TSSA_TRANSPORTES_SESSION';
 $sessionId = bin2hex(random_bytes(24));
+if (!session_save_path()) { session_save_path(sys_get_temp_dir()); }
 session_name($sessionName); session_id($sessionId); session_start();
 $_SESSION = ['usuario_id'=>1,'authenticated_at'=>time(),'last_activity_at'=>time(),'csrf_token'=>bin2hex(random_bytes(32))];
 session_write_close();

@@ -1,9 +1,20 @@
 const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
-const { execSync } = require('child_process');
+const net = require('net');
+const { execSync, spawn } = require('child_process');
 
 const PHP_BIN = 'C:\\AdmBD2026\\Herramientas\\PHP\\8.4\\php.exe';
+
+function checkPortOpen(port) {
+    return new Promise((resolve) => {
+        const s = net.connect({ port, host: '127.0.0.1' }, () => {
+            s.destroy();
+            resolve(true);
+        });
+        s.on('error', () => resolve(false));
+    });
+}
 
 async function runLoteVerification() {
     console.log('=== VERIFICACIÓN VISUAL PLAYWRIGHT: LOTE INTEGRAL UX, HACIENDA E INVITACIONES ===');
@@ -13,10 +24,40 @@ async function runLoteVerification() {
         fs.mkdirSync(screenshotDir, { recursive: true });
     }
 
+    let phpProcess = null;
+    let BASE_URL = 'http://127.0.0.1:8001';
+
+    const isOpen8001 = await checkPortOpen(8001);
+    if (!isOpen8001) {
+        console.log('Iniciando servidor PHP de prueba en puerto 8001...');
+        const rootDir = path.join(__dirname, '..');
+        phpProcess = spawn(PHP_BIN, ['-S', '127.0.0.1:8001', '-t', path.join(rootDir, 'public')], {
+            cwd: rootDir,
+            env: {
+                ...process.env,
+                TSSA_DB_DATABASE: 'TransportesSegurosSA_Test',
+                TSSA_DB_SERVER: 'localhost',
+                TSSA_MAIL_TRANSPORT: 'fake',
+                TSSA_APP_URL: 'http://127.0.0.1:8001'
+            },
+            stdio: 'ignore'
+        });
+
+        for (let i = 0; i < 30; i++) {
+            if (await checkPortOpen(8001)) {
+                break;
+            }
+            await new Promise((r) => setTimeout(r, 100));
+        }
+        console.log('Servidor PHP activo en http://127.0.0.1:8001');
+    } else {
+        console.log('Utilizando servidor existente en http://127.0.0.1:8001');
+    }
+
     // Cuenta efímera
     const helperPath = path.join(__dirname, 'ephemeral_auth_helper.php');
     const helperOutput = execSync(`"${PHP_BIN}" "${helperPath}" create`, {
-        env: { ...process.env, TSSA_DB_DATABASE: 'TransportesSegurosSA_Test' },
+        env: { ...process.env, TSSA_DB_DATABASE: 'TransportesSegurosSA_Test', TSSA_DB_SERVER: 'localhost' },
         encoding: 'utf8'
     });
     const ephemeralUser = JSON.parse(helperOutput.trim());
@@ -31,13 +72,13 @@ async function runLoteVerification() {
             const page = await context.newPage();
 
             // 1. Pantalla pública de Recuperar Contraseña
-            await page.goto('http://127.0.0.1:8085/auth/recuperar.php');
+            await page.goto(`${BASE_URL}/auth/recuperar.php`);
             await page.waitForSelector('form.login-form', { timeout: 8000 });
             await page.screenshot({ path: path.join(screenshotDir, `auth_recuperar_${resolution.width}x${resolution.height}.png`) });
             console.log('  [OK] Pantalla de recuperación de contraseña capturada.');
 
             // 2. Pantalla de Login con enlace de recuperación
-            await page.goto('http://127.0.0.1:8085/auth/login.php');
+            await page.goto(`${BASE_URL}/auth/login.php`);
             await page.waitForSelector('a[href="/auth/recuperar.php"]', { timeout: 8000 });
             await page.screenshot({ path: path.join(screenshotDir, `auth_login_${resolution.width}x${resolution.height}.png`) });
             console.log('  [OK] Pantalla de login con enlace a recuperación capturada.');
@@ -49,7 +90,7 @@ async function runLoteVerification() {
             await page.waitForLoadState('networkidle');
 
             // 3. Hallazgo #1: Modal "Nueva solicitud" con footer pinned y botones a la izquierda
-            await page.goto('http://127.0.0.1:8085/solicitudes.php');
+            await page.goto(`${BASE_URL}/solicitudes.php`);
             await page.waitForSelector('.toolbar-panel .button.is-primary', { timeout: 8000 });
             await page.click('.toolbar-panel .button.is-primary');
             await page.waitForSelector('#modal-contenido .modal-card', { timeout: 8000 });
@@ -89,12 +130,12 @@ async function runLoteVerification() {
             // Cerrar modal
             await page.click('#modal-contenido button[data-close-modal]');
             await page.waitForFunction(() => {
-                const m = document.querySelector('#modal');
+                const m = document.querySelector('#modal-contenido');
                 return !m || m.classList.contains('is-hidden') || m.innerHTML.trim() === '';
             });
 
             // 4. Hallazgo #3: Filtros Tom Select con dropdown abierto y sin doble flecha
-            await page.goto('http://127.0.0.1:8085/solicitudes.php');
+            await page.goto(`${BASE_URL}/solicitudes.php`);
             await page.waitForSelector('.filter-form .ts-wrapper', { timeout: 8000 });
 
             const selectDoubleArrowCheck = await page.evaluate(() => {
@@ -117,7 +158,6 @@ async function runLoteVerification() {
             console.log('  [OK] Dropdown abierto Tom Select verificado.');
 
             // 5. Hallazgo #6: Sidebar colapsado persistente sin parpadeo (FOUC)
-            // Colapsar sidebar
             await page.click('button[data-sidebar-collapse]');
             await page.waitForFunction(() => {
                 const shell = document.querySelector('#app-shell');
@@ -127,7 +167,7 @@ async function runLoteVerification() {
 
             // Navegar a 3 módulos diferentes y verificar que se mantiene colapsado
             for (const modulo of ['/viajes.php', '/usuarios.php', '/reportes.php']) {
-                await page.goto('http://127.0.0.1:8085' + modulo);
+                await page.goto(BASE_URL + modulo);
                 const isCollapsed = await page.evaluate(() => {
                     const shell = document.querySelector('#app-shell');
                     return shell && shell.classList.contains('is-sidebar-collapsed');
@@ -139,7 +179,7 @@ async function runLoteVerification() {
             console.log('  [OK] Persistencia de sidebar colapsado verificada sin parpadeo en 3 páginas.');
 
             // 6. Vista de Usuarios: pestañas de Cuentas e Invitaciones y Modal Invitar usuario
-            await page.goto('http://127.0.0.1:8085/usuarios.php');
+            await page.goto(`${BASE_URL}/usuarios.php`);
             await page.waitForSelector('#usuarios-tabs', { timeout: 8000 });
 
             // Abrir modal de invitar usuario
@@ -202,10 +242,13 @@ async function runLoteVerification() {
         try {
             await browser.close();
         } catch {}
+        if (phpProcess) {
+            phpProcess.kill();
+        }
         if (ephemeralUser && ephemeralUser.user_id) {
             console.log(`Limpiando cuenta efímera: ${ephemeralUser.username}...`);
             execSync(`"${PHP_BIN}" "${helperPath}" cleanup ${ephemeralUser.user_id}`, {
-                env: { ...process.env, TSSA_DB_DATABASE: 'TransportesSegurosSA_Test' },
+                env: { ...process.env, TSSA_DB_DATABASE: 'TransportesSegurosSA_Test', TSSA_DB_SERVER: 'localhost' },
                 encoding: 'utf8'
             });
         }

@@ -8,7 +8,52 @@ require_test_database($connection);
 
 echo "=== INICIO DE REGRESIÓN DE AUTENTICACIÓN Y SEGURIDAD HTTP ===\n";
 
-$base = 'http://127.0.0.1:8085';
+function auth_reserve_port(): int
+{
+    $socket = stream_socket_server('tcp://127.0.0.1:0', $errno, $error);
+    if ($socket === false) {
+        throw new RuntimeException('No se pudo reservar puerto local.');
+    }
+    $name = stream_socket_get_name($socket, false);
+    fclose($socket);
+    return (int)substr((string)$name, strrpos((string)$name, ':') + 1);
+}
+
+$spawnedServerProcess = null;
+$spawnedLog = null;
+$targetUrl = getenv('TSSA_APP_URL') ?: 'http://127.0.0.1:8001';
+$targetHost = (string)parse_url($targetUrl, PHP_URL_HOST);
+$targetPort = (int)(parse_url($targetUrl, PHP_URL_PORT) ?: 80);
+
+$checkSocket = @fsockopen($targetHost, $targetPort, $errno, $errstr, 0.3);
+if ($checkSocket !== false) {
+    fclose($checkSocket);
+    $base = $targetUrl;
+} else {
+    $dynPort = auth_reserve_port();
+    $base = "http://127.0.0.1:{$dynPort}";
+    $root = dirname(__DIR__);
+    $spawnedLog = tempnam(sys_get_temp_dir(), 'tssa-auth-http-');
+    $env = array_merge(getenv(), [
+        'TSSA_DB_DATABASE' => 'TransportesSegurosSA_Test',
+        'TSSA_DB_SERVER' => 'localhost',
+    ]);
+    $spawnedServerProcess = proc_open(
+        [PHP_BINARY, '-S', "127.0.0.1:{$dynPort}", '-t', $root . DIRECTORY_SEPARATOR . 'public'],
+        [0 => ['pipe', 'r'], 1 => ['file', $spawnedLog, 'a'], 2 => ['file', $spawnedLog, 'a']],
+        $pipes,
+        $root,
+        $env
+    );
+    for ($i = 0; $i < 25; $i++) {
+        $s = @fsockopen('127.0.0.1', $dynPort);
+        if ($s !== false) {
+            fclose($s);
+            break;
+        }
+        usleep(100000);
+    }
+}
 
 function auth_test_request(string $url, string $cookie = '', bool $isPost = false, array $postData = []): array
 {
@@ -168,6 +213,14 @@ try {
     echo "  [OK] Sesión invalidada post-logout comprobada.\n";
 
 } finally {
+    if (is_resource($spawnedServerProcess)) {
+        proc_terminate($spawnedServerProcess);
+        proc_close($spawnedServerProcess);
+        if ($spawnedLog && file_exists($spawnedLog)) {
+            @unlink($spawnedLog);
+        }
+    }
+
     // 10. Limpieza estricta de cuenta efímera
     $delP = $connection->prepare('DELETE FROM dbo.usuarios_permisos WHERE usuario_id = ?');
     $delP->execute([$ephemeralId]);
