@@ -1,7 +1,15 @@
 -- ============================================================
--- 01 - CREAR LA BASE DE DATOS Y SUS ARCHIVOS
+-- 01 - CREAR LA BASE DE DATOS Y SUS ARCHIVOS (HISTÓRICO / BASELINE)
 -- Base de datos: TransportesSegurosSA
--- Requiere C:\SQL\SQLData y C:\SQL\SQLLog creadas y con permisos.
+--
+-- ADVERTENCIA DE PORTABILIDAD:
+-- Este script refleja el aprovisionamiento original en el servidor del laboratorio,
+-- requiriendo C:\SQL\SQLData y C:\SQL\SQLLog creadas y con permisos NTFS del servicio.
+--
+-- Para crear e inicializar la base de desarrollo 'TransportesSegurosSA_Test'
+-- en cualquier otra máquina sin depender de estas rutas fijas, utilice el script
+-- automatizado y portable:
+--   .\tools\scripts\init-test-db.ps1
 -- ============================================================
 
 USE master;

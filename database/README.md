@@ -54,44 +54,82 @@ database/
 
 ---
 
-## 2. Orden de Despliegue para un Entorno Limpio
+## 2. Inicialización y Despliegue de Base de Datos
 
-Para inicializar la base de datos desde cero en una instancia local o de pruebas (`TransportesSegurosSA_Test`):
+### 2.1 Método Oficial y Automatizado (Recomendado)
 
-1. **Creación del Esquema Base (`database/baseline/`):**
-   ```powershell
-   sqlcmd -S localhost -d master -E -i database/baseline/02_schema/01_crear_base.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/baseline/02_schema/02_crear_24_tablas.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/baseline/02_schema/03_crear_indices.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/baseline/02_schema/04_crear_relaciones.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/baseline/02_schema/05_restricciones.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/baseline/03_security/01_catalogos.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/baseline/04_logic/01_funciones_y_tipo.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/baseline/04_logic/02_sp_clientes_solicitudes.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/baseline/04_logic/03_sp_viajes_y_entregas.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/baseline/04_logic/04_sp_incidencias_permisos_documentos.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/baseline/04_logic/05_triggers_auditoria.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/baseline/04_logic/06_vistas.sql
+Para inicializar o recrear de forma 100% portable y segura la base de datos de pruebas y desarrollo (`TransportesSegurosSA_Test`), use el asistente PowerShell:
+
+```powershell
+.\tools\scripts\init-test-db.ps1
+```
+
+**Comportamiento y Salvaguardas de `init-test-db.ps1`:**
+- **Destino exclusivo:** Apunta únicamente a `TransportesSegurosSA_Test`. Prohíbe terminantemente apuntar a la base original `TransportesSegurosSA`.
+- **Almacenamiento por defecto:** Si la base no existe, la crea utilizando la configuración de almacenamiento predeterminada de SQL Server (`CREATE DATABASE [TransportesSegurosSA_Test]`), evitando fallos por rutas de disco fijas inexistentes.
+- **Aislamiento de contexto:** Adapta en memoria de forma segura la cláusula `USE TransportesSegurosSA;` de los scripts de baseline para que apunten a `[TransportesSegurosSA_Test]`.
+- **Codificación UTF-8:** Aplica las migraciones `01` a `09` con `-f 65001` para asegurar la integridad de tildes y caracteres especiales normativos.
+- **Verificación automática:** Concluye invocando el script de verificación integral (`verify_environment.ps1`).
+
+> [!WARNING] Advertencia sobre `database/baseline/02_schema/01_crear_base.sql`
+> El archivo `01_crear_base.sql` es un registro histórico del laboratorio original y contiene rutas físicas absolutas (`C:\SQL\Data\...`). **No debe ejecutarse directamente en una máquina nueva o con rutas de almacenamiento distintas**. Utilice siempre `.\tools\scripts\init-test-db.ps1` o cree la base en blanco antes de aplicar el baseline tabular.
+
+### 2.2 Verificación de Estado e Integridad
+
+Para auditar y validar que la base de datos cuenta con las 28 tablas, las 14 categorías de licencias y todos los procedimientos y funciones normativas:
+
+```powershell
+.\tools\scripts\verify_environment.ps1
+```
+
+O apuntando a una base específica:
+
+```powershell
+.\tools\scripts\verify_environment.ps1 -Database TransportesSegurosSA_Test
+```
+
+### 2.3 Despliegue Manual Paso a Paso (Referencia)
+
+Si requiere ejecutar los scripts manualmente mediante `sqlcmd`:
+
+1. **Creación de la base de datos (con almacenamiento del motor):**
+   ```sql
+   CREATE DATABASE [TransportesSegurosSA_Test];
    ```
 
-2. **Aplicación Secuencial de Migraciones (`database/migrations/`):**
+2. **Esquema Base Inicial (`database/baseline/`):**
    ```powershell
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/migrations/01_read_access_contracts.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/migrations/02_extended_read_contracts.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/migrations/02b_delivery_recipient_detail_contract.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/migrations/03_customer_lifecycle_contracts.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/migrations/04_master_data_contracts.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/migrations/05_operational_contracts.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/migrations/06_user_accounts_contracts.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/migrations/07_invitations_and_recovery_contracts.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/migrations/08_invitation_permissions_contracts.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -I -i database/migrations/09_driver_licenses_and_vehicle_pma_contracts.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -i database/baseline/02_schema/02_crear_24_tablas.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -i database/baseline/02_schema/03_crear_indices.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -i database/baseline/02_schema/04_crear_relaciones.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -i database/baseline/02_schema/05_restricciones.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -i database/baseline/03_security/01_catalogos.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -i database/baseline/04_logic/01_funciones_y_tipo.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -i database/baseline/04_logic/02_sp_clientes_solicitudes.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -i database/baseline/04_logic/03_sp_viajes_y_entregas.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -i database/baseline/04_logic/04_sp_incidencias_permisos_documentos.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -i database/baseline/04_logic/05_triggers_auditoria.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -i database/baseline/04_logic/06_vistas.sql
    ```
 
-3. **Carga de Datos Semilla (`database/seed/`):**
+3. **Migraciones del Aplicativo (`database/migrations/`):**
    ```powershell
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/seed/01_datos_maestros.sql
-   sqlcmd -S localhost -d TransportesSegurosSA -E -i database/seed/02_clientes_y_solicitudes.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -f 65001 -i database/migrations/01_read_access_contracts.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -f 65001 -i database/migrations/02_extended_read_contracts.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -f 65001 -i database/migrations/02b_delivery_recipient_detail_contract.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -f 65001 -i database/migrations/03_customer_lifecycle_contracts.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -f 65001 -i database/migrations/04_master_data_contracts.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -f 65001 -i database/migrations/05_operational_contracts.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -f 65001 -i database/migrations/06_user_accounts_contracts.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -f 65001 -i database/migrations/07_invitations_and_recovery_contracts.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -f 65001 -i database/migrations/08_invitation_permissions_contracts.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -f 65001 -i database/migrations/09_driver_licenses_and_vehicle_pma_contracts.sql
+   ```
+
+4. **Carga de Datos Semilla (`database/seed/`):**
+   ```powershell
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -f 65001 -i database/seed/01_datos_maestros.sql
+   sqlcmd -S localhost -d TransportesSegurosSA_Test -E -f 65001 -i database/seed/02_clientes_y_solicitudes.sql
    ```
 
 4. **Ejecución de Pruebas de Contrato (`database/tests/`):**

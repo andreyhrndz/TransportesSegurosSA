@@ -141,11 +141,11 @@ function db(): PDO
         return $pdo;
     }
 
-    $server = getenv('TSSA_DB_SERVER') ?: 'localhost';
+    $server = trim((string)(getenv('TSSA_DB_SERVER') ?: 'localhost'));
     $database = configured_database_name();
-    $user = getenv('TSSA_DB_USER') ?: null;
-    $pass = getenv('TSSA_DB_PASSWORD') ?: null;
-    $port = getenv('TSSA_DB_PORT') ?: null;
+    $user = trim((string)(getenv('TSSA_DB_USER') ?: ''));
+    $pass = (string)(getenv('TSSA_DB_PASSWORD') ?: '');
+    $port = trim((string)(getenv('TSSA_DB_PORT') ?: ''));
 
     $options = [
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -156,25 +156,21 @@ function db(): PDO
         $options[PDO::SQLSRV_ATTR_ENCODING] = PDO::SQLSRV_ENCODING_UTF8;
     }
 
-    // Si el servidor configurado no es localhost o hay credenciales, intentar primero conexión explícita
-    if ($server !== 'localhost' && $server !== '(local)' && $user !== null && $pass !== null && $user !== '') {
-        try {
-            $serverTarget = $port ? "{$server},{$port}" : $server;
-            $dsn = "sqlsrv:Server={$serverTarget};Database={$database};Encrypt=yes;TrustServerCertificate=yes;LoginTimeout=2";
-            $pdo = new PDO($dsn, $user, $pass, $options);
-            return $pdo;
-        } catch (Throwable) {
-            // En laboratorio/desarrollo local, recurrir a Windows Integrated Auth sobre localhost
-        }
-    }
+    $serverTarget = ($port !== '' && !str_contains($server, ',')) ? "{$server},{$port}" : $server;
+    $dsn = "sqlsrv:Server={$serverTarget};Database={$database};Encrypt=yes;TrustServerCertificate=yes";
 
     try {
-        $dsn = "sqlsrv:Server=localhost;Database={$database};Encrypt=yes;TrustServerCertificate=yes";
-        $pdo = new PDO($dsn, null, null, $options);
+        if ($user !== '') {
+            $pdo = new PDO($dsn, $user, $pass, $options);
+        } else {
+            $pdo = new PDO($dsn, null, null, $options);
+        }
         return $pdo;
-    } catch (PDOException|LogicException $ex) {
-        // ASVS 16.3.4: registrar el detalle solo del lado del servidor.
-        error_log('TSSA: no se pudo conectar a SQL Server: ' . $ex->getMessage());
+    } catch (Throwable $ex) {
+        error_log("TSSA: no se pudo conectar a SQL Server ({$serverTarget}/{$database}): " . $ex->getMessage());
+        if (PHP_SAPI === 'cli') {
+            throw $ex;
+        }
         http_response_code(503);
         exit('El servicio no está disponible temporalmente. Inténtalo más tarde.');
     }

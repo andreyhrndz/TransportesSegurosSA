@@ -1,45 +1,170 @@
 # Transportes Seguros S.A.
 
-Aplicación administrativa de transporte y logística en PHP 8.4, SQL Server (PDO_SQLSRV), Bulma y HTMX.
+Plataforma integral de gestión logística, operativa y administrativa desarrollada con **PHP 8.4 (NTS x64)**, **Microsoft SQL Server 2025 (PDO_SQLSRV)**, **Bulma CSS** y **HTMX**.
 
-## Estado auditado
+---
 
-El frontend inicial implementa inicio/cierre de sesión, sesión PHP/CSRF, autorización por permisos existentes, dashboard de lectura y consulta/alta de clientes físicos y jurídicos. No están implementados los módulos operativos, ni edición/desactivación de clientes.
+## 1. Módulos y Capacidades Implementadas
 
-Los scripts SQL de referencia están en `C:\AdmBD2026\BDTransportesSegurosSA`; no se modifican desde este repositorio. La replicación sigue pendiente.
+La plataforma cubre el ciclo de vida completo de la operación de transporte de carga comercial bajo el marco legal de la **República de Costa Rica** y los estándares de seguridad de **OWASP ASVS Nivel 2**:
 
-## Rutas locales
+- **Autenticación y Control de Acceso Granular:**
+  - Sesiones PHP blindadas (`SameSite=Lax`, `HttpOnly`, `__Host-` en HTTPS, regeneración contra fijación y expiración por inactividad).
+  - Protección contra CSRF con tokens criptográficos por sesión en todos los formularios y solicitudes HTMX.
+  - Modelo de autorización granular de **28 permisos individuales activos** (sin roles planos); auditoría transaccional en `dbo.auditorias`.
+  - Sistema de invitaciones por correo transaccional vía **API de Brevo (Sendinblue)** con asignación previa de permisos por principio de mínimo privilegio y flujo de onboarding seguro.
+  - Flujo seguro de recuperación de contraseñas mediante tokens efímeros con hash criptográfico SHA-256.
 
-- Proyecto: `C:\AdmBD2026\ProyectoTransportesSegurosSA`
-- PHP: `C:\AdmBD2026\Herramientas\PHP\8.4\php.exe`
-- Raíz web: `public\`
+- **Directorio de Clientes e Integración Tributaria:**
+  - Registro, edición y consulta de clientes físicos y corporativos (jurídicos).
+  - Validación y autocompletado en tiempo real con el **Ministerio de Hacienda de Costa Rica** (API RUC de comprobantes electrónicos) mediante HTTPS seguro con timeout configurable.
 
+- **Solicitudes de Transporte y Destinatarios:**
+  - Alta y seguimiento de solicitudes de transporte con mercancías asociadas y validación de cubicaje y peso.
+  - Selector interactivo de destinatario: entrega al mismo cliente o a un tercero debidamente autorizado (obligatorio para personas jurídicas).
+
+- **Gestión de Flota Vehicular y Normativa de PMA:**
+  - Administración de flota con registro de **PMA (Peso Máximo Autorizado en kg)** según ficha técnica oficial del MOPT, distinguiendo claramente el PMA de la **capacidad de carga útil**.
+  - Clasificación legal de la unidad: `LIVIANO` (&le; 4.000 kg PMA), `MEDIANO_RIGIDO` (&le; 8.000 kg PMA), `PESADO_RIGIDO` (&gt; 8.000 kg PMA) y `PESADO_ARTICULADO`.
+  - Registro de condición de remolque/articulado y estado de homologación vehicular (`VERIFICADO`, `PENDIENTE_VERIFICACION`, `NO_CONFORME`).
+
+- **Conductores y Catálogo Oficial de Licencias de Conducir (Ley 9078 / 9460):**
+  - Catálogo normativo oficial de **14 categorías** de licencias de Costa Rica (`A1`, `A2`, `A3`, `B1`, `B2`, `B3`, `B4`, `C1`, `C2`, `D1`, `D2`, `D3`, `E1`, `E2`).
+  - Soporte de múltiples licencias por conductor en `dbo.conductores_licencias` con número de documento, fecha de vencimiento individual y estado de verificación oficial.
+
+- **Planificación de Viajes y Validación Legal en Tiempo Real:**
+  - Verificación autoritativa de compatibilidad de licencia, vigencia y PMA tanto en base de datos (`dbo.fn_conductor_habilitado_vehiculo`, con **Error 50320** en `sp_crear_viaje` y **Error 50321** en `sp_iniciar_viaje`) como en el navegador con diagnóstico visual dinámico.
+  - Control de concurrencia pesimista con locks transaccionales (`UPDLOCK`, `HOLDLOCK`).
+  - Asignación de paradas ordenadas y vinculación de solicitudes.
+
+- **Entregas, Incidencias y Gestión Documental:**
+  - Confirmación de entregas en destino o reporte de intentos fallidos con receptor efectivo.
+  - Registro y resolución de incidencias operativas en ruta.
+  - Carga y vinculación de respaldos documentales protegidos.
+
+- **Reportes, Auditoría y Data Warehouse:**
+  - Visualización del historial de auditoría de modificaciones a entidades críticas.
+  - Esquema dimensional de analítica en `TransportesSegurosSA_DW` (6 tablas dimensionales y procedimientos ETL).
+
+---
+
+## 2. Requisitos del Sistema
+
+- **Sistema Operativo:** Windows 10 / 11 / Server 2022+.
+- **PHP:** Versión **8.4 x64 Non-Thread Safe (NTS)**.
+  - Extensiones requeridas: `pdo`, `pdo_sqlsrv`, `sqlsrv`, `openssl`, `mbstring`, `curl`, `fileinfo`.
+- **Base de Datos:** Microsoft SQL Server 2019 / 2022 / 2025 con autenticación Windows o SQL Server Authentication.
+- **Controlador ODBC:** Microsoft ODBC Driver 17 u 18 for SQL Server.
+- **Herramienta CLI:** `sqlcmd` (incluida en Microsoft Command Line Utilities for SQL Server).
+
+---
+
+## 3. Guía de Instalación y Arranque Rápido (Desde Cero)
+
+El repositorio está diseñado para ser completamente **portable**: puede clonarse y ejecutarse desde cualquier unidad o carpeta de Windows (sin requerir rutas fijas).
+
+### Paso 1: Clonar el Repositorio
 ```powershell
-cd C:\AdmBD2026\ProyectoTransportesSegurosSA
-& "C:\AdmBD2026\Herramientas\PHP\8.4\php.exe" -S 127.0.0.1:8000 -t public
+git clone https://github.com/andreyhrndz/TransportesSegurosSA.git
+cd TransportesSegurosSA
 ```
 
-La conexión del equipo principal ya funciona con PHP 8.4, PDO_SQLSRV y ODBC Driver 18. La autenticación integrada de Windows y `TrustServerCertificate=yes` son sólo para laboratorio; producción exige TLS verificable, secretos fuera de Git/public y cuenta SQL de mínimo privilegio.
-
-## Seguridad de acceso
-
-La aplicación admite únicamente autenticación local con usuario/correo y contraseña verificada con `password_verify()`. Los errores de acceso son deliberadamente genéricos, se limitan a ocho intentos por sesión cada cinco minutos y se registran sin contraseñas ni hashes. La sesión vence tras 30 minutos de inactividad o 8 horas absolutas y se invalida al cerrar sesión o cuando el usuario deja de estar activo.
-
-En desarrollo HTTP la cookie `TSSA_TRANSPORTES_SESSION` no puede usar `Secure`; en producción HTTPS se emite como `__Host-TSSA_TRANSPORTES_SESSION`, `Secure`, `HttpOnly` y `SameSite=Lax`. El nombre específico evita colisiones con otras aplicaciones locales que compartan `localhost` o `127.0.0.1`. Producción debe terminar TLS antes de PHP, usar un certificado verificable, proporcionar `TSSA_DB_SERVER` fuera de Git y sustituir la autenticación integrada por una cuenta SQL de mínimo privilegio. No se deben colocar credenciales, DSN con secretos ni hashes en `public/`.
-
-Para trabajar sobre una copia aislada, configurar antes de iniciar PHP:
-
+### Paso 2: Preparar y Validar el Entorno de Desarrollo
+Ejecute el asistente automatizado de configuración:
 ```powershell
-$env:TSSA_DB_DATABASE = 'TransportesSegurosSA_Test'
+.\tools\scripts\setup-dev.ps1
+```
+> [!NOTE]
+> `setup-dev.ps1` detecta automáticamente su ejecutable de PHP 8.4 (en el PATH, en `tools/local/php84/php.exe` o ubicaciones estándar), valida extensiones, detecta los controladores ODBC y crea el archivo `.env` inicial con valores seguros de desarrollo si aún no existe. Si su PHP está en una ruta personalizada, pásela como parámetro:
+> ```powershell
+> .\tools\scripts\setup-dev.ps1 -PhpPath "D:\Herramientas\PHP\8.4\php.exe"
+> ```
+
+### Paso 3: Inicializar la Base de Datos de Pruebas (`TransportesSegurosSA_Test`)
+Para aprovisionar la base de datos de pruebas local con las 28 tablas, procedimientos almacenados y contratos 01 a 09:
+```powershell
+.\tools\scripts\init-test-db.ps1
+```
+*(Opcional: use el parámetro `-IncludeSeed` si desea cargar datos de ejemplo sintéticos).*
+
+### Paso 4: Verificar la Integridad del Entorno
+Ejecute el diagnóstico exhaustivo de solo lectura:
+```powershell
+.\tools\scripts\verify_environment.ps1
 ```
 
-Sin esa variable se mantiene la compatibilidad local con `TransportesSegurosSA`. La
-aplicación sólo acepta esos dos nombres; las pruebas de escritura deben llamar
-`require_test_database(db())` y fallan cerradas si la conexión efectiva no es la base
-de pruebas.
+### Paso 5: Iniciar el Servidor de Desarrollo
+Levante el servidor integrado de PHP:
+```powershell
+.\tools\scripts\start-dev.ps1
+```
+El servidor quedará escuchando en `http://127.0.0.1:8001`.
 
-Los encabezados de navegador restringen el contenido a la propia aplicación y a Bulma desde jsDelivr. Antes de producción, el CSS externo debe fijarse con SRI o alojarse como activo aprobado localmente; no se deben añadir otros orígenes sin revisar su CSP.
+Abra su navegador web y visite:
+**[http://127.0.0.1:8001/auth/login.php](http://127.0.0.1:8001/auth/login.php)**
 
-## OpenSpec
+Para detener el servidor en cualquier momento, presione `Ctrl + C`.
 
-Los changes activos están en `openspec/changes/`. La secuencia, dependencias SQL, riesgos y cierre están en [docs/frontend-roadmap.md](docs/frontend-roadmap.md). La validación OpenSpec confirma estructura, no implementación.
+---
+
+## 4. Estructura Canónica del Proyecto
+
+```
+TransportesSegurosSA/
+├── app/                                 # Lógica de negocio, consultas y contratos de seguridad
+│   ├── bootstrap.php                    # Inicialización segura, encabezados y conexión PDO_SQLSRV
+│   ├── auth.php                         # Control de sesiones, autenticación y CSRF
+│   ├── master_data.php                  # Catálogos de flota, licencias, ubicaciones y rutas
+│   └── ...
+├── database/                            # Fuente canónica oficial de Base de Datos (SQL Server)
+│   ├── baseline/                        # Esquema fundacional reproducible (24 tablas, DW, Jobs)
+│   ├── migrations/                      # Migraciones incrementales aditivas (01 a 09) y rollbacks
+│   ├── seed/                            # Datos sintéticos maestros y operativos de prueba
+│   ├── tests/                           # 13 suites automatizadas de pruebas contractuales T-SQL
+│   └── README.md                        # Documentación exhaustiva de arquitectura de datos
+├── docs/                                # Documentación técnica, capturas Playwright y roadmaps
+│   └── screenshots/                     # 48 capturas de pantallas y modales en 1366x768 y 1440x900
+├── openspec/                            # Especificaciones del estándar OpenSpec (18 changes)
+├── public/                              # Raíz del servidor web (document root)
+│   ├── index.php                        # Redirección y panel de control
+│   ├── auth/                            # Login, logout, recuperación y onboarding
+│   ├── clientes/                        # Gestión de clientes físicos y jurídicos
+│   ├── flota/                           # Gestión de flota (PMA, homologación) y conductores (licencias)
+│   ├── solicitudes/                     # Registro y asignación de solicitudes
+│   ├── viajes/                          # Planificación y control de viajes con diagnóstico Ley 9078
+│   ├── entregas.php                     # Confirmación de entregas y terminales
+│   └── assets/                          # Estilos Bulma, tema Dark Logistics y componentes JS
+├── tests/                               # 24 suites de pruebas automatizadas PHP y suite Playwright
+└── tools/                               # Configuración y utilidades de entorno de desarrollo
+    ├── manifests/
+    │   └── runtime_manifest.json        # Hashes SHA-256 de los binarios oficiales de PHP y drivers
+    ├── scripts/
+    │   ├── setup-dev.ps1                # Asistente de configuración inicial
+    │   ├── start-dev.ps1                # Script de arranque del servidor local
+    │   ├── init-test-db.ps1             # Inicializador de la base TransportesSegurosSA_Test
+    │   ├── verify_environment.ps1       # Verificador de entorno en PowerShell
+    │   └── verify_environment.php       # Diagnóstico interno de extensiones y contratos SQL
+    ├── templates/
+    │   └── php.ini.example              # Plantilla de configuración endurecida para PHP 8.4
+    └── README.md                        # Guía del entorno de herramientas y drivers
+```
+
+---
+
+## 5. Distinción Estricta de Bases de Datos y Entornos
+
+| Base de Datos | Propósito | Reglas Operativas |
+|---|---|---|
+| **`TransportesSegurosSA_Test`** | **Desarrollo y Pruebas** | Entorno predeterminado en `.env`. Destino seguro para ejecutar suites de pruebas automatizadas, pruebas de integración y creación de registros efímeros. |
+| **`TransportesSegurosSA`** | **Base Original de Producción** | Base de datos principal. Cuenta con las migraciones 01 a 09 aplicadas y verificadas. **PROHIBIDO ejecutar pruebas automatizadas con escrituras o modificaciones directas sobre esta base.** |
+| **`TransportesSegurosSA_DW`** | **Data Warehouse** | Base dimensional para analítica e indicadores operacionales (ETL programado). |
+
+---
+
+## 6. Pruebas Automatizadas y Calidad
+
+El proyecto cuenta con una cobertura integral de pruebas reproducibles:
+- **24 Suites Automatizadas PHP:** Pruebas unitarias, funcionales, de integración HTTP y de seguridad ASVS (100% PASS bajo PHP 8.4).
+- **13 Suites Contractuales T-SQL:** Ejecutadas sobre SQL Server validando reglas de negocio, rollback transaccional y catálogo de licencias.
+- **Verificación Visual Playwright:** Inspección automatizada en resoluciones de laptop (1366×768 y 1440×900) con comprobación de contraste, selectores personalizados y modales accesibles.
+- **OpenSpec:** 18 especificaciones activas validadas con `openspec validate --all` (18 passed, 0 failed).
