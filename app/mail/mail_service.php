@@ -12,30 +12,55 @@ function get_app_base_url(): string
         return rtrim(trim($envUrl), '/');
     }
 
-    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-    $host = $_SERVER['HTTP_HOST'] ?? '127.0.0.1:8085';
-    // Sanitizar host para prevenir inyección de cabeceras Host
-    $host = preg_replace('/[^a-zA-Z0-9.:_-]/', '', $host);
-    return $scheme . '://' . ($host !== '' ? $host : '127.0.0.1:8085');
+    if (!empty($_SERVER['HTTP_HOST'])) {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = preg_replace('/[^a-zA-Z0-9.:_-]/', '', (string)$_SERVER['HTTP_HOST']);
+        if ($host !== '') {
+            return $scheme . '://' . $host;
+        }
+    }
+
+    // Puerto 8001 es el utilizado localmente por el propietario de la aplicación
+    return 'http://127.0.0.1:8001';
+}
+
+function get_mail_transport_mode(): string
+{
+    $transport = strtolower(trim((string)(getenv('TSSA_MAIL_TRANSPORT') ?: 'fake')));
+    return ($transport === 'brevo') ? 'brevo' : 'fake';
+}
+
+function get_mail_transport_info(): array
+{
+    $mode = get_mail_transport_mode();
+    $apiKey = trim((string)(getenv('BREVO_API_KEY') ?: ''));
+    $senderEmail = trim((string)(getenv('BREVO_SENDER_EMAIL') ?: 'notificaciones@transportesseguros.cr'));
+    $senderName = trim((string)(getenv('BREVO_SENDER_NAME') ?: 'Transportes Seguros S.A.'));
+
+    return [
+        'mode' => $mode,
+        'is_brevo' => ($mode === 'brevo'),
+        'has_api_key' => ($apiKey !== ''),
+        'is_ready' => ($mode === 'fake' || ($mode === 'brevo' && $apiKey !== '' && $senderEmail !== '')),
+        'sender_email' => $senderEmail,
+        'sender_name' => $senderName,
+        'app_url' => get_app_base_url(),
+    ];
 }
 
 function get_mail_sender(): MailSender
 {
-    $dbName = configured_database_name();
-    $transport = strtolower((string)(getenv('TSSA_MAIL_TRANSPORT') ?: ''));
-    $apiKey = (string)(getenv('BREVO_API_KEY') ?: '');
-    $senderEmail = (string)(getenv('BREVO_SENDER_EMAIL') ?: 'notificaciones@transportesseguros.cr');
-    $senderName = (string)(getenv('BREVO_SENDER_NAME') ?: 'Transportes Seguros S.A.');
+    $mode = get_mail_transport_mode();
+    $apiKey = trim((string)(getenv('BREVO_API_KEY') ?: ''));
+    $senderEmail = trim((string)(getenv('BREVO_SENDER_EMAIL') ?: 'notificaciones@transportesseguros.cr'));
+    $senderName = trim((string)(getenv('BREVO_SENDER_NAME') ?: 'Transportes Seguros S.A.'));
 
-    // Por seguridad, en base de pruebas nunca enviar correos reales
-    if ($dbName === 'TransportesSegurosSA_Test' || $transport === 'fake' || $apiKey === '') {
-        return new FakeMailCaptureSender();
-    }
-
-    if ($transport === 'brevo') {
+    // Si el modo configurado es Brevo y dispone de clave y remitente, usar el cliente HTTP API
+    if ($mode === 'brevo' && $apiKey !== '' && $senderEmail !== '') {
         return new BrevoApiSender($apiKey, $senderEmail, $senderName);
     }
 
+    // Modo fake de captura segura para pruebas locales y desarrollo
     return new FakeMailCaptureSender();
 }
 
@@ -112,16 +137,15 @@ function render_password_reset_email(string $resetLink, string $email): string
     <div class="card">
         <div class="brand">Transportes Seguros S.A.</div>
         <h1>Restablecimiento de contraseña</h1>
-        <p>Recibimos una solicitud para restablecer la contraseña asociada a la cuenta <strong>{$safeEmail}</strong> en la plataforma de Transportes Seguros S.A.</p>
-        <p>Para ingresar una nueva contraseña, haz clic en el siguiente botón:</p>
+        <p>Hemos recibido una solicitud para restablecer la contraseña asociada a tu cuenta <strong>{$safeEmail}</strong> en la plataforma de Transportes Seguros S.A.</p>
+        <p>Para crear una nueva contraseña, haz clic en el siguiente enlace:</p>
         <div class="btn-wrap">
             <a class="btn" href="{$safeLink}" target="_blank" rel="noopener noreferrer">Restablecer mi contraseña</a>
         </div>
-        <p>Este enlace es de un solo uso y caduca en <strong>30 minutos</strong>.</p>
+        <p>Este enlace tiene una validez de <strong>2 horas</strong> y solo puede ser utilizado una vez.</p>
         <p class="footer">
-            Si no puedes hacer clic en el botón, copia y pega este enlace en tu navegador:<br>
-            <span class="url-text">{$safeLink}</span><br><br>
-            Si tú no solicitaste este cambio, no te preocupes: tu contraseña actual sigue siendo segura y puedes descartar este correo.
+            Si no solicitaste este cambio, puedes ignorar este correo de forma segura; tu contraseña actual no será modificada.<br><br>
+            Enlace directo: <span class="url-text">{$safeLink}</span>
         </p>
     </div>
 </body>

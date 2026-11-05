@@ -4,6 +4,56 @@ declare(strict_types=1);
 
 ini_set('default_charset', 'UTF-8');
 
+/**
+ * Carga de forma segura variables de entorno desde el archivo .env raíz si existe,
+ * sin sobreescribir variables ya inyectadas por el entorno de ejecución del proceso.
+ */
+function load_env_file(?string $path = null): void
+{
+    $envPath = $path ?? dirname(__DIR__) . DIRECTORY_SEPARATOR . '.env';
+    if (!file_exists($envPath) || !is_readable($envPath)) {
+        return;
+    }
+
+    $content = file_get_contents($envPath);
+    if ($content === false) {
+        return;
+    }
+
+    $lines = preg_split('/\r\n|\r|\n/', $content);
+    if (!is_array($lines)) {
+        return;
+    }
+
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '' || str_starts_with($line, '#')) {
+            continue;
+        }
+
+        $pos = strpos($line, '=');
+        if ($pos === false) {
+            continue;
+        }
+
+        $key = trim(substr($line, 0, $pos));
+        $val = trim(substr($line, $pos + 1));
+
+        if ((str_starts_with($val, '"') && str_ends_with($val, '"'))
+            || (str_starts_with($val, "'") && str_ends_with($val, "'"))) {
+            $val = substr($val, 1, -1);
+        }
+
+        if (getenv($key) === false) {
+            putenv("{$key}={$val}");
+            $_ENV[$key] = $val;
+            $_SERVER[$key] = $val;
+        }
+    }
+}
+
+load_env_file();
+
 function is_https(): bool
 {
     return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['SERVER_PORT'] ?? '') === '443');
@@ -92,17 +142,34 @@ function db(): PDO
     }
 
     $server = getenv('TSSA_DB_SERVER') ?: 'localhost';
-    try {
-        $database = configured_database_name();
-        $dsn = "sqlsrv:Server={$server};Database={$database};Encrypt=yes;TrustServerCertificate=yes";
-        $options = [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES => false,
-        ];
-        if (defined('PDO::SQLSRV_ATTR_ENCODING') && defined('PDO::SQLSRV_ENCODING_UTF8')) {
-            $options[PDO::SQLSRV_ATTR_ENCODING] = PDO::SQLSRV_ENCODING_UTF8;
+    $database = configured_database_name();
+    $user = getenv('TSSA_DB_USER') ?: null;
+    $pass = getenv('TSSA_DB_PASSWORD') ?: null;
+    $port = getenv('TSSA_DB_PORT') ?: null;
+
+    $options = [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES => false,
+    ];
+    if (defined('PDO::SQLSRV_ATTR_ENCODING') && defined('PDO::SQLSRV_ENCODING_UTF8')) {
+        $options[PDO::SQLSRV_ATTR_ENCODING] = PDO::SQLSRV_ENCODING_UTF8;
+    }
+
+    // Si el servidor configurado no es localhost o hay credenciales, intentar primero conexión explícita
+    if ($server !== 'localhost' && $server !== '(local)' && $user !== null && $pass !== null && $user !== '') {
+        try {
+            $serverTarget = $port ? "{$server},{$port}" : $server;
+            $dsn = "sqlsrv:Server={$serverTarget};Database={$database};Encrypt=yes;TrustServerCertificate=yes;LoginTimeout=2";
+            $pdo = new PDO($dsn, $user, $pass, $options);
+            return $pdo;
+        } catch (Throwable) {
+            // En laboratorio/desarrollo local, recurrir a Windows Integrated Auth sobre localhost
         }
+    }
+
+    try {
+        $dsn = "sqlsrv:Server=localhost;Database={$database};Encrypt=yes;TrustServerCertificate=yes";
         $pdo = new PDO($dsn, null, null, $options);
         return $pdo;
     } catch (PDOException|LogicException $ex) {
