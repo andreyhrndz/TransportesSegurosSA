@@ -23,6 +23,12 @@ GO
 IF OBJECT_ID('dbo.sp_listar_invitaciones', 'P') IS NOT NULL
     DROP PROCEDURE dbo.sp_listar_invitaciones;
 GO
+IF OBJECT_ID('dbo.sp_actualizar_estado_envio_invitacion', 'P') IS NOT NULL
+    DROP PROCEDURE dbo.sp_actualizar_estado_envio_invitacion;
+GO
+IF OBJECT_ID('dbo.sp_revocar_invitacion_usuario', 'P') IS NOT NULL
+    DROP PROCEDURE dbo.sp_revocar_invitacion_usuario;
+GO
 IF OBJECT_ID('dbo.sp_reenviar_invitacion_usuario', 'P') IS NOT NULL
     DROP PROCEDURE dbo.sp_reenviar_invitacion_usuario;
 GO

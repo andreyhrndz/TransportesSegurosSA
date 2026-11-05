@@ -226,6 +226,10 @@ function humanize_status(mixed $value): string
         'CERRADA' => 'Cerrada',
         'PENDIENTE' => 'Pendiente',
         'COMPLETADA' => 'Completada',
+        'REVOCADA' => 'Revocada',
+        'EXPIRADA' => 'Expirada',
+        'SIMULADO' => 'Simulado (Fake)',
+        'FALLIDO' => 'Fallido',
         'OMITIDA' => 'Omitida',
         'ENVIADA' => 'Enviada',
         'ERROR' => 'Con error',
@@ -307,9 +311,10 @@ function status_tag(mixed $value): string
 {
     $status = utf8_strtoupper(trim((string)$value));
     $tone = match ($status) {
-        'ENTREGADA', 'FINALIZADO', 'RESUELTA', 'ENVIADA', 'DISPONIBLE', 'ACTIVO' => 'success',
-        'CANCELADA', 'FALLIDA', 'ENTREGA_FALLIDA', 'ERROR', 'FUERA_SERVICIO', 'INACTIVO', 'CRITICA' => 'danger',
-        'EN_TRANSITO', 'EN_CURSO', 'ASIGNADA', 'ASIGNADO', 'EN_ATENCION', 'MANTENIMIENTO', 'URGENTE', 'ALTA', 'PENDIENTE_ASIGNACION', 'ABIERTA' => 'warning',
+        'ENTREGADA', 'FINALIZADO', 'RESUELTA', 'ENVIADA', 'DISPONIBLE', 'ACTIVO', 'COMPLETADA' => 'success',
+        'CANCELADA', 'FALLIDA', 'ENTREGA_FALLIDA', 'ERROR', 'FUERA_SERVICIO', 'INACTIVO', 'CRITICA', 'REVOCADA', 'FALLIDO' => 'danger',
+        'EN_TRANSITO', 'EN_CURSO', 'ASIGNADA', 'ASIGNADO', 'EN_ATENCION', 'MANTENIMIENTO', 'URGENTE', 'ALTA', 'PENDIENTE_ASIGNACION', 'ABIERTA', 'PENDIENTE' => 'warning',
+        'EXPIRADA' => 'neutral',
         default => 'info',
     };
 

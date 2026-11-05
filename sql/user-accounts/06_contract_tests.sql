@@ -125,6 +125,74 @@ BEGIN TRY
         THROW 59108, 'Debe rechazar reuso de token de invitación completado.', 1;
     PRINT 'OK: Rechazo de reuso de token verificado (50432).';
 
+    -- 6.1 Prueba de Revocación explícita
+    DECLARE @token_rev VARCHAR(64) = LOWER(CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', 'token_para_revocar'), 2));
+    DECLARE @inv_rev INT;
+
+    EXEC dbo.sp_crear_invitacion_usuario
+        @correo_destino = N'revocable@example.test',
+        @token_hash = @token_rev,
+        @horas_vigencia = 24,
+        @invitacion_id = @inv_rev OUTPUT;
+
+    EXEC dbo.sp_revocar_invitacion_usuario @invitacion_id = @inv_rev;
+
+    IF (SELECT estado FROM dbo.invitaciones_usuario WHERE invitacion_id = @inv_rev) <> 'REVOCADA'
+        THROW 59120, 'La invitación debe quedar en estado REVOCADA.', 1;
+
+    DELETE FROM @t_res;
+    INSERT INTO @t_res
+    EXEC dbo.sp_validar_token_invitacion @token_hash = @token_rev;
+
+    IF NOT EXISTS (SELECT 1 FROM @t_res WHERE resultado = 'revocada')
+        THROW 59121, 'El token de invitación revocada debe retornar resultado revocada.', 1;
+    PRINT 'OK: Revocación de invitación y validación de token revocado verificada.';
+
+    -- 6.2 Prueba de Reenvío con Cooldown y rotación de token
+    -- Invocación inmediata debe fallar por cooldown de 60 segundos
+    DECLARE @token_reenvio VARCHAR(64) = LOWER(CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', 'token_nuevo_reenviado'), 2));
+    DECLARE @nueva_inv_id INT;
+    DECLARE @fallo_cooldown BIT = 0;
+
+    BEGIN TRY
+        EXEC dbo.sp_reenviar_invitacion_usuario
+            @invitacion_id = @inv_rev,
+            @nuevo_token_hash = @token_reenvio,
+            @horas_vigencia = 24,
+            @nueva_invitacion_id = @nueva_inv_id OUTPUT;
+    END TRY
+    BEGIN CATCH
+        IF ERROR_NUMBER() = 50440
+            SET @fallo_cooldown = 1;
+    END CATCH;
+
+    IF @fallo_cooldown <> 1
+        THROW 59122, 'Debe exigir esperar al menos 60 segundos antes de reenviar.', 1;
+    PRINT 'OK: Cooldown de 60 segundos entre reenvíos verificado (50440).';
+
+    -- Simular que pasaron 65 segundos modificando ultimo_envio_en para probar reenvío exitoso
+    UPDATE dbo.invitaciones_usuario
+    SET ultimo_envio_en = DATEADD(SECOND, -65, SYSUTCDATETIME())
+    WHERE invitacion_id = @inv_rev;
+
+    EXEC dbo.sp_reenviar_invitacion_usuario
+        @invitacion_id = @inv_rev,
+        @nuevo_token_hash = @token_reenvio,
+        @horas_vigencia = 24,
+        @nueva_invitacion_id = @nueva_inv_id OUTPUT;
+
+    IF @nueva_inv_id IS NULL OR @nueva_inv_id <= 0
+        THROW 59123, 'El reenvío debe generar un nuevo ID de invitación.', 1;
+
+    -- Verificar que el nuevo token es válido
+    DELETE FROM @t_res;
+    INSERT INTO @t_res
+    EXEC dbo.sp_validar_token_invitacion @token_hash = @token_reenvio;
+
+    IF NOT EXISTS (SELECT 1 FROM @t_res WHERE resultado = 'valida' AND invitacion_id = @nueva_inv_id)
+        THROW 59124, 'El nuevo token generado en reenvío debe ser válido.', 1;
+    PRINT 'OK: Reenvío con nuevo token y nueva vigencia de 24h verificado.';
+
     -- 7. Flujo de recuperación de contraseña
     DECLARE @token_rec VARCHAR(64) = LOWER(CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', 'token_recuperacion_test'), 2));
     DECLARE @rec_usr_id INT, @rec_nombre NVARCHAR(80);

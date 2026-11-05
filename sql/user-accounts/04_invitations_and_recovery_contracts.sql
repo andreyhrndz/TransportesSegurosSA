@@ -47,12 +47,42 @@ BEGIN
         fecha_creacion DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
         fecha_completada DATETIME2 NULL,
         completado_usuario_id INT NULL,
-        CONSTRAINT CK_invitaciones_estado CHECK (estado IN ('PENDIENTE', 'COMPLETADA', 'EXPIRADA', 'CANCELADA')),
+        ultimo_envio_en DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME(),
+        envios_contador INT NOT NULL DEFAULT 1,
+        estado_envio VARCHAR(30) NOT NULL DEFAULT 'PENDIENTE',
+        CONSTRAINT CK_invitaciones_estado CHECK (estado IN ('PENDIENTE', 'COMPLETADA', 'EXPIRADA', 'REVOCADA', 'CANCELADA')),
         CONSTRAINT FK_invitaciones_creador FOREIGN KEY (creado_por_usuario_id) REFERENCES dbo.usuarios(usuario_id),
         CONSTRAINT FK_invitaciones_usuario_creado FOREIGN KEY (completado_usuario_id) REFERENCES dbo.usuarios(usuario_id)
     );
 
     CREATE INDEX IX_invitaciones_correo ON dbo.invitaciones_usuario(correo_destino);
+END
+ELSE
+BEGIN
+    -- Asegurar columnas para ciclo de invitaciones extendido
+    IF COL_LENGTH('dbo.invitaciones_usuario', 'ultimo_envio_en') IS NULL
+    BEGIN
+        ALTER TABLE dbo.invitaciones_usuario ADD ultimo_envio_en DATETIME2 NOT NULL DEFAULT SYSUTCDATETIME();
+    END;
+
+    IF COL_LENGTH('dbo.invitaciones_usuario', 'envios_contador') IS NULL
+    BEGIN
+        ALTER TABLE dbo.invitaciones_usuario ADD envios_contador INT NOT NULL DEFAULT 1;
+    END;
+
+    IF COL_LENGTH('dbo.invitaciones_usuario', 'estado_envio') IS NULL
+    BEGIN
+        ALTER TABLE dbo.invitaciones_usuario ADD estado_envio VARCHAR(30) NOT NULL DEFAULT 'PENDIENTE';
+    END;
+
+    -- Actualizar restricción de estados para admitir REVOCADA
+    IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE name = 'CK_invitaciones_estado')
+    BEGIN
+        ALTER TABLE dbo.invitaciones_usuario DROP CONSTRAINT CK_invitaciones_estado;
+    END;
+
+    ALTER TABLE dbo.invitaciones_usuario ADD CONSTRAINT CK_invitaciones_estado
+        CHECK (estado IN ('PENDIENTE', 'COMPLETADA', 'EXPIRADA', 'REVOCADA', 'CANCELADA'));
 END
 GO
 
@@ -75,7 +105,7 @@ BEGIN
 END
 GO
 
--- 4. SP para crear invitación
+-- 4. SP para crear invitación de usuario (con rate limit y cooldown)
 CREATE OR ALTER PROCEDURE dbo.sp_crear_invitacion_usuario
     @correo_destino NVARCHAR(150),
     @token_hash VARCHAR(64),
@@ -109,31 +139,58 @@ BEGIN
         )
             THROW 50430, 'El correo ya pertenece a una cuenta activa.', 1;
 
+        -- Rate limit: máximo 5 invitaciones para este correo en 24 horas
+        DECLARE @envios_24h INT = 0;
+        SELECT @envios_24h = COUNT(*)
+        FROM dbo.invitaciones_usuario WITH (UPDLOCK, HOLDLOCK)
+        WHERE LOWER(correo_destino) = @correo_destino
+          AND fecha_creacion >= DATEADD(HOUR, -24, SYSUTCDATETIME());
+
+        IF @envios_24h >= 5
+            THROW 50439, 'Se ha alcanzado el límite de 5 invitaciones para este correo en un período de 24 horas.', 1;
+
         -- Verificar si existe una invitación vigente en estado PENDIENTE
-        IF EXISTS (
-            SELECT 1 FROM dbo.invitaciones_usuario WITH (UPDLOCK, HOLDLOCK)
-            WHERE LOWER(correo_destino) = @correo_destino
-              AND estado = 'PENDIENTE'
-              AND fecha_expiracion > SYSUTCDATETIME()
-        )
-            THROW 50431, 'Ya existe una invitación pendiente para este correo electrónico. Puedes reenviarla o cancelarla.', 1;
+        DECLARE @pendiente_id INT = NULL;
+        DECLARE @ultimo_envio DATETIME2 = NULL;
+
+        SELECT TOP 1
+            @pendiente_id = invitacion_id,
+            @ultimo_envio = ultimo_envio_en
+        FROM dbo.invitaciones_usuario WITH (UPDLOCK, HOLDLOCK)
+        WHERE LOWER(correo_destino) = @correo_destino
+          AND estado = 'PENDIENTE'
+          AND fecha_expiracion > SYSUTCDATETIME();
+
+        IF @pendiente_id IS NOT NULL
+        BEGIN
+            -- Cooldown de 60 segundos entre reenvíos
+            IF @ultimo_envio IS NOT NULL AND DATEDIFF(SECOND, @ultimo_envio, SYSUTCDATETIME()) < 60
+                THROW 50440, 'Debes esperar al menos 60 segundos antes de reenviar una invitación a este correo.', 1;
+
+            THROW 50431, 'Ya existe una invitación pendiente para este correo electrónico. Puedes reenviarla o revocarla.', 1;
+        END;
 
         -- Insertar invitación
         INSERT INTO dbo.invitaciones_usuario
         (
-            correo_destino, token_hash, estado, fecha_expiracion, creado_por_usuario_id
+            correo_destino, token_hash, estado, fecha_expiracion, creado_por_usuario_id,
+            fecha_creacion, ultimo_envio_en, envios_contador, estado_envio
         )
         VALUES
         (
             @correo_destino, @token_hash, 'PENDIENTE',
             DATEADD(HOUR, ISNULL(@horas_vigencia, 24), SYSUTCDATETIME()),
-            @actor_id
+            @actor_id,
+            SYSUTCDATETIME(),
+            SYSUTCDATETIME(),
+            1,
+            'PENDIENTE'
         );
 
         SET @invitacion_id = CONVERT(INT, SCOPE_IDENTITY());
 
         INSERT INTO dbo.auditorias (usuario_id, entidad, registro_id, accion, valores_nuevos)
-        VALUES (@actor_id, N'invitaciones_usuario', CONVERT(NVARCHAR(100), @invitacion_id), 'INVITE', CONCAT(N'Invitación enviada a correo: ', @correo_destino));
+        VALUES (@actor_id, N'invitaciones_usuario', CONVERT(NVARCHAR(100), @invitacion_id), 'INVITE', CONCAT(N'Invitación emitida a correo: ', @correo_destino));
 
         COMMIT TRANSACTION;
     END TRY
@@ -164,9 +221,15 @@ BEGIN
     FROM dbo.invitaciones_usuario WITH (UPDLOCK, HOLDLOCK)
     WHERE token_hash = @token_hash;
 
-    IF @invitacion_id IS NULL OR @estado = 'CANCELADA'
+    IF @invitacion_id IS NULL
     BEGIN
         SELECT 'invalido' AS resultado, NULL AS invitacion_id, NULL AS correo_destino;
+        RETURN;
+    END;
+
+    IF @estado IN ('REVOCADA', 'CANCELADA')
+    BEGIN
+        SELECT 'revocada' AS resultado, @invitacion_id AS invitacion_id, @correo AS correo_destino;
         RETURN;
     END;
 
@@ -178,12 +241,21 @@ BEGIN
 
     IF @expiracion <= SYSUTCDATETIME()
     BEGIN
-        UPDATE dbo.invitaciones_usuario SET estado = 'EXPIRADA' WHERE invitacion_id = @invitacion_id;
+        IF @estado = 'PENDIENTE'
+        BEGIN
+            UPDATE dbo.invitaciones_usuario SET estado = 'EXPIRADA' WHERE invitacion_id = @invitacion_id;
+        END;
         SELECT 'expirada' AS resultado, @invitacion_id AS invitacion_id, @correo AS correo_destino;
         RETURN;
     END;
 
-    SELECT 'valida' AS resultado, @invitacion_id AS invitacion_id, @correo AS correo_destino;
+    IF @estado = 'PENDIENTE'
+    BEGIN
+        SELECT 'valida' AS resultado, @invitacion_id AS invitacion_id, @correo AS correo_destino;
+        RETURN;
+    END;
+
+    SELECT 'invalido' AS resultado, @invitacion_id AS invitacion_id, @correo AS correo_destino;
 END;
 GO
 
@@ -241,7 +313,7 @@ BEGIN
         WHERE token_hash = @token_hash;
 
         IF @invitacion_id IS NULL OR @estado <> 'PENDIENTE' OR @expiracion <= SYSUTCDATETIME()
-            THROW 50432, 'La invitación es inválida, ya fue utilizada o ha expirado.', 1;
+            THROW 50432, 'La invitación es inválida, ya fue utilizada, revocada o ha expirado.', 1;
 
         -- Verificar que el nombre de usuario o correo no existan ya
         IF EXISTS (
@@ -292,8 +364,8 @@ BEGIN
 END;
 GO
 
--- 7. SP para cancelar invitación
-CREATE OR ALTER PROCEDURE dbo.sp_cancelar_invitacion_usuario
+-- 7. SP para revocar invitación de usuario
+CREATE OR ALTER PROCEDURE dbo.sp_revocar_invitacion_usuario
     @invitacion_id INT
 AS
 BEGIN
@@ -303,16 +375,51 @@ BEGIN
     IF dbo.fn_tiene_permiso(@actor_id, N'USUARIOS_GESTIONAR_CUENTAS') = 0
         THROW 50412, 'No tiene permiso para gestionar cuentas de usuario.', 1;
 
-    UPDATE dbo.invitaciones_usuario
-    SET estado = 'CANCELADA'
-    WHERE invitacion_id = @invitacion_id AND estado = 'PENDIENTE';
+    BEGIN TRY
+        BEGIN TRANSACTION;
 
-    IF @@ROWCOUNT = 0
-        THROW 50436, 'La invitación no existe o ya no está pendiente.', 1;
+        DECLARE @correo NVARCHAR(150);
+        DECLARE @estado VARCHAR(20);
+
+        SELECT @correo = correo_destino, @estado = estado
+        FROM dbo.invitaciones_usuario WITH (UPDLOCK, HOLDLOCK)
+        WHERE invitacion_id = @invitacion_id;
+
+        IF @correo IS NULL
+            THROW 50436, 'La invitación no existe.', 1;
+
+        IF @estado = 'COMPLETADA'
+            THROW 50441, 'Una invitación completada no puede ser revocada.', 1;
+
+        IF @estado IN ('REVOCADA', 'CANCELADA')
+            THROW 50442, 'La invitación ya se encuentra revocada.', 1;
+
+        UPDATE dbo.invitaciones_usuario
+        SET estado = 'REVOCADA'
+        WHERE invitacion_id = @invitacion_id;
+
+        INSERT INTO dbo.auditorias (usuario_id, entidad, registro_id, accion, valores_nuevos)
+        VALUES (@actor_id, N'invitaciones_usuario', CONVERT(NVARCHAR(100), @invitacion_id), 'REVOKE', CONCAT(N'Invitación revocada para: ', @correo));
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
 END;
 GO
 
--- 8. SP para reenviar invitación
+-- Alias de compatibilidad para sp_cancelar_invitacion_usuario
+CREATE OR ALTER PROCEDURE dbo.sp_cancelar_invitacion_usuario
+    @invitacion_id INT
+AS
+BEGIN
+    EXEC dbo.sp_revocar_invitacion_usuario @invitacion_id = @invitacion_id;
+END;
+GO
+
+-- 8. SP para reenviar invitación de usuario
 CREATE OR ALTER PROCEDURE dbo.sp_reenviar_invitacion_usuario
     @invitacion_id INT,
     @nuevo_token_hash VARCHAR(64),
@@ -326,29 +433,78 @@ BEGIN
     IF dbo.fn_tiene_permiso(@actor_id, N'USUARIOS_GESTIONAR_CUENTAS') = 0
         THROW 50412, 'No tiene permiso para gestionar cuentas de usuario.', 1;
 
+    IF @nuevo_token_hash IS NULL OR LEN(@nuevo_token_hash) <> 64
+        THROW 50435, 'El hash del nuevo token de invitación no es válido.', 1;
+
     BEGIN TRY
         BEGIN TRANSACTION;
 
         DECLARE @correo NVARCHAR(150);
+        DECLARE @estado VARCHAR(20);
+        DECLARE @ultimo_envio DATETIME2;
+        DECLARE @envios INT;
 
-        SELECT @correo = correo_destino
+        SELECT
+            @correo = correo_destino,
+            @estado = estado,
+            @ultimo_envio = ultimo_envio_en,
+            @envios = envios_contador
         FROM dbo.invitaciones_usuario WITH (UPDLOCK, HOLDLOCK)
         WHERE invitacion_id = @invitacion_id;
 
         IF @correo IS NULL
             THROW 50437, 'La invitación original no fue encontrada.', 1;
 
-        -- Cancelar la invitación anterior
-        UPDATE dbo.invitaciones_usuario
-        SET estado = 'CANCELADA'
-        WHERE invitacion_id = @invitacion_id AND estado = 'PENDIENTE';
+        IF @estado = 'COMPLETADA'
+            THROW 50441, 'Una invitación completada no puede ser reenviada.', 1;
 
-        -- Crear la nueva invitación
-        EXEC dbo.sp_crear_invitacion_usuario
-            @correo_destino = @correo,
-            @token_hash = @nuevo_token_hash,
-            @horas_vigencia = @horas_vigencia,
-            @invitacion_id = @nueva_invitacion_id OUTPUT;
+        -- Verificar si ya existe cuenta activa
+        IF EXISTS (
+            SELECT 1 FROM dbo.usuarios WITH (UPDLOCK, HOLDLOCK)
+            WHERE LOWER(correo_acceso) = LOWER(@correo) AND activo = 1
+        )
+            THROW 50430, 'El correo ya pertenece a una cuenta activa.', 1;
+
+        -- Rate limit: máximo 5 invitaciones por correo en 24 horas
+        DECLARE @envios_24h INT = 0;
+        SELECT @envios_24h = COUNT(*)
+        FROM dbo.invitaciones_usuario WITH (UPDLOCK, HOLDLOCK)
+        WHERE LOWER(correo_destino) = LOWER(@correo)
+          AND fecha_creacion >= DATEADD(HOUR, -24, SYSUTCDATETIME());
+
+        IF @envios_24h >= 5
+            THROW 50439, 'Se ha alcanzado el límite de 5 invitaciones para este correo en un período de 24 horas.', 1;
+
+        -- Cooldown de 60 segundos entre reenvíos
+        IF @ultimo_envio IS NOT NULL AND DATEDIFF(SECOND, @ultimo_envio, SYSUTCDATETIME()) < 60
+            THROW 50440, 'Debes esperar al menos 60 segundos antes de reenviar una invitación a este correo.', 1;
+
+        -- Revocar la invitación previa
+        UPDATE dbo.invitaciones_usuario
+        SET estado = 'REVOCADA'
+        WHERE invitacion_id = @invitacion_id AND estado IN ('PENDIENTE', 'EXPIRADA');
+
+        -- Crear la nueva invitación con nuevo token y nueva vigencia de 24h
+        INSERT INTO dbo.invitaciones_usuario
+        (
+            correo_destino, token_hash, estado, fecha_expiracion, creado_por_usuario_id,
+            fecha_creacion, ultimo_envio_en, envios_contador, estado_envio
+        )
+        VALUES
+        (
+            @correo, @nuevo_token_hash, 'PENDIENTE',
+            DATEADD(HOUR, ISNULL(@horas_vigencia, 24), SYSUTCDATETIME()),
+            @actor_id,
+            SYSUTCDATETIME(),
+            SYSUTCDATETIME(),
+            ISNULL(@envios, 0) + 1,
+            'PENDIENTE'
+        );
+
+        SET @nueva_invitacion_id = CONVERT(INT, SCOPE_IDENTITY());
+
+        INSERT INTO dbo.auditorias (usuario_id, entidad, registro_id, accion, valores_nuevos)
+        VALUES (@actor_id, N'invitaciones_usuario', CONVERT(NVARCHAR(100), @nueva_invitacion_id), 'RESEND', CONCAT(N'Invitación reenviada a correo: ', @correo));
 
         COMMIT TRANSACTION;
     END TRY
@@ -359,7 +515,22 @@ BEGIN
 END;
 GO
 
--- 9. SP para listar invitaciones
+-- 9. SP para actualizar el estado del envío de correo de una invitación
+CREATE OR ALTER PROCEDURE dbo.sp_actualizar_estado_envio_invitacion
+    @invitacion_id INT,
+    @estado_envio VARCHAR(30)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE dbo.invitaciones_usuario
+    SET estado_envio = @estado_envio,
+        ultimo_envio_en = SYSUTCDATETIME()
+    WHERE invitacion_id = @invitacion_id;
+END;
+GO
+
+-- 10. SP para listar invitaciones de usuario
 CREATE OR ALTER PROCEDURE dbo.sp_listar_invitaciones
     @estado VARCHAR(20) = NULL
 AS
@@ -370,6 +541,11 @@ BEGIN
     IF dbo.fn_tiene_permiso(@actor_id, N'USUARIOS_VER') = 0
         THROW 50410, 'No tiene permiso para consultar usuarios.', 1;
 
+    -- Actualizar automáticamente invitaciones vencidas
+    UPDATE dbo.invitaciones_usuario
+    SET estado = 'EXPIRADA'
+    WHERE estado = 'PENDIENTE' AND fecha_expiracion <= SYSUTCDATETIME();
+
     SELECT
         i.invitacion_id,
         i.correo_destino,
@@ -377,6 +553,9 @@ BEGIN
         i.fecha_expiracion,
         i.fecha_creacion,
         i.fecha_completada,
+        i.ultimo_envio_en,
+        i.envios_contador,
+        i.estado_envio,
         u_crea.nombre_usuario AS creado_por_nombre,
         u_comp.nombre_usuario AS completado_por_nombre
     FROM dbo.invitaciones_usuario i
@@ -387,11 +566,11 @@ BEGIN
 END;
 GO
 
--- 10. SP para solicitar recuperación de contraseña
+-- 11. SP para solicitar recuperación de contraseña
 CREATE OR ALTER PROCEDURE dbo.sp_solicitar_recuperacion_password
     @correo NVARCHAR(150),
     @token_hash VARCHAR(64),
-    @minutos_vigencia INT = 30,
+    @minutos_vigencia INT = 120,
     @usuario_id INT OUTPUT,
     @nombre_usuario NVARCHAR(80) OUTPUT
 AS
@@ -408,7 +587,7 @@ BEGIN
     FROM dbo.usuarios WITH (UPDLOCK, HOLDLOCK)
     WHERE LOWER(correo_acceso) = @correo AND activo = 1;
 
-    -- Si el usuario no existe o está inactivo, no hacemos nada (respuesta genérica)
+    -- Si el usuario no existe o está inactivo, no hacemos nada (respuesta genérica no enumerable)
     IF @usuario_id IS NULL
         RETURN;
 
@@ -428,7 +607,7 @@ BEGIN
         VALUES
         (
             @usuario_id, @token_hash, 'PENDIENTE',
-            DATEADD(MINUTE, ISNULL(@minutos_vigencia, 30), SYSUTCDATETIME())
+            DATEADD(MINUTE, ISNULL(@minutos_vigencia, 120), SYSUTCDATETIME())
         );
 
         COMMIT TRANSACTION;
@@ -440,7 +619,7 @@ BEGIN
 END;
 GO
 
--- 11. SP para validar token de recuperación
+-- 12. SP para validar token de recuperación
 CREATE OR ALTER PROCEDURE dbo.sp_validar_token_recuperacion
     @token_hash VARCHAR(64)
 AS
@@ -480,7 +659,7 @@ BEGIN
 END;
 GO
 
--- 12. SP para completar recuperación de contraseña
+-- 13. SP para completar recuperación de contraseña
 CREATE OR ALTER PROCEDURE dbo.sp_completar_recuperacion_password
     @token_hash VARCHAR(64),
     @password_hash NVARCHAR(255)
