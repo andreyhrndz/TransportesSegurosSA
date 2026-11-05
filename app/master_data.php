@@ -1,6 +1,8 @@
 <?php
 declare(strict_types=1);
 
+require_once __DIR__ . '/read_queries.php';
+
 /**
  * Metadatos, validadores y buscadores autorizados (mediante procedimientos de lectura)
  * para Datos Maestros y Flota. No ejecuta consultas directas a tablas.
@@ -199,4 +201,30 @@ function master_coordinates(mixed $latRaw, mixed $lonRaw): array
     $lat = master_decimal($latText, -90.0, 90.0, true, 'latitud');
     $lon = master_decimal($lonText, -180.0, 180.0, true, 'longitud');
     return [$lat, $lon];
+}
+
+/**
+ * Retorna las categorías oficiales de licencias de Costa Rica (Ley 9078).
+ * @return array<int, array<string, mixed>>
+ */
+function master_license_catalog(): array
+{
+    try {
+        return read_procedure_sets('EXEC dbo.sp_listar_catalogo_licencias @solo_activos=1;', [])[0] ?? [];
+    } catch (PDOException) {
+        return [];
+    }
+}
+
+/**
+ * Retorna las licencias asignadas y verificadas de un conductor.
+ * @return array<int, array<string, mixed>>
+ */
+function master_driver_licenses(int $conductorId): array
+{
+    try {
+        return read_procedure_sets('EXEC dbo.sp_listar_licencias_conductor @conductor_id=?;', [$conductorId])[0] ?? [];
+    } catch (PDOException) {
+        return [];
+    }
 }

@@ -40,6 +40,7 @@ try {
         50303 => 'El conductor no está disponible o su licencia no es válida.',
         50304 => 'La ruta no está activa.',
         50305 => 'La fecha programada no es válida.',
+        50320 => 'El conductor seleccionado no está habilitado legalmente para este vehículo (compruebe categoría de licencia por PMA, articulado o vigencia según Ley 9078).',
     ]);
 } catch (RuntimeException) {
     operation_error('No se pudo crear el viaje. Inténtalo nuevamente.', 500);

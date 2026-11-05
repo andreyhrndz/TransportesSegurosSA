@@ -28,20 +28,34 @@ try {
             $marca = (string)operation_text($_POST['marca'] ?? null, 80);
             $modelo = (string)operation_text($_POST['modelo'] ?? null, 80);
             $anio = (int)master_int($_POST['anio'] ?? null, 1980, $maxYear, true, 'año');
-            $carga = (string)master_decimal($_POST['capacidad_carga_kg'] ?? null, 0.0, 9999999999.99, true, 'capacidad de carga', true);
+            $carga = (string)master_decimal($_POST['capacidad_carga_kg'] ?? null, 0.0, 9999999999.99, true, 'capacidad de carga útil', true);
+            $pmaRaw = trim((string)($_POST['pma_kg'] ?? ''));
+            $pma = (string)master_decimal($pmaRaw !== '' ? $pmaRaw : $carga, 0.0, 9999999999.99, true, 'PMA / peso bruto vehicular', true);
             $volumen = master_decimal($_POST['capacidad_volumen_m3'] ?? null, 0.0, 999999999.999, false, 'capacidad de volumen', true);
             $km = (string)master_decimal($_POST['kilometraje_actual'] ?? '0', 0.0, 99999999999.9, true, 'kilometraje actual');
+            $claseLegal = strtoupper(trim((string)($_POST['clase_legal'] ?? '')));
+            if ($claseLegal === '') {
+                $claseLegal = ((float)$pma > 8000 ? 'PESADO_RIGIDO' : ((float)$pma > 4000 ? 'MEDIANO_RIGIDO' : 'LIVIANO'));
+            }
+            if (!in_array($claseLegal, ['LIVIANO', 'MEDIANO_RIGIDO', 'PESADO_RIGIDO', 'PESADO_ARTICULADO'], true)) {
+                throw new InvalidArgumentException('Selecciona una clasificación legal válida.');
+            }
+            $esArticulado = !empty($_POST['es_articulado']) ? 1 : 0;
+            $estadoHomologacion = strtoupper(trim((string)($_POST['estado_homologacion'] ?? 'VERIFICADO')));
+            if (!in_array($estadoHomologacion, ['VERIFICADO', 'PENDIENTE_VERIFICACION', 'NO_CONFORME'], true)) {
+                throw new InvalidArgumentException('Selecciona un estado de homologación válido.');
+            }
             $estado = strtoupper(trim((string)($_POST['estado'] ?? 'DISPONIBLE')));
             if (!in_array($estado, ['DISPONIBLE', 'MANTENIMIENTO', 'FUERA_SERVICIO'], true)) {
                 throw new InvalidArgumentException('Selecciona un estado operativo permitido para el vehículo.');
             }
             if ($isEdit) {
-                $sql = 'EXEC dbo.sp_actualizar_vehiculo @vehiculo_id=?, @marca=?, @modelo=?, @anio=?, @capacidad_carga_kg=?, @capacidad_volumen_m3=?, @kilometraje_actual=?, @estado=?;';
-                $params = [$recordId, $marca, $modelo, $anio, $carga, $volumen, $km, $estado];
+                $sql = 'EXEC dbo.sp_actualizar_vehiculo @vehiculo_id=?, @marca=?, @modelo=?, @anio=?, @capacidad_carga_kg=?, @capacidad_volumen_m3=?, @kilometraje_actual=?, @estado=?, @pma_kg=?, @clase_legal=?, @es_articulado=?, @estado_homologacion=?;';
+                $params = [$recordId, $marca, $modelo, $anio, $carga, $volumen, $km, $estado, $pma, $claseLegal, $esArticulado, $estadoHomologacion];
             } else {
                 $placa = strtoupper((string)operation_text($_POST['placa'] ?? null, 20));
-                $sql = 'DECLARE @nuevo_id INT; EXEC dbo.sp_crear_vehiculo @placa=?, @marca=?, @modelo=?, @anio=?, @capacidad_carga_kg=?, @capacidad_volumen_m3=?, @kilometraje_actual=?, @estado=?, @vehiculo_id=@nuevo_id OUTPUT;';
-                $params = [$placa, $marca, $modelo, $anio, $carga, $volumen, $km, $estado];
+                $sql = 'DECLARE @nuevo_id INT; EXEC dbo.sp_crear_vehiculo @placa=?, @marca=?, @modelo=?, @anio=?, @capacidad_carga_kg=?, @capacidad_volumen_m3=?, @kilometraje_actual=?, @estado=?, @pma_kg=?, @clase_legal=?, @es_articulado=?, @estado_homologacion=?, @vehiculo_id=@nuevo_id OUTPUT;';
+                $params = [$placa, $marca, $modelo, $anio, $carga, $volumen, $km, $estado, $pma, $claseLegal, $esArticulado, $estadoHomologacion];
             }
             break;
 
@@ -59,12 +73,32 @@ try {
             }
             $usuarioId = master_int($_POST['usuario_id'] ?? null, 1, 2147483647, false, 'cuenta de usuario');
 
+            $selectedLicencias = (array)($_POST['licencias_seleccionadas'] ?? []);
+            if (empty($selectedLicencias)) {
+                $selectedLicencias = ['B4'];
+            }
+
+            $licenciasPayload = [];
+            foreach ($selectedLicencias as $codeRaw) {
+                $code = strtoupper(trim((string)$codeRaw));
+                if ($code === '') continue;
+                $vencLic = master_license_date($_POST['licencia_vencimiento'][$code] ?? $vencimiento);
+                $estLic = strtoupper(trim((string)($_POST['licencia_estado'][$code] ?? 'VERIFICADA')));
+                if (!in_array($estLic, ['VERIFICADA', 'PENDIENTE', 'RECHAZADA'], true)) {
+                    $estLic = 'VERIFICADA';
+                }
+                $licenciasPayload[$code] = [
+                    'vencimiento' => $vencLic,
+                    'estado' => $estLic,
+                ];
+            }
+
             if ($isEdit) {
                 $sql = 'EXEC dbo.sp_actualizar_conductor @conductor_id=?, @nombre=?, @primer_apellido=?, @segundo_apellido=?, @telefono=?, @correo=?, @numero_licencia=?, @fecha_vencimiento_licencia=?, @estado_operativo=?, @usuario_id=?;';
                 $params = [$recordId, $nombre, $ap1, $ap2, $telefono, $correo, $licencia, $vencimiento, $estadoOp, $usuarioId];
             } else {
                 $identificacion = (string)operation_text($_POST['identificacion'] ?? null, 30);
-                $sql = 'DECLARE @nuevo_id INT; EXEC dbo.sp_crear_conductor @identificacion=?, @nombre=?, @primer_apellido=?, @segundo_apellido=?, @telefono=?, @correo=?, @numero_licencia=?, @fecha_vencimiento_licencia=?, @estado_operativo=?, @usuario_id=?, @conductor_id=@nuevo_id OUTPUT;';
+                $sql = 'DECLARE @nuevo_id INT; EXEC dbo.sp_crear_conductor @identificacion=?, @nombre=?, @primer_apellido=?, @segundo_apellido=?, @telefono=?, @correo=?, @numero_licencia=?, @fecha_vencimiento_licencia=?, @estado_operativo=?, @usuario_id=?, @conductor_id=@nuevo_id OUTPUT; SELECT @nuevo_id AS nuevo_id;';
                 $params = [$identificacion, $nombre, $ap1, $ap2, $telefono, $correo, $licencia, $vencimiento, $estadoOp, $usuarioId];
             }
             break;
@@ -148,7 +182,49 @@ try {
 try {
     $stmt = db()->prepare($sql);
     $stmt->execute($params);
+
+    $savedConductorId = $recordId;
+    if ($entity === 'conductor' && !$isEdit) {
+        do {
+            if ($stmt->columnCount() > 0) {
+                $row = $stmt->fetch();
+                if (is_array($row) && isset($row['nuevo_id'])) {
+                    $savedConductorId = (int)$row['nuevo_id'];
+                }
+            }
+        } while ($stmt->nextRowset());
+    }
     $stmt->closeCursor();
+
+    if ($entity === 'conductor' && $savedConductorId > 0 && !empty($licenciasPayload)) {
+        if ($isEdit) {
+            $stmtCur = db()->prepare('EXEC dbo.sp_listar_licencias_conductor @conductor_id=?;');
+            $stmtCur->execute([$savedConductorId]);
+            $currentLicencias = $stmtCur->fetchAll(PDO::FETCH_ASSOC);
+            $stmtCur->closeCursor();
+
+            foreach ($currentLicencias as $curLic) {
+                $curCod = (string)$curLic['codigo_licencia'];
+                if (!isset($licenciasPayload[$curCod])) {
+                    $stmtRem = db()->prepare('EXEC dbo.sp_remover_licencia_conductor @conductor_id=?, @codigo_licencia=?;');
+                    $stmtRem->execute([$savedConductorId, $curCod]);
+                    $stmtRem->closeCursor();
+                }
+            }
+        }
+
+        $stmtLic = db()->prepare('EXEC dbo.sp_asignar_licencia_conductor @conductor_id=?, @codigo_licencia=?, @numero_licencia=?, @fecha_vencimiento=?, @estado_verificacion=?, @observaciones=NULL;');
+        foreach ($licenciasPayload as $catCod => $catInfo) {
+            $stmtLic->execute([
+                $savedConductorId,
+                $catCod,
+                $licencia,
+                $catInfo['vencimiento'],
+                $catInfo['estado'],
+            ]);
+            $stmtLic->closeCursor();
+        }
+    }
 } catch (PDOException $exception) {
     operation_sql_error($exception, [
         50501 => 'No tienes permiso para gestionar este registro.',

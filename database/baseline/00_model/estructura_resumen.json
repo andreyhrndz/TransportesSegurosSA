@@ -1,0 +1,31 @@
+{
+  "tables": 24,
+  "foreign_keys": 32,
+  "table_names": [
+    "auditorias",
+    "clientes",
+    "clientes_fisicos",
+    "clientes_juridicos",
+    "conductores",
+    "documentos",
+    "entregas",
+    "historial_estados_solicitud",
+    "incidencias",
+    "mercancias",
+    "notificaciones",
+    "paradas_viaje",
+    "permisos",
+    "rutas",
+    "solicitudes",
+    "tipos_documento",
+    "tipos_incidencia",
+    "tipos_mercancia",
+    "ubicaciones",
+    "usuarios",
+    "usuarios_permisos",
+    "vehiculos",
+    "viaje_solicitudes",
+    "viajes"
+  ],
+  "database": "TransportesSegurosSA"
+}

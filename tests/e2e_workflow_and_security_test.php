@@ -158,6 +158,7 @@ try {
 
     // Limpiar restos de usuarios efímeros de ejecuciones anteriores
     $pdo->exec("UPDATE dbo.historial_estados_solicitud SET usuario_id = 1 WHERE usuario_id IN (SELECT usuario_id FROM dbo.usuarios WHERE nombre_usuario LIKE '__e2e%')");
+    $pdo->exec("UPDATE dbo.entregas SET registrado_por_usuario_id = 1 WHERE registrado_por_usuario_id IN (SELECT usuario_id FROM dbo.usuarios WHERE nombre_usuario LIKE '__e2e%')");
     $pdo->exec("DELETE FROM dbo.usuarios_permisos WHERE usuario_id IN (SELECT usuario_id FROM dbo.usuarios WHERE nombre_usuario LIKE '__e2e%')");
     $pdo->exec("DELETE FROM dbo.auditorias WHERE usuario_id IN (SELECT usuario_id FROM dbo.usuarios WHERE nombre_usuario LIKE '__e2e%')");
     $pdo->exec("DELETE FROM dbo.usuarios WHERE nombre_usuario LIKE '__e2e%'");
@@ -181,6 +182,8 @@ try {
     $pdo->exec("DELETE FROM dbo.viaje_solicitudes WHERE viaje_id IN (SELECT viaje_id FROM dbo.viajes WHERE codigo_viaje LIKE '__E2E%' OR (vehiculo_id IN (1, 2) AND estado <> 'FINALIZADO' AND estado <> 'CANCELADO'))");
     $pdo->exec("DELETE FROM dbo.paradas_viaje WHERE viaje_id IN (SELECT viaje_id FROM dbo.viajes WHERE codigo_viaje LIKE '__E2E%' OR (vehiculo_id IN (1, 2) AND estado <> 'FINALIZADO' AND estado <> 'CANCELADO'))");
     $pdo->exec("DELETE FROM dbo.viajes WHERE codigo_viaje LIKE '__E2E%' OR (vehiculo_id IN (1, 2) AND estado <> 'FINALIZADO' AND estado <> 'CANCELADO')");
+    $pdo->exec("DELETE FROM dbo.entregas WHERE viaje_solicitud_id IN (SELECT viaje_solicitud_id FROM dbo.viaje_solicitudes WHERE solicitud_id IN (SELECT solicitud_id FROM dbo.solicitudes WHERE cliente_id IN (SELECT cliente_id FROM dbo.clientes WHERE identificacion LIKE '__E2E%') OR codigo_solicitud LIKE '__E2E%'))");
+    $pdo->exec("DELETE FROM dbo.viaje_solicitudes WHERE solicitud_id IN (SELECT solicitud_id FROM dbo.solicitudes WHERE cliente_id IN (SELECT cliente_id FROM dbo.clientes WHERE identificacion LIKE '__E2E%') OR codigo_solicitud LIKE '__E2E%')");
     $pdo->exec("DELETE FROM dbo.mercancias WHERE solicitud_id IN (SELECT solicitud_id FROM dbo.solicitudes WHERE cliente_id IN (SELECT cliente_id FROM dbo.clientes WHERE identificacion LIKE '__E2E%') OR codigo_solicitud LIKE '__E2E%')");
     $pdo->exec("DELETE FROM dbo.incidencias WHERE solicitud_id IN (SELECT solicitud_id FROM dbo.solicitudes WHERE cliente_id IN (SELECT cliente_id FROM dbo.clientes WHERE identificacion LIKE '__E2E%') OR codigo_solicitud LIKE '__E2E%')");
     $pdo->exec("DELETE FROM dbo.documentos WHERE solicitud_id IN (SELECT solicitud_id FROM dbo.solicitudes WHERE cliente_id IN (SELECT cliente_id FROM dbo.clientes WHERE identificacion LIKE '__E2E%') OR codigo_solicitud LIKE '__E2E%')");
@@ -812,6 +815,8 @@ try {
         // Limpiar solicitudes efímeras y mercancías
         if (!empty($createdSolicitudIds)) {
             $inReqs = implode(',', array_map('intval', $createdSolicitudIds));
+            $pdo->exec("DELETE FROM dbo.entregas WHERE viaje_solicitud_id IN (SELECT viaje_solicitud_id FROM dbo.viaje_solicitudes WHERE solicitud_id IN ({$inReqs}))");
+            $pdo->exec("DELETE FROM dbo.viaje_solicitudes WHERE solicitud_id IN ({$inReqs})");
             $pdo->exec("DELETE FROM dbo.mercancias WHERE solicitud_id IN ({$inReqs})");
             $pdo->exec("DELETE FROM dbo.incidencias WHERE solicitud_id IN ({$inReqs})");
             $pdo->exec("DELETE FROM dbo.documentos WHERE solicitud_id IN ({$inReqs})");
@@ -830,6 +835,7 @@ try {
         // Limpiar usuarios efímeros y permisos asociados
         if (!empty($createdUserIds)) {
             $inUsers = implode(',', array_map('intval', $createdUserIds));
+            $pdo->exec("UPDATE dbo.entregas SET registrado_por_usuario_id = 1 WHERE registrado_por_usuario_id IN ({$inUsers})");
             $pdo->exec("DELETE FROM dbo.usuarios_permisos WHERE usuario_id IN ({$inUsers})");
             $pdo->exec("DELETE FROM dbo.auditorias WHERE usuario_id IN ({$inUsers})");
             $pdo->exec("DELETE FROM dbo.usuarios WHERE usuario_id IN ({$inUsers})");

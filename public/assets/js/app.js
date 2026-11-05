@@ -1162,7 +1162,66 @@
             }
             aviso.hidden = true;
         }
+
+        if (['viaje-vehiculo', 'viaje-conductor', 'viaje-fecha'].includes(target.id)) {
+            actualizarDiagnosticoHabilitacionViaje();
+        }
     });
+
+    function actualizarDiagnosticoHabilitacionViaje() {
+        const selVeh = document.getElementById('viaje-vehiculo');
+        const selCond = document.getElementById('viaje-conductor');
+        const aviso = document.getElementById('aviso-diagnostico-habilitacion');
+        if (!selVeh || !selCond || !aviso) return;
+
+        const optVeh = selVeh.options ? selVeh.options[selVeh.selectedIndex] : null;
+        const optCond = selCond.options ? selCond.options[selCond.selectedIndex] : null;
+
+        if (!optVeh || !optVeh.value || !optCond || !optCond.value) {
+            aviso.style.display = 'none';
+            aviso.textContent = '';
+            return;
+        }
+
+        const pma = parseFloat(optVeh.dataset.pma || '0');
+        const esArticulado = optVeh.dataset.articulado === '1';
+        const licenciasRaw = optCond.dataset.licencias || '';
+        const lics = licenciasRaw.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
+
+        if (lics.length === 0 || lics.includes('PENDIENTE')) {
+            aviso.style.display = 'block';
+            aviso.className = 'notification is-warning is-light py-2 px-3 mb-3';
+            aviso.textContent = 'Advertencia: El conductor seleccionado no cuenta con licencias oficiales verificadas en el sistema.';
+            return;
+        }
+
+        let habilitado = false;
+        let requerida = '';
+
+        if (esArticulado) {
+            requerida = 'B-4 o E-2 (vehículo articulado)';
+            habilitado = lics.includes('B4') || lics.includes('E2');
+        } else if (pma > 8000) {
+            requerida = 'B-3, B-4, E-1 o E-2 (pesado rígido > 8.000 kg)';
+            habilitado = lics.includes('B3') || lics.includes('B4') || lics.includes('E1') || lics.includes('E2');
+        } else if (pma > 4000) {
+            requerida = 'B-2, B-3, B-4, E-1 o E-2 (carga liviana/mediana hasta 8.000 kg)';
+            habilitado = lics.includes('B2') || lics.includes('B3') || lics.includes('B4') || lics.includes('E1') || lics.includes('E2');
+        } else {
+            requerida = 'B-1, B-2, B-3, B-4, E-1 o E-2 (carga liviana hasta 4.000 kg)';
+            habilitado = lics.includes('B1') || lics.includes('B2') || lics.includes('B3') || lics.includes('B4') || lics.includes('E1') || lics.includes('E2');
+        }
+
+        if (!habilitado) {
+            aviso.style.display = 'block';
+            aviso.className = 'notification is-danger is-light py-2 px-3 mb-3';
+            aviso.textContent = `Incompatibilidad legal (Ley 9078): La unidad (PMA ${pma.toLocaleString()} kg${esArticulado ? ', articulada' : ''}) requiere licencia ${requerida}. El conductor posee: ${lics.join(', ')}.`;
+        } else {
+            aviso.style.display = 'block';
+            aviso.className = 'notification is-success is-light py-2 px-3 mb-3';
+            aviso.textContent = `Habilitación conforme (Ley 9078): Conductor habilitado con categoría ${lics.join(', ')} para unidad de PMA ${pma.toLocaleString()} kg.`;
+        }
+    }
 
     /* ======================================================================
        ONBOARDING: WIZARD DE 2 PASOS (DATOS PERSONALES -> ACCESO)

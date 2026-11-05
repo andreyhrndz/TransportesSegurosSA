@@ -73,14 +73,25 @@ if ($entity === 'ruta') {
 }
 
 $activeUsers = [];
-if ($entity === 'conductor' && has_permission('USUARIOS_VER')) {
-    try {
-        $activeUsers = read_procedure_list(
-            'DECLARE @total_registros INT; EXEC dbo.sp_listar_usuarios @buscar=NULL,@activo=1,@pagina=1,@por_pagina=100,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;',
-            []
-        )['rows'];
-    } catch (PDOException) {
-        $activeUsers = [];
+$catalogLicencias = [];
+$driverLicenses = [];
+if ($entity === 'conductor') {
+    $catalogLicencias = master_license_catalog();
+    if ($isEdit && isset($id)) {
+        $driverLicensesRaw = master_driver_licenses($id);
+        foreach ($driverLicensesRaw as $dl) {
+            $driverLicenses[$dl['codigo_licencia']] = $dl;
+        }
+    }
+    if (has_permission('USUARIOS_VER')) {
+        try {
+            $activeUsers = read_procedure_list(
+                'DECLARE @total_registros INT; EXEC dbo.sp_listar_usuarios @buscar=NULL,@activo=1,@pagina=1,@por_pagina=100,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;',
+                []
+            )['rows'];
+        } catch (PDOException) {
+            $activeUsers = [];
+        }
     }
 }
 
@@ -144,11 +155,27 @@ $todayUtc = gmdate('Y-m-d');
                         </div>
                     </div>
 
+                    <div class="notification is-info is-light py-3 px-4 mb-4">
+                        <p class="is-size-7"><strong>Distinción técnica legal (Ley 9078):</strong> La <em>capacidad de carga</em> corresponde al peso neto transportable de mercancía. El <strong>PMA (Peso Máximo Autorizado)</strong> es la masa total del vehículo cargado (Tara + Capacidad), la cual determina obligatoriamente la habilitación de licencias de conducir: B-1 (&le; 4.000 kg), B-2 (&le; 8.000 kg) o B-3 / B-4 (&gt; 8.000 kg).</p>
+                    </div>
+
+                    <div class="notification is-info is-light pma-help-callout mb-3" role="note" style="border-left: 4px solid var(--bulma-info, #2563eb); font-size: 0.875rem;">
+                        <p><strong>Distinción legal Ley 9078:</strong> El <em>PMA (Peso Máximo Autorizado)</em> corresponde a la masa total reglamentaria en ficha técnica oficial. La <em>capacidad de carga</em> es el peso neto útil transportable.</p>
+                    </div>
+
                     <div class="columns">
                         <div class="column">
                             <div class="field">
-                                <label class="label" for="veh-carga">Capacidad carga (kg) <span class="required">*</span></label>
+                                <label class="label" for="veh-carga">Capacidad carga útil (kg) <span class="required">*</span></label>
                                 <input class="input" id="veh-carga" name="capacidad_carga_kg" inputmode="decimal" maxlength="15" value="<?= e($record['capacidad_carga_kg'] ?? '') ?>" required>
+                                <p class="help">Peso neto máximo de mercancías admitido.</p>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label" for="veh-pma">PMA / Peso Bruto (kg) <span class="required">*</span></label>
+                                <input class="input" id="veh-pma" name="pma_kg" inputmode="decimal" maxlength="15" value="<?= e($record['pma_kg'] ?? '') ?>" placeholder="Ej. 7500.00" required>
+                                <p class="help">Masa máxima autorizada en ficha técnica MOPT.</p>
                             </div>
                         </div>
                         <div class="column">
@@ -157,6 +184,44 @@ $todayUtc = gmdate('Y-m-d');
                                 <input class="input" id="veh-volumen" name="capacidad_volumen_m3" inputmode="decimal" maxlength="16" value="<?= e($record['capacidad_volumen_m3'] ?? '') ?>">
                             </div>
                         </div>
+                    </div>
+
+                    <div class="columns">
+                        <div class="column">
+                            <div class="field">
+                                <label class="label" for="veh-clase">Clasificación legal <span class="required">*</span></label>
+                                <div class="select is-fullwidth">
+                                    <?php $vehClase = (string)($record['clase_legal'] ?? 'LIVIANO'); ?>
+                                    <select id="veh-clase" name="clase_legal" required>
+                                        <option value="LIVIANO" <?= $vehClase === 'LIVIANO' ? 'selected' : '' ?>>Liviano (&le; 4.000 kg PMA)</option>
+                                        <option value="MEDIANO_RIGIDO" <?= $vehClase === 'MEDIANO_RIGIDO' ? 'selected' : '' ?>>Mediano rígido (&le; 8.000 kg PMA)</option>
+                                        <option value="PESADO_RIGIDO" <?= $vehClase === 'PESADO_RIGIDO' ? 'selected' : '' ?>>Pesado rígido (&gt; 8.000 kg PMA)</option>
+                                        <option value="PESADO_ARTICULADO" <?= $vehClase === 'PESADO_ARTICULADO' ? 'selected' : '' ?>>Pesado articulado (cabezal/tráiler)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label" for="veh-homologacion">Estado de homologación <span class="required">*</span></label>
+                                <div class="select is-fullwidth">
+                                    <?php $vehHomo = (string)($record['estado_homologacion'] ?? 'VERIFICADO'); ?>
+                                    <select id="veh-homologacion" name="estado_homologacion" required>
+                                        <option value="VERIFICADO" <?= $vehHomo === 'VERIFICADO' ? 'selected' : '' ?>>Verificado (habilitado para viajes)</option>
+                                        <option value="PENDIENTE_VERIFICACION" <?= $vehHomo === 'PENDIENTE_VERIFICACION' ? 'selected' : '' ?>>Pendiente de verificación</option>
+                                        <option value="NO_CONFORME" <?= $vehHomo === 'NO_CONFORME' ? 'selected' : '' ?>>No conforme</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="field mb-4">
+                        <label class="checkbox">
+                            <input type="checkbox" id="veh-articulado" name="es_articulado" value="1" <?= !empty($record['es_articulado']) ? 'checked' : '' ?>>
+                            <strong>Vehículo articulado o combinación de cabezal con semirremolque</strong>
+                        </label>
+                        <p class="help">Los vehículos articulados exigen obligatoriamente licencia de conducir Clase B-4 o E-2 según el art. 86 de la Ley 9078.</p>
                     </div>
 
                     <div class="columns">
@@ -219,15 +284,68 @@ $todayUtc = gmdate('Y-m-d');
                     <div class="columns">
                         <div class="column">
                             <div class="field">
-                                <label class="label" for="cond-licencia">Número de licencia <span class="required">*</span></label>
+                                <label class="label" for="cond-licencia">Número de cédula / licencia física <span class="required">*</span></label>
                                 <input class="input" id="cond-licencia" name="numero_licencia" maxlength="50" value="<?= e($record['numero_licencia'] ?? '') ?>" required>
                             </div>
                         </div>
                         <div class="column">
                             <div class="field">
-                                <label class="label" for="cond-vencimiento">Vencimiento de licencia <span class="required">*</span></label>
+                                <label class="label" for="cond-vencimiento">Vencimiento general de licencia <span class="required">*</span></label>
                                 <input class="input" id="cond-vencimiento" name="fecha_vencimiento_licencia" type="text" data-datepicker="date" min="<?= e($todayUtc) ?>" value="<?= e($record['fecha_vencimiento_licencia'] ?? '') ?>" placeholder="dd/mm/aaaa" required>
                             </div>
+                        </div>
+                    </div>
+
+                    <div class="field mb-4">
+                        <label class="label">Categorías de licencia habilitadas (Ley de Tránsito 9078) <span class="required">*</span></label>
+                        <p class="help mb-3">Selecciona una o más categorías oficiales. El sistema validará en cada viaje que el conductor cuente con categoría verificada y vigente según el PMA del vehículo asignado.</p>
+                        <div class="table-container">
+                            <table class="table is-fullwidth is-narrow is-bordered license-selector-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40px;" class="has-text-center">Activa</th>
+                                        <th style="width: 220px;">Categoría</th>
+                                        <th>PMA y vehículos autorizados</th>
+                                        <th style="width: 150px;">Vencimiento</th>
+                                        <th style="width: 140px;">Verificación</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($catalogLicencias as $catLic): ?>
+                                        <?php
+                                        $catCod = (string)$catLic['codigo'];
+                                        $hasCat = isset($driverLicenses[$catCod]);
+                                        $catData = $driverLicenses[$catCod] ?? null;
+                                        $catVenc = (string)($catData['fecha_vencimiento'] ?? ($record['fecha_vencimiento_licencia'] ?? ''));
+                                        $catEst = (string)($catData['estado_verificacion'] ?? 'VERIFICADA');
+                                        ?>
+                                        <tr>
+                                            <td class="has-text-center">
+                                                <input type="checkbox" name="licencias_seleccionadas[]" value="<?= e($catCod) ?>" <?= $hasCat ? 'checked' : '' ?> aria-label="Habilitar categoría <?= e($catCod) ?>">
+                                            </td>
+                                            <td>
+                                                <strong class="tag is-dark is-rounded mr-1"><?= e($catCod) ?></strong>
+                                                <span class="is-size-7"><?= e($catLic['nombre']) ?></span>
+                                            </td>
+                                            <td class="is-size-7">
+                                                <?= e($catLic['descripcion']) ?>
+                                            </td>
+                                            <td>
+                                                <input class="input is-small" name="licencia_vencimiento[<?= e($catCod) ?>]" type="text" data-datepicker="date" min="<?= e($todayUtc) ?>" value="<?= e($catVenc) ?>" placeholder="dd/mm/aaaa">
+                                            </td>
+                                            <td>
+                                                <div class="select is-small is-fullwidth">
+                                                    <select name="licencia_estado[<?= e($catCod) ?>]">
+                                                        <option value="VERIFICADA" <?= $catEst === 'VERIFICADA' ? 'selected' : '' ?>>Verificada</option>
+                                                        <option value="PENDIENTE" <?= $catEst === 'PENDIENTE' ? 'selected' : '' ?>>Pendiente</option>
+                                                        <option value="RECHAZADA" <?= $catEst === 'RECHAZADA' ? 'selected' : '' ?>>Rechazada</option>
+                                                    </select>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
 
