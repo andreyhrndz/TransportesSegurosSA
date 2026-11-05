@@ -99,7 +99,7 @@ layout_start('flota', 'Flota y catálogos', 'Administra vehículos, conductores,
 
         <?php if (in_array($section, ['vehiculos', 'conductores'], true)): ?>
             <div class="select">
-                <select id="flota-estado" name="estado" aria-label="Estado operativo">
+                <select id="flota-estado" name="estado" data-combobox data-allow-clear="false" data-placeholder="Todos los estados operativos" aria-label="Estado operativo">
                     <option value="">Todos los estados operativos</option>
                     <option value="DISPONIBLE">Disponible</option>
                     <option value="ASIGNADO">Asignado</option>
@@ -114,7 +114,7 @@ layout_start('flota', 'Flota y catálogos', 'Administra vehículos, conductores,
         <?php endif; ?>
 
         <div class="select">
-            <select id="flota-activo" name="activo" aria-label="Condición de registro">
+            <select id="flota-activo" name="activo" data-combobox data-allow-clear="false" data-placeholder="Todos los registros" aria-label="Condición de registro">
                 <option value="">Todos los registros</option>
                 <option value="1">Activos</option>
                 <option value="0">Inactivos</option>

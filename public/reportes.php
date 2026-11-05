@@ -51,7 +51,7 @@ layout_start('reportes', 'Reportes', 'Consulta de operaciones, indicadores hist√
                 <input class="input" id="reporte-buscar" type="search" name="buscar" maxlength="120" placeholder="C√≥digo, cliente o destinatario" aria-label="Buscar solicitudes">
             </div>
             <div class="select">
-                <select id="reporte-estado" name="estado" aria-label="Estado de solicitud">
+                <select id="reporte-estado" name="estado" data-combobox data-allow-clear="false" data-placeholder="Todos los estados" aria-label="Estado de solicitud">
                     <option value="">Todos los estados</option>
                     <option value="REGISTRADA">Registrada</option>
                     <option value="PENDIENTE_ASIGNACION">Pendiente de asignaci√≥n</option>
@@ -68,7 +68,7 @@ layout_start('reportes', 'Reportes', 'Consulta de operaciones, indicadores hist√
                 <input class="input" id="reporte-buscar" type="search" name="buscar" maxlength="80" placeholder="Placa, marca o modelo" aria-label="Buscar veh√≠culo">
             </div>
             <div class="select">
-                <select id="reporte-estado" name="estado" aria-label="Estado del veh√≠culo">
+                <select id="reporte-estado" name="estado" data-combobox data-allow-clear="false" data-placeholder="Todos los estados" aria-label="Estado del veh√≠culo">
                     <option value="">Todos los estados</option>
                     <option value="DISPONIBLE">Disponible</option>
                     <option value="ASIGNADO">Asignado</option>
@@ -87,7 +87,7 @@ layout_start('reportes', 'Reportes', 'Consulta de operaciones, indicadores hist√
             </div>
         <?php else: ?>
             <div class="select">
-                <select id="reporte-estado" name="estado" aria-label="Estado">
+                <select id="reporte-estado" name="estado" data-combobox data-allow-clear="false" data-placeholder="Todos los estados" aria-label="Estado">
                     <option value="">Todos los estados</option>
                     <?php if ($section === 'viajes'): ?>
                         <option value="PLANIFICADO">Planificado</option>

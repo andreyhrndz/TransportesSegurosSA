@@ -37,6 +37,7 @@
     function applySidebarCollapsed(collapsed) {
         if (!appShell) return;
         appShell.classList.toggle('is-sidebar-collapsed', collapsed);
+        document.documentElement.classList.toggle('preload-sidebar-collapsed', collapsed);
         if (sidebarCollapseBtn) {
             sidebarCollapseBtn.setAttribute('aria-expanded', String(!collapsed));
             sidebarCollapseBtn.setAttribute('data-tooltip', collapsed ? 'Expandir menú' : 'Contraer menú');
@@ -111,7 +112,7 @@
                 || select.querySelector('option[value=""]')?.textContent?.trim()
                 || 'Seleccionar o buscar…';
             const hasEmptyOption = Boolean(select.querySelector('option[value=""]'));
-            const allowClear = select.dataset.allowClear === 'true' || (hasEmptyOption && !select.required);
+            const allowClear = select.dataset.allowClear === 'true' || (select.dataset.allowClear !== 'false' && hasEmptyOption && !select.required);
 
             const plugins = {};
             if (allowClear) {

@@ -192,7 +192,7 @@ try {
                     </fieldset>
                 </template>
             </section>
-            <?= modal_footer('Guardar', 'is-primary') ?>
+            <?= modal_footer('Crear solicitud', 'is-primary') ?>
         </form>
     </div>
 </div>

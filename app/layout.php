@@ -34,6 +34,19 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
     <link rel="stylesheet" href="/assets/vendor/tom-select/tom-select.css">
     <link rel="stylesheet" href="/assets/vendor/flatpickr/flatpickr.min.css">
     <link rel="stylesheet" href="/assets/css/estilos.css">
+    <script>
+    (function() {
+        try {
+            if (localStorage.getItem('tssa_sidebar_collapsed') === '1') {
+                document.documentElement.classList.add('preload-sidebar-collapsed');
+                document.documentElement.classList.add('preload-no-transition');
+            }
+        } catch(e) {}
+    })();
+    window.addEventListener('DOMContentLoaded', function() {
+        document.documentElement.classList.remove('preload-no-transition');
+    });
+    </script>
     <script src="/assets/js/htmx.min.js" defer></script>
     <script src="/assets/vendor/tom-select/tom-select.complete.min.js" defer></script>
     <script src="/assets/vendor/flatpickr/flatpickr.min.js" defer></script>
@@ -44,6 +57,11 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
 <body>
 <a class="skip-link" href="#main-content">Saltar al contenido principal</a>
 <div class="app-shell" id="app-shell">
+    <script>
+    if (document.documentElement.classList.contains('preload-sidebar-collapsed')) {
+        document.getElementById('app-shell')?.classList.add('is-sidebar-collapsed');
+    }
+    </script>
     <aside class="sidebar" id="sidebar" aria-label="Navegación principal">
         <div class="brand">
             <div class="brand-identity">

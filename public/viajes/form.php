@@ -70,7 +70,7 @@ try {
                     <input class="input" id="viaje-fecha" name="fecha_programada" type="text" data-datepicker="datetime" min="<?= e(gmdate('Y-m-d\\TH:i', time() + 60)) ?>" placeholder="dd/mm/aaaa, hh:mm" required>
                 </div>
             </section>
-            <?= modal_footer('Guardar', 'is-primary') ?>
+            <?= modal_footer('Crear viaje', 'is-primary') ?>
         </form>
     </div>
 </div>

@@ -13,7 +13,7 @@ layout_start('clientes', 'Clientes', 'Administra el directorio de personas y emp
             <input class="input" id="buscar" type="search" name="buscar" maxlength="120" placeholder="Buscar clientes por nombre, identificación o correo" autocomplete="off" aria-label="Buscar clientes" aria-controls="clientes-resultado">
         </div>
         <div class="select">
-            <select id="clientes-activo" name="activo" aria-label="Estado del cliente">
+            <select id="clientes-activo" name="activo" data-combobox data-allow-clear="false" data-placeholder="Todos los estados" aria-label="Estado del cliente">
                 <option value="">Todos los estados</option>
                 <option value="1">Activos</option>
                 <option value="0">Inactivos</option>

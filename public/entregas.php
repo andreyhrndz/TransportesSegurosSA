@@ -64,7 +64,7 @@ layout_start('entregas', $sections[$section][0], $descriptions[$section]);
             </div>
         <?php elseif ($section === 'incidencias'): ?>
             <div class="select">
-                <select id="incidencias-estado" name="estado" aria-label="Estado de incidencia">
+                <select id="incidencias-estado" name="estado" data-combobox data-allow-clear="false" data-placeholder="Todos los estados" aria-label="Estado de incidencia">
                     <option value="">Todos los estados</option>
                     <option value="ABIERTA">Abierta</option>
                     <option value="EN_ATENCION">En atención</option>
@@ -73,7 +73,7 @@ layout_start('entregas', $sections[$section][0], $descriptions[$section]);
             </div>
         <?php else: ?>
             <div class="select">
-                <select id="entregas-estado" name="estado" aria-label="Estado">
+                <select id="entregas-estado" name="estado" data-combobox data-allow-clear="false" data-placeholder="Todos los estados" aria-label="Estado">
                     <option value="">Todos los estados</option>
                     <?php if ($section === 'entregas'): ?>
                         <option value="ENTREGADA">Entregada</option>

@@ -14,7 +14,7 @@ layout_start('solicitudes', 'Solicitudes', 'Consulta órdenes de transporte, des
             <input class="input" id="solicitud-buscar" type="search" name="buscar" maxlength="120" placeholder="Buscar por código, cliente o destinatario" aria-label="Buscar solicitudes">
         </div>
         <div class="select">
-            <select id="solicitud-estado" name="estado" aria-label="Estado de solicitud">
+            <select id="solicitud-estado" name="estado" data-combobox data-allow-clear="false" data-placeholder="Todos los estados" aria-label="Estado de solicitud">
                 <option value="">Todos los estados</option>
                 <option value="REGISTRADA">Registrada</option>
                 <option value="PENDIENTE_ASIGNACION">Pendiente de asignación</option>

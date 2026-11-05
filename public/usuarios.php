@@ -13,7 +13,7 @@ layout_start('usuarios', 'Usuarios y permisos', 'Administra cuentas de acceso y 
             <input class="input" id="usuarios-buscar" type="search" name="buscar" maxlength="120" placeholder="Buscar por nombre de usuario o correo" autocomplete="off" aria-label="Buscar usuarios" aria-controls="usuarios-resultado">
         </div>
         <div class="select">
-            <select id="usuarios-activo" name="activo" aria-label="Estado del usuario">
+            <select id="usuarios-activo" name="activo" data-combobox data-allow-clear="false" data-placeholder="Todos los estados" aria-label="Estado del usuario">
                 <option value="">Todos los estados</option>
                 <option value="1">Activos</option>
                 <option value="0">Inactivos</option>

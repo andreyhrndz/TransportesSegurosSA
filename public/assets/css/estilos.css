@@ -197,8 +197,15 @@ code {
     transition: grid-template-columns var(--transition-base);
 }
 
+html.preload-sidebar-collapsed .app-shell,
 .app-shell.is-sidebar-collapsed {
     grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr);
+}
+
+html.preload-no-transition *,
+html.preload-no-transition *::before,
+html.preload-no-transition *::after {
+    transition: none !important;
 }
 
 .sidebar {
@@ -411,36 +418,47 @@ code {
 
 /* Estado colapsado en escritorio */
 @media (min-width: 1024px) {
+    html.preload-sidebar-collapsed .sidebar,
     .app-shell.is-sidebar-collapsed .sidebar {
         padding-left: 0.65rem;
         padding-right: 0.65rem;
         overflow: visible;
     }
 
+    html.preload-sidebar-collapsed .sidebar-navigation,
     .app-shell.is-sidebar-collapsed .sidebar-navigation {
         overflow: visible;
     }
 
+    html.preload-sidebar-collapsed .brand,
     .app-shell.is-sidebar-collapsed .brand {
         padding-left: 0;
         padding-right: 0;
         justify-content: center;
     }
 
+    html.preload-sidebar-collapsed .brand-identity,
     .app-shell.is-sidebar-collapsed .brand-identity {
         display: none;
     }
 
+    html.preload-sidebar-collapsed .brand-monogram,
     .app-shell.is-sidebar-collapsed .brand-monogram {
         display: inline-flex;
     }
 
+    html.preload-sidebar-collapsed .nav-section-label,
+    html.preload-sidebar-collapsed .sidebar-link-text,
+    html.preload-sidebar-collapsed .sidebar-collapse-label,
     .app-shell.is-sidebar-collapsed .nav-section-label,
     .app-shell.is-sidebar-collapsed .sidebar-link-text,
     .app-shell.is-sidebar-collapsed .sidebar-collapse-label {
         display: none;
     }
 
+    html.preload-sidebar-collapsed .menu-list a.sidebar-link,
+    html.preload-sidebar-collapsed .sidebar-link,
+    html.preload-sidebar-collapsed .sidebar-collapse-btn,
     .app-shell.is-sidebar-collapsed .menu-list a.sidebar-link,
     .app-shell.is-sidebar-collapsed .sidebar-link,
     .app-shell.is-sidebar-collapsed .sidebar-collapse-btn {
@@ -449,10 +467,12 @@ code {
         padding-right: 0 !important;
     }
 
+    html.preload-sidebar-collapsed .collapse-icon-open,
     .app-shell.is-sidebar-collapsed .collapse-icon-open {
         display: none;
     }
 
+    html.preload-sidebar-collapsed .collapse-icon-closed,
     .app-shell.is-sidebar-collapsed .collapse-icon-closed {
         display: inline-flex;
     }
@@ -1773,12 +1793,22 @@ input[type="radio"] {
 }
 
 .modal-card {
+    display: flex;
+    flex-direction: column;
     width: min(720px, calc(100vw - 2rem));
     max-height: calc(100vh - 2.5rem);
     background: var(--color-surface);
     border: 1px solid var(--color-border-strong);
     border-radius: var(--radius-xl);
     box-shadow: var(--shadow-lg);
+    overflow: hidden;
+}
+
+.modal-card > form {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow: hidden;
 }
 
@@ -1789,6 +1819,7 @@ input[type="radio"] {
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-shrink: 0;
 }
 
 .modal-card-title {
@@ -1802,6 +1833,8 @@ input[type="radio"] {
     background: var(--color-surface) !important;
     color: var(--color-text) !important;
     padding: 1.35rem !important;
+    flex: 1 1 auto;
+    min-height: 0;
     overflow-y: auto;
 }
 
@@ -1810,6 +1843,7 @@ input[type="radio"] {
     border-top: 1px solid var(--color-border) !important;
     padding: 0.95rem 1.35rem !important;
     justify-content: flex-end !important;
+    flex-shrink: 0;
 }
 
 .modal-close {
@@ -1969,6 +2003,19 @@ input[type="radio"] {
 .ts-dropdown .no-results {
     color: var(--color-text-muted) !important;
     text-align: center;
+}
+
+.select:has(.ts-wrapper)::after {
+    display: none !important;
+}
+
+.select:has(.ts-wrapper) {
+    height: auto !important;
+    display: inline-flex !important;
+}
+
+.filter-form .select:has(.ts-wrapper) {
+    min-width: 200px;
 }
 
 /* ==========================================================================
