@@ -31,13 +31,6 @@ try {
                 <div id="mensaje-viaje" role="alert"></div>
 
                 <div class="field">
-                    <label class="label">Código de viaje</label>
-                    <div class="control">
-                        <input class="input is-static has-text-subtle" type="text" value="Código asignado al guardar (automático)" readonly tabindex="-1">
-                    </div>
-                </div>
-
-                <div class="field">
                     <label class="label" for="viaje-vehiculo">Vehículo disponible <span class="required">*</span></label>
                     <select id="viaje-vehiculo" name="vehiculo_id" data-combobox data-remote-url="/flota/lista.php?seccion=vehiculos&estado=DISPONIBLE" data-placeholder="Buscar unidad por placa o modelo…" required>
                         <option value="">Selecciona vehículo…</option>

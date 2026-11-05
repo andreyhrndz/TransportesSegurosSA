@@ -177,10 +177,10 @@ try {
     $grantAll->closeCursor();
 
     // Asegurar estado inicial limpio para recursos compartidos y limpiar restos de ejecuciones previas
-    $pdo->exec("DELETE FROM dbo.entregas WHERE viaje_solicitud_id IN (SELECT viaje_solicitud_id FROM dbo.viaje_solicitudes WHERE viaje_id IN (SELECT viaje_id FROM dbo.viajes WHERE codigo_viaje LIKE '__E2E%'))");
-    $pdo->exec("DELETE FROM dbo.viaje_solicitudes WHERE viaje_id IN (SELECT viaje_id FROM dbo.viajes WHERE codigo_viaje LIKE '__E2E%')");
-    $pdo->exec("DELETE FROM dbo.paradas_viaje WHERE viaje_id IN (SELECT viaje_id FROM dbo.viajes WHERE codigo_viaje LIKE '__E2E%')");
-    $pdo->exec("DELETE FROM dbo.viajes WHERE codigo_viaje LIKE '__E2E%'");
+    $pdo->exec("DELETE FROM dbo.entregas WHERE viaje_solicitud_id IN (SELECT viaje_solicitud_id FROM dbo.viaje_solicitudes WHERE viaje_id IN (SELECT viaje_id FROM dbo.viajes WHERE codigo_viaje LIKE '__E2E%' OR (vehiculo_id IN (1, 2) AND estado <> 'FINALIZADO' AND estado <> 'CANCELADO')))");
+    $pdo->exec("DELETE FROM dbo.viaje_solicitudes WHERE viaje_id IN (SELECT viaje_id FROM dbo.viajes WHERE codigo_viaje LIKE '__E2E%' OR (vehiculo_id IN (1, 2) AND estado <> 'FINALIZADO' AND estado <> 'CANCELADO'))");
+    $pdo->exec("DELETE FROM dbo.paradas_viaje WHERE viaje_id IN (SELECT viaje_id FROM dbo.viajes WHERE codigo_viaje LIKE '__E2E%' OR (vehiculo_id IN (1, 2) AND estado <> 'FINALIZADO' AND estado <> 'CANCELADO'))");
+    $pdo->exec("DELETE FROM dbo.viajes WHERE codigo_viaje LIKE '__E2E%' OR (vehiculo_id IN (1, 2) AND estado <> 'FINALIZADO' AND estado <> 'CANCELADO')");
     $pdo->exec("DELETE FROM dbo.mercancias WHERE solicitud_id IN (SELECT solicitud_id FROM dbo.solicitudes WHERE cliente_id IN (SELECT cliente_id FROM dbo.clientes WHERE identificacion LIKE '__E2E%') OR codigo_solicitud LIKE '__E2E%')");
     $pdo->exec("DELETE FROM dbo.incidencias WHERE solicitud_id IN (SELECT solicitud_id FROM dbo.solicitudes WHERE cliente_id IN (SELECT cliente_id FROM dbo.clientes WHERE identificacion LIKE '__E2E%') OR codigo_solicitud LIKE '__E2E%')");
     $pdo->exec("DELETE FROM dbo.documentos WHERE solicitud_id IN (SELECT solicitud_id FROM dbo.solicitudes WHERE cliente_id IN (SELECT cliente_id FROM dbo.clientes WHERE identificacion LIKE '__E2E%') OR codigo_solicitud LIKE '__E2E%')");
@@ -292,23 +292,31 @@ try {
     e2e_assert(str_contains($detailHtml, 'Carga valorada refrigerada'), 'El detalle debe listar las mercancías.');
 
     // 1.6 Crear viaje planificado por HTTP
-    $tripCode = '__E2E_TRIP_' . $suffix;
     $futureTrip = (new DateTimeImmutable('+1 day', new DateTimeZone('UTC')))->format('Y-m-d\TH:i');
-    [$tripStatus, $tripBody] = e2e_request($base . '/viajes/guardar.php', $adminCookie, true, [
+    [$tripStatus, $tripBody, $tripHeaders] = e2e_request($base . '/viajes/guardar.php', $adminCookie, true, [
         'csrf_token' => $adminCsrf,
-        'codigo' => $tripCode,
         'vehiculo_id' => 1,
         'conductor_id' => 1,
         'ruta_id' => 1, // Nicoya -> Liberia
         'fecha_programada' => $futureTrip,
     ]);
     e2e_assert($tripStatus === 200, "La creación HTTP de viaje debe responder 200 (obtenido {$tripStatus}): {$tripBody}");
-    $fetchTrip = $pdo->prepare('SELECT viaje_id, estado FROM dbo.viajes WHERE codigo_viaje = ?');
-    $fetchTrip->execute([$tripCode]);
+    $tripId = 0;
+    foreach ($tripHeaders as $h) {
+        if (preg_match('/HX-Redirect:\s*\/viajes\/detalle\.php\?id=(\d+)/i', $h, $mId)) {
+            $tripId = (int)$mId[1];
+        }
+    }
+    if ($tripId === 0 && preg_match('/detalle\.php\?id=(\d+)/', $tripBody, $mId)) {
+        $tripId = (int)$mId[1];
+    }
+    e2e_assert($tripId > 0, 'No se pudo obtener el ID del viaje creado.');
+    $fetchTrip = $pdo->prepare('SELECT codigo_viaje, estado FROM dbo.viajes WHERE viaje_id = ?');
+    $fetchTrip->execute([$tripId]);
     $tripRow = $fetchTrip->fetch();
     $fetchTrip->closeCursor();
-    e2e_assert(is_array($tripRow) && (int)$tripRow['viaje_id'] > 0, 'El viaje debe existir en BD.');
-    $tripId = (int)$tripRow['viaje_id'];
+    e2e_assert(is_array($tripRow) && !empty($tripRow['codigo_viaje']), 'El viaje debe existir en BD.');
+    $tripCode = (string)$tripRow['codigo_viaje'];
     $createdTripIds[] = $tripId;
     e2e_assert($tripRow['estado'] === 'PLANIFICADO', 'El viaje debe iniciar en estado PLANIFICADO.');
 
@@ -722,7 +730,7 @@ try {
     // 3.8 Restricciones de transiciones de estado en Viajes
     // Intentar iniciar viaje sin paradas ni solicitudes asignadas
     $emptyTripCode = '__TRIP_EMPTY_' . $suffix;
-    [$_, $_] = e2e_request($base . '/viajes/guardar.php', $adminCookie, true, [
+    [$_, $emptyTripBody, $emptyTripHeaders] = e2e_request($base . '/viajes/guardar.php', $adminCookie, true, [
         'csrf_token' => $adminCsrf,
         'codigo' => $emptyTripCode,
         'vehiculo_id' => 2,
@@ -730,10 +738,22 @@ try {
         'ruta_id' => 1,
         'fecha_programada' => $futureTrip,
     ]);
-    $fetchEmptyTrip = $pdo->prepare('SELECT viaje_id FROM dbo.viajes WHERE codigo_viaje = ?');
-    $fetchEmptyTrip->execute([$emptyTripCode]);
-    $emptyTripId = (int)$fetchEmptyTrip->fetchColumn();
-    $fetchEmptyTrip->closeCursor();
+    $emptyTripId = 0;
+    foreach ($emptyTripHeaders as $h) {
+        if (preg_match('/HX-Redirect:\s*\/viajes\/detalle\.php\?id=(\d+)/i', $h, $mId)) {
+            $emptyTripId = (int)$mId[1];
+        }
+    }
+    if ($emptyTripId === 0 && preg_match('/detalle\.php\?id=(\d+)/', $emptyTripBody, $mId)) {
+        $emptyTripId = (int)$mId[1];
+    }
+    if ($emptyTripId === 0) {
+        $fetchEmptyTrip = $pdo->prepare('SELECT TOP 1 viaje_id FROM dbo.viajes WHERE vehiculo_id = 2 AND conductor_id = 1 ORDER BY viaje_id DESC');
+        $fetchEmptyTrip->execute();
+        $emptyTripId = (int)$fetchEmptyTrip->fetchColumn();
+        $fetchEmptyTrip->closeCursor();
+    }
+    e2e_assert($emptyTripId > 0, 'No se pudo obtener el ID del viaje vacío creado.');
     $createdTripIds[] = $emptyTripId;
 
     [$emptyStartStatus, $emptyStartBody] = e2e_request($base . '/viajes/accion.php', $adminCookie, true, [

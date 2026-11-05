@@ -115,11 +115,11 @@ if ($error === null) {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
     <link rel="stylesheet" href="/assets/css/estilos.css">
 </head>
-<body class="login-page">
-<div class="login-panel is-flex is-justify-content-center is-align-items-center" style="width: 100%; min-height: 100vh; padding: 2rem 1rem;">
-    <div class="login-box" style="max-width: 520px; width: 100%;">
-        <div class="login-box-header has-text-centered mb-5">
-            <strong class="is-size-4 has-text-primary">Transportes Seguros S.A.</strong>
+<body class="onboarding-page">
+<div class="onboarding-shell">
+    <div class="onboarding-box">
+        <div class="has-text-centered mb-5">
+            <strong class="is-size-5 has-text-primary">Transportes Seguros S.A.</strong>
             <h1 class="title is-3 mt-2"><?= $error !== null ? 'Error de activación' : '¡Cuenta activada!' ?></h1>
         </div>
 
@@ -128,7 +128,7 @@ if ($error === null) {
                 <?= svg_icon('alert-triangle') ?>
                 <span><?= e($error) ?></span>
             </div>
-            <div class="buttons is-centered">
+            <div class="is-flex is-justify-content-center" style="gap: 1rem;">
                 <a href="/auth/onboarding.php?token=<?= urlencode($tokenRaw) ?>" class="button is-primary">Volver al formulario</a>
                 <a href="/auth/login.php" class="button button-secondary">Ir a inicio de sesión</a>
             </div>

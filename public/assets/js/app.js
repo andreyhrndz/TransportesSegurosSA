@@ -660,41 +660,63 @@
        ====================================================================== */
 
     function descomponerNombreCR(nombreCompleto) {
-        const partes = String(nombreCompleto || '').trim().split(/\s+/).filter(Boolean);
+        const limpio = String(nombreCompleto || '').trim().replace(/\s+/g, ' ');
+        if (!limpio) {
+            return { nombre: '', primerApellido: '', segundoApellido: '', ambiguo: false };
+        }
+
+        const partes = limpio.split(' ').filter(Boolean);
+
+        // En Costa Rica el formato oficial es: NOMBRE(S) PRIMER_APELLIDO SEGUNDO_APELLIDO
+        // Para 3 o más componentes: los dos últimos son los apellidos y los anteriores son el nombre
         if (partes.length >= 3) {
+            const segundoApellido = partes[partes.length - 1];
+            const primerApellido = partes[partes.length - 2];
+            const nombre = partes.slice(0, partes.length - 2).join(' ');
             return {
-                primerApellido: partes[0],
-                segundoApellido: partes[1],
-                nombre: partes.slice(2).join(' ')
-            };
-        } else if (partes.length === 2) {
-            return {
-                primerApellido: partes[0],
-                segundoApellido: '',
-                nombre: partes[1]
-            };
-        } else if (partes.length === 1) {
-            return {
-                primerApellido: '',
-                segundoApellido: '',
-                nombre: partes[0]
+                nombre,
+                primerApellido,
+                segundoApellido,
+                ambiguo: false
             };
         }
-        return { primerApellido: '', segundoApellido: '', nombre: '' };
+
+        // Si sólo hay 2 componentes: Ej. "MARIA MORA" -> nombre: "MARIA", primerApellido: "MORA"
+        // Se preserva completo y se marca como ambiguo para requerir revisión si el usuario lo desea
+        if (partes.length === 2) {
+            return {
+                nombre: partes[0],
+                primerApellido: partes[1],
+                segundoApellido: '',
+                ambiguo: true
+            };
+        }
+
+        // Si sólo hay 1 componente: se preserva en nombre y se marca ambiguo
+        return {
+            nombre: partes[0],
+            primerApellido: '',
+            segundoApellido: '',
+            ambiguo: true
+        };
     }
 
     function setHaciendaAviso(el, tipo, texto) {
         if (!el) return;
-        if (!texto) {
+        // UX silenciosa en éxito: no mostrar banner llamativo verde, sólo limpiar o emitir aria-label
+        if (!texto || tipo === 'success') {
             el.hidden = true;
             el.innerHTML = '';
             el.textContent = '';
+            if (tipo === 'success' && texto) {
+                el.setAttribute('aria-label', texto);
+            }
             return;
         }
         el.hidden = false;
-        const alertClass = tipo === 'success'
-            ? 'notification-success'
-            : (tipo === 'warning' ? 'notification-warning' : (tipo === 'danger' ? 'notification-danger' : 'notification-info'));
+        const alertClass = tipo === 'warning'
+            ? 'notification-warning'
+            : (tipo === 'danger' ? 'notification-danger' : 'notification-info');
         el.className = 'notification ' + alertClass + ' p-2 mt-2';
         el.textContent = texto;
     }
@@ -778,9 +800,13 @@
                         if (inputNom) inputNom.value = parsed.nombre;
                         if (inputAp1) inputAp1.value = parsed.primerApellido;
                         if (inputAp2) inputAp2.value = parsed.segundoApellido;
-                        if (avisoEl) {
-                            avisoEl.textContent = 'Registro oficial encontrado: ' + rawNombre;
-                            avisoEl.className = 'help has-text-success';
+
+                        if (parsed.ambiguo && avisoEl) {
+                            avisoEl.textContent = 'Nombre con formato inusual. Por favor revisa y confirma la distribución de nombres y apellidos.';
+                            avisoEl.className = 'help has-text-warning';
+                        } else if (avisoEl) {
+                            avisoEl.textContent = '';
+                            avisoEl.className = 'help';
                         }
                     } else if (isCli) {
                         const inputRazon = document.getElementById('razon_social');
@@ -790,15 +816,22 @@
                         const inputAp2 = document.getElementById('segundo_apellido');
 
                         if (inputRazon) {
+                            // Persona Jurídica: preservar razón social intacta sin descomponer
                             inputRazon.value = rawNombre;
                             if (inputComercial && !inputComercial.value) inputComercial.value = rawNombre;
+                            setHaciendaAviso(avisoEl, '', '');
                         } else if (inputNom) {
+                            // Persona Física: descomponer apellidos al final
                             const parsed = descomponerNombreCR(rawNombre);
                             inputNom.value = parsed.nombre;
                             if (inputAp1) inputAp1.value = parsed.primerApellido;
                             if (inputAp2) inputAp2.value = parsed.segundoApellido;
+                            if (parsed.ambiguo) {
+                                setHaciendaAviso(avisoEl, 'warning', 'Nombre con formato inusual. Por favor revisa y confirma la distribución de nombres y apellidos antes de guardar.');
+                            } else {
+                                setHaciendaAviso(avisoEl, '', '');
+                            }
                         }
-                        setHaciendaAviso(avisoEl, 'success', 'Registro oficial encontrado: ' + rawNombre);
                     } else if (isEdit) {
                         const inputRazon = document.getElementById('edit-razon-social');
                         const inputComercial = document.getElementById('edit-nombre-comercial');
@@ -809,26 +842,40 @@
                         if (inputRazon) {
                             inputRazon.value = rawNombre;
                             if (inputComercial && !inputComercial.value) inputComercial.value = rawNombre;
+                            setHaciendaAviso(avisoEl, '', '');
                         } else if (inputNom) {
                             const parsed = descomponerNombreCR(rawNombre);
                             inputNom.value = parsed.nombre;
                             if (inputAp1) inputAp1.value = parsed.primerApellido;
                             if (inputAp2) inputAp2.value = parsed.segundoApellido;
+                            if (parsed.ambiguo) {
+                                setHaciendaAviso(avisoEl, 'warning', 'Nombre con formato inusual. Por favor revisa y confirma la distribución de nombres y apellidos antes de guardar.');
+                            } else {
+                                setHaciendaAviso(avisoEl, '', '');
+                            }
                         }
-                        setHaciendaAviso(avisoEl, 'success', 'Registro oficial encontrado: ' + rawNombre);
                     } else if (isDest) {
                         const inputNom = document.getElementById('destinatario-nombre');
                         const inputAp1 = document.getElementById('destinatario-apellido1');
                         const inputAp2 = document.getElementById('destinatario-apellido2');
-                        const parsed = descomponerNombreCR(rawNombre);
 
-                        if (inputNom) inputNom.value = parsed.nombre || '';
-                        if (inputAp1) inputAp1.value = parsed.primerApellido || '';
-                        if (inputAp2) inputAp2.value = parsed.segundoApellido || '';
-                        setHaciendaAviso(avisoEl, 'success', 'Registro oficial encontrado: ' + rawNombre);
+                        if (data.tipo === '02') {
+                            if (inputNom) inputNom.value = rawNombre;
+                            setHaciendaAviso(avisoEl, 'warning', 'La cédula corresponde a una persona jurídica. Por favor ingresa el nombre de la persona física autorizada para recibir la entrega.');
+                        } else {
+                            const parsed = descomponerNombreCR(rawNombre);
+                            if (inputNom) inputNom.value = parsed.nombre || '';
+                            if (inputAp1) inputAp1.value = parsed.primerApellido || '';
+                            if (inputAp2) inputAp2.value = parsed.segundoApellido || '';
+                            if (parsed.ambiguo) {
+                                setHaciendaAviso(avisoEl, 'warning', 'Nombre con formato inusual. Por favor revisa y confirma la distribución de nombres y apellidos.');
+                            } else {
+                                setHaciendaAviso(avisoEl, '', '');
+                            }
+                        }
                     }
                 } else if (data.status === 'no_encontrado') {
-                    const msg = 'Identificación no registrada en Hacienda. Completa los datos manualmente.';
+                    const msg = 'Identificación no registrada en Hacienda. Puedes ingresar los datos manualmente.';
                     if (isOnb && avisoEl) {
                         avisoEl.textContent = msg;
                         avisoEl.className = 'help has-text-warning';
@@ -836,7 +883,7 @@
                         setHaciendaAviso(avisoEl, 'warning', msg);
                     }
                 } else if (data.status === 'limite_excedido') {
-                    const msg = 'Límite de consultas excedido temporalmente. Completa los datos manualmente.';
+                    const msg = 'Límite de consultas excedido temporalmente. Puedes ingresar los datos manualmente.';
                     if (isOnb && avisoEl) {
                         avisoEl.textContent = msg;
                         avisoEl.className = 'help has-text-warning';
@@ -844,7 +891,7 @@
                         setHaciendaAviso(avisoEl, 'warning', msg);
                     }
                 } else {
-                    const msg = data.mensaje || 'Servicio de Hacienda no disponible. Completa los datos manualmente.';
+                    const msg = data.mensaje || 'Servicio de Hacienda no disponible temporalmente. Puedes ingresar los datos manualmente.';
                     if (isOnb && avisoEl) {
                         avisoEl.textContent = msg;
                         avisoEl.className = 'help has-text-warning';
@@ -856,7 +903,7 @@
             .catch(() => {
                 btn.disabled = false;
                 btn.classList.remove('is-loading');
-                const msg = 'No fue posible conectar con Hacienda. Completa los datos manualmente.';
+                const msg = 'No fue posible conectar con Hacienda. Puedes ingresar los datos manualmente.';
                 if (isOnb && avisoEl) {
                     avisoEl.textContent = msg;
                     avisoEl.className = 'help has-text-danger';
@@ -871,6 +918,7 @@
        ====================================================================== */
 
     let clienteSolicitudCache = null;
+    let clienteFetchSeq = 0;
 
     function actualizarModoDestinatario() {
         const radioMismo = document.getElementById('modo-mismo-cliente');
@@ -887,21 +935,23 @@
         const btnHacienda = document.getElementById('btn-consultar-hacienda-dest');
         const avisoHacienda = document.getElementById('hacienda-dest-aviso');
 
-        if (!seccionDest) return;
+        if (!seccionDest || !radioMismo || !radioTercero) return;
 
         const camposTercero = [inputId, inputNom, inputAp1, inputAp2, inputTel];
 
         // 1. Estado sin cliente seleccionado
-        if (!clienteSolicitudCache) {
+        if (!clienteSolicitudCache || !clienteSolicitudCache.tipo_cliente) {
+            radioMismo.disabled = true;
+            radioTercero.disabled = true;
+            radioMismo.checked = false;
+            radioTercero.checked = false;
             if (labelMismo) labelMismo.style.display = 'inline-flex';
-            if (radioMismo) radioMismo.checked = true;
-            if (ayudaModo) ayudaModo.textContent = 'Selecciona primero un cliente para configurar el destinatario de la entrega.';
+            if (ayudaModo) ayudaModo.textContent = 'Selecciona un cliente para indicar quién recibe la mercancía.';
             seccionDest.style.display = 'none';
             camposTercero.forEach((el) => {
                 if (el) {
                     el.disabled = true;
                     el.required = false;
-                    el.value = '';
                 }
             });
             if (btnHacienda) btnHacienda.disabled = true;
@@ -909,10 +959,15 @@
             return;
         }
 
-        // 2. Cliente Jurídico (Empresa): no puede recibir físicamente "el mismo cliente"
+        // Habilitar controles de destinatario
+        radioTercero.disabled = false;
+
+        // 2. Cliente Jurídico (Empresa): obligatorio designar persona física autorizada
         if (clienteSolicitudCache.tipo_cliente === 'JURIDICA') {
             if (labelMismo) labelMismo.style.display = 'none';
-            if (radioTercero) radioTercero.checked = true;
+            radioMismo.disabled = true;
+            radioMismo.checked = false;
+            radioTercero.checked = true;
             if (ayudaModo) ayudaModo.textContent = 'Para clientes jurídicos (empresas), es obligatorio registrar la persona física autorizada para recibir la entrega.';
             seccionDest.style.display = 'block';
             camposTercero.forEach((el) => {
@@ -927,22 +982,28 @@
 
         // 3. Cliente Físico
         if (labelMismo) labelMismo.style.display = 'inline-flex';
-        if (ayudaModo) ayudaModo.textContent = 'Para clientes físicos, la recepción por defecto es directa sin requerir datos adicionales.';
+        radioMismo.disabled = false;
 
-        if (radioMismo && radioMismo.checked) {
-            // Modo "El mismo cliente": ocultar y deshabilitar sección de tercero por completo
+        // Si venía sin selección o de cliente jurídico, marcar mismo_cliente por defecto
+        if (!radioMismo.checked && !radioTercero.checked) {
+            radioMismo.checked = true;
+        }
+
+        if (radioMismo.checked) {
+            // Modo "El mismo cliente": recepción propia, sección oculta y campos deshabilitados
+            if (ayudaModo) ayudaModo.textContent = 'Para clientes físicos, la recepción por defecto es directa sin requerir datos adicionales.';
             seccionDest.style.display = 'none';
             camposTercero.forEach((el) => {
                 if (el) {
                     el.disabled = true;
                     el.required = false;
-                    el.value = '';
                 }
             });
             if (btnHacienda) btnHacienda.disabled = true;
             setHaciendaAviso(avisoHacienda, '', '');
         } else {
-            // Modo "Otra persona autorizada": mostrar campos y habilitar validaciones requeridas
+            // Modo "Otra persona autorizada": mostrar campos y habilitar validación
+            if (ayudaModo) ayudaModo.textContent = 'Indica los datos de la persona física autorizada por el cliente para recibir la entrega.';
             seccionDest.style.display = 'block';
             camposTercero.forEach((el) => {
                 if (el) el.disabled = false;
@@ -951,9 +1012,6 @@
             if (inputAp1) inputAp1.required = true;
             if (inputAp2) inputAp2.required = false;
             if (btnHacienda) btnHacienda.disabled = false;
-            if (inputNom && !inputNom.value) {
-                inputNom.focus();
-            }
         }
     }
 
@@ -963,28 +1021,41 @@
 
         if (target.id === 'solicitud-cliente') {
             const clienteId = target.value;
+            clienteFetchSeq++;
+            const seq = clienteFetchSeq;
+
             if (!clienteId) {
                 clienteSolicitudCache = null;
                 actualizarModoDestinatario();
                 return;
             }
+
             // Sincronización inmediata con atributo data-tipo del option seleccionado
             const opt = target.options ? target.options[target.selectedIndex] : null;
-            if (opt && opt.dataset.tipo) {
-                clienteSolicitudCache = {
-                    cliente_id: parseInt(clienteId, 10),
-                    tipo_cliente: opt.dataset.tipo,
-                    nombre: opt.dataset.nombre || '',
-                    identificacion: opt.dataset.identificacion || '',
-                    telefono: opt.dataset.telefono || ''
-                };
-                actualizarModoDestinatario();
+            const tipoInmediato = opt?.dataset?.tipo || 'FISICA';
+            const anteriorTipo = clienteSolicitudCache?.tipo_cliente;
+
+            clienteSolicitudCache = {
+                cliente_id: parseInt(clienteId, 10),
+                tipo_cliente: tipoInmediato,
+                nombre: opt?.dataset?.nombre || '',
+                identificacion: opt?.dataset?.identificacion || '',
+                telefono: opt?.dataset?.telefono || ''
+            };
+
+            // Si venía de jurídica y cambia a física, restablecer a mismo_cliente
+            if (anteriorTipo === 'JURIDICA' && tipoInmediato === 'FISICA') {
+                const radioMismo = document.getElementById('modo-mismo-cliente');
+                if (radioMismo) radioMismo.checked = true;
             }
-            // Confirmación autoritativa desde API de cliente
+
+            actualizarModoDestinatario();
+
+            // Confirmación asíncrona segura con verificación de secuencia para evitar race conditions
             fetch('/clientes/info.php?cliente_id=' + encodeURIComponent(clienteId))
                 .then((res) => (res.ok ? res.json() : null))
                 .then((data) => {
-                    if (data) {
+                    if (data && seq === clienteFetchSeq && parseInt(target.value, 10) === data.cliente_id) {
                         clienteSolicitudCache = data;
                         actualizarModoDestinatario();
                     }
@@ -993,7 +1064,7 @@
             return;
         }
 
-        if (target.id === 'modo-mismo-cliente' || target.id === 'modo-tercero') {
+        if (target.name === 'modo_destinatario' || target.id === 'modo-mismo-cliente' || target.id === 'modo-tercero') {
             actualizarModoDestinatario();
             return;
         }
@@ -1038,6 +1109,173 @@
                 return;
             }
             aviso.hidden = true;
+        }
+    });
+
+    /* ======================================================================
+       ONBOARDING: WIZARD DE 2 PASOS (DATOS PERSONALES -> ACCESO)
+       ====================================================================== */
+
+    function inicializarOnboardingWizard() {
+        const formOnb = document.getElementById('form-onboarding');
+        if (!formOnb) return;
+
+        const paso1 = document.getElementById('onb-paso-1');
+        const paso2 = document.getElementById('onb-paso-2');
+        const btnContinuar = document.getElementById('btn-onb-continuar');
+        const btnVolver = document.getElementById('btn-onb-volver');
+        const btnSubmit = document.getElementById('btn-submit-onboarding');
+        const pill1 = document.getElementById('pill-step-1');
+        const pill2 = document.getElementById('pill-step-2');
+        const badge1 = document.getElementById('badge-step-1');
+        const errorBox = document.getElementById('onb-general-error');
+
+        const inputId = document.getElementById('onb-identificacion');
+        const inputNom = document.getElementById('onb-nombre');
+        const inputAp1 = document.getElementById('onb-primer-apellido');
+        const inputUsuario = document.getElementById('onb-usuario');
+        const inputPass = document.getElementById('onb-password');
+        const inputPassConf = document.getElementById('onb-password-confirm');
+
+        function mostrarErrorOnb(msg) {
+            if (!errorBox) return;
+            if (!msg) {
+                errorBox.hidden = true;
+                errorBox.textContent = '';
+                return;
+            }
+            errorBox.hidden = false;
+            errorBox.textContent = msg;
+            errorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        // Paso 1 -> Paso 2
+        btnContinuar?.addEventListener('click', (e) => {
+            e.preventDefault();
+            mostrarErrorOnb('');
+
+            const idVal = (inputId?.value || '').trim();
+            const nomVal = (inputNom?.value || '').trim();
+            const ap1Val = (inputAp1?.value || '').trim();
+
+            if (!idVal) {
+                mostrarErrorOnb('Por favor ingresa tu número de cédula o identificación nacional.');
+                inputId?.focus();
+                return;
+            }
+            if (!nomVal) {
+                mostrarErrorOnb('Por favor ingresa tu nombre.');
+                inputNom?.focus();
+                return;
+            }
+            if (!ap1Val) {
+                mostrarErrorOnb('Por favor ingresa tu primer apellido.');
+                inputAp1?.focus();
+                return;
+            }
+
+            // Ocultar paso 1, mostrar paso 2
+            if (paso1) paso1.hidden = true;
+            if (paso2) paso2.hidden = false;
+
+            // Actualizar indicadores
+            pill1?.classList.remove('is-active');
+            pill1?.classList.add('is-completed');
+            if (badge1) badge1.textContent = '✓';
+
+            pill2?.classList.add('is-active');
+            pill2?.classList.remove('is-completed');
+
+            // Habilitar required en paso 2
+            if (inputUsuario) inputUsuario.required = true;
+            if (inputPass) inputPass.required = true;
+            if (inputPassConf) inputPassConf.required = true;
+
+            inputUsuario?.focus();
+        });
+
+        // Paso 2 -> Paso 1 (Volver)
+        btnVolver?.addEventListener('click', (e) => {
+            e.preventDefault();
+            mostrarErrorOnb('');
+
+            // Ocultar paso 2, mostrar paso 1
+            if (paso2) paso2.hidden = true;
+            if (paso1) paso1.hidden = false;
+
+            // Actualizar indicadores
+            pill2?.classList.remove('is-active');
+            pill1?.classList.add('is-active');
+            pill1?.classList.remove('is-completed');
+            if (badge1) badge1.textContent = '1';
+
+            // Deshabilitar required en paso 2 mientras está oculto
+            if (inputUsuario) inputUsuario.required = false;
+            if (inputPass) inputPass.required = false;
+            if (inputPassConf) inputPassConf.required = false;
+
+            inputNom?.focus();
+        });
+
+        // Validación final y prevención de doble submit
+        formOnb.addEventListener('submit', (e) => {
+            mostrarErrorOnb('');
+            const usr = (inputUsuario?.value || '').trim();
+            const p1 = inputPass?.value || '';
+            const p2 = inputPassConf?.value || '';
+
+            if (usr.length < 3) {
+                e.preventDefault();
+                mostrarErrorOnb('El nombre de usuario debe contener al menos 3 caracteres.');
+                inputUsuario?.focus();
+                return;
+            }
+            if (p1.length < 12) {
+                e.preventDefault();
+                mostrarErrorOnb('La contraseña debe tener un mínimo de 12 caracteres.');
+                inputPass?.focus();
+                return;
+            }
+            if (p1 !== p2) {
+                e.preventDefault();
+                mostrarErrorOnb('Las contraseñas no coinciden. Por favor verifícalas.');
+                inputPassConf?.focus();
+                return;
+            }
+
+            // Prevenir doble click/envío múltiple
+            if (btnSubmit) {
+                btnSubmit.disabled = true;
+                btnSubmit.classList.add('is-loading');
+            }
+        });
+    }
+
+    // Inicializar wizard de onboarding si estamos en la página
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', inicializarOnboardingWizard);
+    } else {
+        inicializarOnboardingWizard();
+    }
+
+    // Limpieza e inicialización al abrir o intercambiar contenido HTMX en modales
+    document.addEventListener('htmx:afterSwap', (event) => {
+        if (event.detail?.target?.id === 'modal-contenido') {
+            const selCli = document.getElementById('solicitud-cliente');
+            if (selCli) {
+                clienteSolicitudCache = null;
+                if (selCli.value) {
+                    const opt = selCli.options ? selCli.options[selCli.selectedIndex] : null;
+                    clienteSolicitudCache = {
+                        cliente_id: parseInt(selCli.value, 10),
+                        tipo_cliente: opt?.dataset?.tipo || 'FISICA',
+                        nombre: opt?.dataset?.nombre || '',
+                        identificacion: opt?.dataset?.identificacion || '',
+                        telefono: opt?.dataset?.telefono || ''
+                    };
+                }
+                actualizarModoDestinatario();
+            }
         }
     });
 })();

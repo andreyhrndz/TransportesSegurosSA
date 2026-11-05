@@ -2164,6 +2164,102 @@ span.flatpickr-weekday {
     background: var(--color-canvas);
 }
 
+/* ==========================================================================
+   PÁGINA DE ONBOARDING (ACTIVACIÓN DE INVITACIÓN - WIZARD CENTRADO)
+   ========================================================================== */
+
+.onboarding-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+        radial-gradient(circle at 15% 15%, rgba(100, 143, 255, 0.08), transparent 45%),
+        radial-gradient(circle at 85% 85%, rgba(54, 197, 178, 0.06), transparent 50%),
+        var(--color-canvas);
+    padding: 3rem 1.5rem;
+}
+
+.onboarding-shell {
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.onboarding-box {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-xl);
+    padding: 2.75rem 2.5rem;
+    box-shadow: var(--shadow-lg);
+}
+
+.onboarding-step-bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding-bottom: 1.25rem;
+    margin-bottom: 1.75rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.onboarding-step-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.onboarding-step-pill.is-active {
+    color: var(--color-text);
+}
+
+.onboarding-step-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.85rem;
+    height: 1.85rem;
+    border-radius: 50%;
+    font-size: 0.82rem;
+    font-weight: 700;
+    background: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+}
+
+.onboarding-step-pill.is-active .onboarding-step-badge {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: #ffffff;
+}
+
+.onboarding-step-pill.is-completed .onboarding-step-badge {
+    background: var(--color-success);
+    border-color: var(--color-success);
+    color: #ffffff;
+}
+
+.onboarding-step-divider {
+    flex: 1;
+    height: 1px;
+    background: var(--color-border);
+}
+
+.onboarding-section-box {
+    background: var(--color-surface-subtle);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+}
+
+.onboarding-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
 .login-side {
     background:
         radial-gradient(circle at 18% 18%, rgba(100, 143, 255, 0.16), transparent 48%),

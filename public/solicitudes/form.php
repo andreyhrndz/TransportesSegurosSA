@@ -71,15 +71,15 @@ try {
                     <label class="label">¿Quién recibirá la mercancía? <span class="required">*</span></label>
                     <div class="control" id="grupo-modo-destinatario">
                         <label class="radio mr-4" id="label-mismo-cliente">
-                            <input type="radio" name="modo_destinatario" value="mismo_cliente" id="modo-mismo-cliente" checked>
+                            <input type="radio" name="modo_destinatario" value="mismo_cliente" id="modo-mismo-cliente" disabled>
                             <span id="texto-modo-mismo-cliente">El mismo cliente (recepción propia)</span>
                         </label>
                         <label class="radio" id="label-tercero">
-                            <input type="radio" name="modo_destinatario" value="tercero" id="modo-tercero">
+                            <input type="radio" name="modo_destinatario" value="tercero" id="modo-tercero" disabled>
                             <span id="texto-modo-tercero">Otra persona autorizada</span>
                         </label>
                     </div>
-                    <p class="help" id="ayuda-modo-destinatario">Para clientes físicos, la recepción por defecto es directa sin requerir datos adicionales.</p>
+                    <p class="help" id="ayuda-modo-destinatario">Selecciona un cliente para indicar quién recibe la mercancía.</p>
                 </div>
 
                 <div id="seccion-destinatario" class="p-3 mb-3" style="display: none; background: var(--color-surface-subtle); border: 1px solid var(--color-border); border-radius: var(--radius-md);">

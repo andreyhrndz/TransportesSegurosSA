@@ -48,13 +48,13 @@ if ($tokenRaw === '' || strlen($tokenRaw) !== 64 || !ctype_xdigit($tokenRaw)) {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
     <link rel="stylesheet" href="/assets/css/estilos.css">
 </head>
-<body class="login-page">
-<div class="login-panel is-flex is-justify-content-center is-align-items-center" style="width: 100%; min-height: 100vh; padding: 2rem 1rem;">
-    <div class="login-box" style="max-width: 580px; width: 100%;">
-        <div class="login-box-header has-text-centered mb-5">
-            <strong class="is-size-4 has-text-primary">Transportes Seguros S.A.</strong>
-            <h1 class="title is-3 mt-2">Activar cuenta de acceso</h1>
-            <p class="login-subtitle">Completa tus datos personales y credenciales para comenzar.</p>
+<body class="onboarding-page">
+<div class="onboarding-shell">
+    <div class="onboarding-box">
+        <div class="has-text-centered mb-5">
+            <strong class="is-size-5 has-text-primary">Transportes Seguros S.A.</strong>
+            <h1 class="title is-3 mt-2 mb-1">Activar cuenta de acceso</h1>
+            <p class="has-text-grey-light is-size-6">Completa tus datos personales y credenciales para comenzar en el sistema.</p>
         </div>
 
         <?php if ($errorMsg !== null): ?>
@@ -66,93 +66,130 @@ if ($tokenRaw === '' || strlen($tokenRaw) !== 64 || !ctype_xdigit($tokenRaw)) {
                 <a href="/auth/login.php" class="button button-secondary">Ir al inicio de sesión</a>
             </div>
         <?php else: ?>
+            <div class="onboarding-step-bar" aria-label="Progreso de activación">
+                <div class="onboarding-step-pill is-active" id="pill-step-1">
+                    <span class="onboarding-step-badge" id="badge-step-1">1</span>
+                    <span id="text-step-1">Paso 1 de 2 — Datos personales</span>
+                </div>
+                <div class="onboarding-step-divider"></div>
+                <div class="onboarding-step-pill" id="pill-step-2">
+                    <span class="onboarding-step-badge" id="badge-step-2">2</span>
+                    <span id="text-step-2">Paso 2 de 2 — Acceso</span>
+                </div>
+            </div>
+
+            <div id="onb-general-error" class="notification notification-danger mb-4" role="alert" hidden></div>
+
             <form action="/auth/onboarding_guardar.php" method="post" id="form-onboarding">
                 <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
                 <input type="hidden" name="token" value="<?= e($tokenRaw) ?>">
 
-                <div class="field mb-4">
-                    <label class="label" for="onb-email">Correo electrónico de la cuenta</label>
-                    <div class="control input-with-icon">
-                        <?= svg_icon('envelope', '', 'input-icon') ?>
-                        <input id="onb-email" class="input" type="email" value="<?= e($invitation['correo_destino']) ?>" readonly>
-                    </div>
-                    <p class="help">Este correo fue validado por el administrador y será tu identificador de acceso.</p>
-                </div>
-
-                <div class="box has-background-dark mb-4 p-4" style="border: 1px solid var(--tssa-border, #223247);">
-                    <h2 class="title is-6 mb-3 has-text-info">Datos personales</h2>
-
-                    <div class="field mb-3">
-                        <label class="label" for="onb-identificacion">Cédula o identificación nacional <span class="required">*</span></label>
-                        <div class="field has-addons">
-                            <div class="control is-expanded">
-                                <input class="input" id="onb-identificacion" name="identificacion" maxlength="30" placeholder="Ej. 101110222" autocomplete="off" required>
-                            </div>
-                            <div class="control">
-                                <button type="button" class="button is-info" id="btn-onb-hacienda">
-                                    <?= svg_icon('search') ?>
-                                    <span>Consultar Hacienda</span>
-                                </button>
-                            </div>
-                        </div>
-                        <p class="help" id="onb-hacienda-help">Ingresa tu cédula física (9 dígitos) o jurídica (10 dígitos) para autocompletar tus nombres.</p>
-                    </div>
-
-                    <div class="field mb-3">
-                        <label class="label" for="onb-nombre">Nombre <span class="required">*</span></label>
-                        <input class="input" id="onb-nombre" name="nombre" maxlength="100" required autocomplete="given-name">
-                    </div>
-
-                    <div class="columns is-variable is-2 mb-0">
-                        <div class="column">
-                            <div class="field mb-3">
-                                <label class="label" for="onb-primer-apellido">Primer apellido <span class="required">*</span></label>
-                                <input class="input" id="onb-primer-apellido" name="primer_apellido" maxlength="100" required autocomplete="family-name">
-                            </div>
-                        </div>
-                        <div class="column">
-                            <div class="field mb-3">
-                                <label class="label" for="onb-segundo-apellido">Segundo apellido</label>
-                                <input class="input" id="onb-segundo-apellido" name="segundo_apellido" maxlength="100" autocomplete="additional-name">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="box has-background-dark mb-4 p-4" style="border: 1px solid var(--tssa-border, #223247);">
-                    <h2 class="title is-6 mb-3 has-text-info">Credenciales de acceso</h2>
-
-                    <div class="field mb-3">
-                        <label class="label" for="onb-usuario">Nombre de usuario <span class="required">*</span></label>
+                <!-- ==========================================
+                     PASO 1: DATOS PERSONALES
+                     ========================================== -->
+                <div id="onb-paso-1">
+                    <div class="field mb-4">
+                        <label class="label" for="onb-email">Correo electrónico verificado</label>
                         <div class="control input-with-icon">
-                            <?= svg_icon('user', '', 'input-icon') ?>
-                            <input class="input" id="onb-usuario" name="nombre_usuario" maxlength="80" autocomplete="username" placeholder="Ej. carlos.mora" required>
+                            <?= svg_icon('envelope', '', 'input-icon') ?>
+                            <input id="onb-email" class="input" type="email" value="<?= e($invitation['correo_destino']) ?>" readonly tabindex="-1">
                         </div>
-                        <p class="help">Entre 3 y 80 caracteres (letras, números, punto, guion o guion bajo).</p>
+                        <p class="help">Este correo fue validado por el administrador y será tu identificador de acceso principal.</p>
                     </div>
 
-                    <div class="field mb-3">
-                        <label class="label" for="onb-password">Contraseña <span class="required">*</span></label>
-                        <div class="control input-with-icon">
-                            <?= svg_icon('lock', '', 'input-icon') ?>
-                            <input class="input" id="onb-password" name="password" type="password" minlength="12" maxlength="72" autocomplete="new-password" placeholder="Mínimo 12 caracteres" required>
+                    <div class="box onboarding-section-box mb-4 p-4">
+                        <h2 class="title is-6 mb-3 has-text-info">Identificación y nombre oficial</h2>
+
+                        <div class="field mb-3">
+                            <label class="label" for="onb-identificacion">Cédula o identificación nacional <span class="required">*</span></label>
+                            <div class="field has-addons">
+                                <div class="control is-expanded">
+                                    <input class="input" id="onb-identificacion" name="identificacion" maxlength="30" placeholder="Ej. 208820984" autocomplete="off" required>
+                                </div>
+                                <div class="control">
+                                    <button type="button" class="button is-info" id="btn-onb-hacienda">
+                                        <?= svg_icon('search') ?>
+                                        <span>Consultar Hacienda</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <p class="help" id="onb-hacienda-help">Ingresa tu cédula física (9 dígitos) o jurídica (10 dígitos) para autocompletar tus nombres oficiales.</p>
                         </div>
-                        <p class="help">Mínimo 12 caracteres seguros. Se almacenará únicamente como hash bcrypt.</p>
+
+                        <div class="field mb-3">
+                            <label class="label" for="onb-nombre">Nombre(s) <span class="required">*</span></label>
+                            <input class="input" id="onb-nombre" name="nombre" maxlength="100" required autocomplete="given-name" placeholder="Ej. Andrey Josué">
+                        </div>
+
+                        <div class="columns is-variable is-2 mb-0">
+                            <div class="column">
+                                <div class="field mb-3">
+                                    <label class="label" for="onb-primer-apellido">Primer apellido <span class="required">*</span></label>
+                                    <input class="input" id="onb-primer-apellido" name="primer_apellido" maxlength="100" required autocomplete="family-name" placeholder="Ej. Tijerino">
+                                </div>
+                            </div>
+                            <div class="column">
+                                <div class="field mb-3">
+                                    <label class="label" for="onb-segundo-apellido">Segundo apellido</label>
+                                    <input class="input" id="onb-segundo-apellido" name="segundo_apellido" maxlength="100" autocomplete="additional-name" placeholder="Ej. Hernández">
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
-                    <div class="field mb-2">
-                        <label class="label" for="onb-password-confirm">Confirmar contraseña <span class="required">*</span></label>
-                        <div class="control input-with-icon">
-                            <?= svg_icon('lock', '', 'input-icon') ?>
-                            <input class="input" id="onb-password-confirm" name="password_confirmacion" type="password" minlength="12" maxlength="72" autocomplete="new-password" placeholder="Repite tu contraseña" required>
-                        </div>
+                    <div class="mt-5">
+                        <button class="button is-primary is-medium" type="button" id="btn-onb-continuar">
+                            <span>Continuar</span>
+                            <?= svg_icon('chevron-right') ?>
+                        </button>
                     </div>
                 </div>
 
-                <button class="button is-primary is-fullwidth mt-4" type="submit" id="btn-submit-onboarding">
-                    <span>Activar mi cuenta y comenzar</span>
-                    <?= svg_icon('chevron-right') ?>
-                </button>
+                <!-- ==========================================
+                     PASO 2: CREDENCIALES Y ACTIVACIÓN
+                     ========================================== -->
+                <div id="onb-paso-2" hidden>
+                    <div class="box onboarding-section-box mb-4 p-4">
+                        <h2 class="title is-6 mb-3 has-text-info">Credenciales de inicio de sesión</h2>
+
+                        <div class="field mb-3">
+                            <label class="label" for="onb-usuario">Nombre de usuario <span class="required">*</span></label>
+                            <div class="control input-with-icon">
+                                <?= svg_icon('user', '', 'input-icon') ?>
+                                <input class="input" id="onb-usuario" name="nombre_usuario" maxlength="80" autocomplete="username" placeholder="Ej. andrey.tijerino">
+                            </div>
+                            <p class="help">Entre 3 y 80 caracteres (letras, números, punto, guion o guion bajo).</p>
+                        </div>
+
+                        <div class="field mb-3">
+                            <label class="label" for="onb-password">Contraseña <span class="required">*</span></label>
+                            <div class="control input-with-icon">
+                                <?= svg_icon('lock', '', 'input-icon') ?>
+                                <input class="input" id="onb-password" name="password" type="password" minlength="12" maxlength="72" autocomplete="new-password" placeholder="Mínimo 12 caracteres seguros">
+                            </div>
+                            <p class="help">Mínimo 12 caracteres. Se almacenará de forma segura como hash bcrypt.</p>
+                        </div>
+
+                        <div class="field mb-2">
+                            <label class="label" for="onb-password-confirm">Confirmar contraseña <span class="required">*</span></label>
+                            <div class="control input-with-icon">
+                                <?= svg_icon('lock', '', 'input-icon') ?>
+                                <input class="input" id="onb-password-confirm" name="password_confirmacion" type="password" minlength="12" maxlength="72" autocomplete="new-password" placeholder="Repite tu contraseña exactamente">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="onboarding-actions mt-5">
+                        <button class="button is-primary is-medium" type="submit" id="btn-submit-onboarding">
+                            <span>Activar mi cuenta</span>
+                            <?= svg_icon('check') ?>
+                        </button>
+                        <button class="button button-secondary is-medium" type="button" id="btn-onb-volver">
+                            <?= svg_icon('chevron-left') ?>
+                            <span>Volver</span>
+                        </button>
+                    </div>
+                </div>
             </form>
         <?php endif; ?>
     </div>
