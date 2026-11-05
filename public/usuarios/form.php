@@ -37,40 +37,44 @@ if ($isEdit) {
 <div class="modal is-active" role="dialog" aria-modal="true" aria-labelledby="titulo-form-usuario">
     <div class="modal-background" data-close-modal></div>
     <div class="modal-card">
-        <?= modal_header('titulo-form-usuario', $isEdit ? 'Editar usuario' : 'Nuevo usuario') ?>
-        <form hx-post="/usuarios/guardar.php" hx-target="#mensaje-form-usuario" hx-swap="innerHTML" hx-disabled-elt="find button[type=submit]">
-            <section class="modal-card-body">
-                <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-                <?php if ($isEdit): ?>
+        <?= modal_header('titulo-form-usuario', $isEdit ? 'Editar usuario' : 'Invitar usuario · Nuevo usuario') ?>
+        <?php if ($isEdit): ?>
+            <form hx-post="/usuarios/guardar.php" hx-target="#mensaje-form-usuario" hx-swap="innerHTML" hx-disabled-elt="find button[type=submit]">
+                <section class="modal-card-body">
+                    <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
                     <input type="hidden" name="usuario_id" value="<?= (int)$user['usuario_id'] ?>">
-                <?php endif; ?>
-                <div id="mensaje-form-usuario" role="alert"></div>
+                    <div id="mensaje-form-usuario" role="alert"></div>
 
-                <div class="field">
-                    <label class="label" for="usr-nombre">Nombre de usuario <span class="required">*</span></label>
-                    <input class="input" id="usr-nombre" name="nombre_usuario" maxlength="80" autocomplete="off" value="<?= e($user['nombre_usuario'] ?? '') ?>" required autofocus>
-                    <p class="help">Entre 3 y 80 caracteres (letras, números, punto, guion o guion bajo).</p>
-                </div>
-
-                <div class="field">
-                    <label class="label" for="usr-correo">Correo de acceso <span class="required">*</span></label>
-                    <input class="input" id="usr-correo" name="correo_acceso" type="email" maxlength="150" autocomplete="off" value="<?= e($user['correo_acceso'] ?? '') ?>" required>
-                </div>
-
-                <?php if (!$isEdit): ?>
                     <div class="field">
-                        <label class="label" for="usr-password">Contraseña inicial <span class="required">*</span></label>
-                        <input class="input" id="usr-password" name="password" type="password" minlength="12" maxlength="72" autocomplete="new-password" required>
-                        <p class="help">Mínimo 12 caracteres. Se almacena únicamente su hash bcrypt y no volverá a mostrarse.</p>
+                        <label class="label" for="usr-nombre">Nombre de usuario</label>
+                        <input class="input" id="usr-nombre" name="nombre_usuario" maxlength="80" autocomplete="off" value="<?= e($user['nombre_usuario'] ?? '') ?>" readonly>
+                        <p class="help">El identificador de cuenta no puede modificarse tras el alta.</p>
                     </div>
 
                     <div class="field">
-                        <label class="label" for="usr-password-confirm">Confirmar contraseña <span class="required">*</span></label>
-                        <input class="input" id="usr-password-confirm" name="password_confirmacion" type="password" minlength="12" maxlength="72" autocomplete="new-password" required>
+                        <label class="label" for="usr-correo">Correo de acceso <span class="required">*</span></label>
+                        <input class="input" id="usr-correo" name="correo_acceso" type="email" maxlength="150" autocomplete="off" value="<?= e($user['correo_acceso'] ?? '') ?>" required autofocus>
                     </div>
-                <?php endif; ?>
-            </section>
-            <?= modal_footer('Guardar', 'is-primary') ?>
-        </form>
+                </section>
+                <?= modal_footer('Guardar cambios', 'is-primary') ?>
+            </form>
+        <?php else: ?>
+            <form hx-post="/usuarios/invitar.php" hx-target="#mensaje-form-usuario" hx-swap="innerHTML" hx-disabled-elt="find button[type=submit]">
+                <section class="modal-card-body">
+                    <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
+                    <div id="mensaje-form-usuario" role="alert"></div>
+
+                    <div class="field">
+                        <label class="label" for="usr-correo-invitacion">Correo electrónico del usuario <span class="required">*</span></label>
+                        <div class="control input-with-icon">
+                            <?= svg_icon('envelope', '', 'input-icon') ?>
+                            <input class="input" id="usr-correo-invitacion" name="correo" type="email" maxlength="150" autocomplete="off" placeholder="colaborador@transportesseguros.cr" required autofocus>
+                        </div>
+                        <p class="help">El colaborador recibirá un enlace seguro de uso único para completar sus datos personales y establecer su propia contraseña. La cuenta se creará sin permisos predeterminados.</p>
+                    </div>
+                </section>
+                <?= modal_footer('Enviar invitación', 'is-primary') ?>
+            </form>
+        <?php endif; ?>
     </div>
 </div>

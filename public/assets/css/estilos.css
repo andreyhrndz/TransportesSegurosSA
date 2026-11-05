@@ -2005,16 +2005,25 @@ input[type="radio"] {
     text-align: center;
 }
 
-.select:has(.ts-wrapper)::after {
+.select:has(.ts-wrapper)::after,
+.select:has(select.tomselected)::after,
+.select.has-tomselect::after,
+.select.has-tomselect:not(.is-multiple)::after {
     display: none !important;
+    content: none !important;
+    border: none !important;
+    opacity: 0 !important;
+    visibility: hidden !important;
 }
 
-.select:has(.ts-wrapper) {
+.select:has(.ts-wrapper),
+.select.has-tomselect {
     height: auto !important;
     display: inline-flex !important;
 }
 
-.filter-form .select:has(.ts-wrapper) {
+.filter-form .select:has(.ts-wrapper),
+.filter-form .select.has-tomselect {
     min-width: 200px;
 }
 

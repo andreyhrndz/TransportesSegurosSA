@@ -15,7 +15,7 @@ if (!$authenticated && $invitationToken !== '') {
     try {
         $pdo = db();
         $tokenHash = hash('sha256', $invitationToken);
-        $stmt = $pdo->prepare('SELECT COUNT(*) FROM dbo.invitaciones_usuario WHERE token_hash = ? AND estado = \'PENDIENTE\' AND fecha_expiracion > SYSUTCDATETIME()');
+        $stmt = $pdo->prepare('SELECT COUNT(*) FROM dbo.invitaciones_usuario WHERE token_hash = ? AND estado = \'PENDIENTE\' AND expira_en > SYSUTCDATETIME()');
         $stmt->execute([$tokenHash]);
         if ((int)$stmt->fetchColumn() > 0) {
             $authenticated = true;

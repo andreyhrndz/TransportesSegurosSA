@@ -106,6 +106,7 @@
         selects.forEach((select) => {
             if (select.tomselect || select.dataset.tsInitialized === '1') return;
             select.dataset.tsInitialized = '1';
+            select.closest('.select')?.classList.add('has-tomselect');
 
             const remoteUrl = select.dataset.remoteUrl || '';
             const placeholder = select.dataset.placeholder
@@ -623,4 +624,34 @@
 
     document.body.addEventListener('htmx:sendError', () => mostrarAviso('No se pudo contactar al servidor.', true));
     document.body.addEventListener('htmx:timeout', () => mostrarAviso('La solicitud tardó demasiado.', true));
+
+    /* Pestañas de administración de usuarios e invitaciones */
+    document.addEventListener('click', (event) => {
+        const tabLink = event.target.closest('[data-user-tab]');
+        if (!tabLink) return;
+        event.preventDefault();
+        const tab = tabLink.dataset.userTab;
+        const cuentasLi = document.getElementById('tab-btn-cuentas');
+        const invLi = document.getElementById('tab-btn-invitaciones');
+        const cuentasPanel = document.getElementById('panel-cuentas');
+        const invPanel = document.getElementById('panel-invitaciones');
+        const cuentasA = document.getElementById('tab-cuentas');
+        const invA = document.getElementById('tab-invitaciones');
+
+        if (tab === 'cuentas') {
+            cuentasLi?.classList.add('is-active');
+            invLi?.classList.remove('is-active');
+            cuentasA?.setAttribute('aria-selected', 'true');
+            invA?.setAttribute('aria-selected', 'false');
+            cuentasPanel?.classList.remove('is-hidden');
+            invPanel?.classList.add('is-hidden');
+        } else if (tab === 'invitaciones') {
+            cuentasLi?.classList.remove('is-active');
+            invLi?.classList.add('is-active');
+            cuentasA?.setAttribute('aria-selected', 'false');
+            invA?.setAttribute('aria-selected', 'true');
+            cuentasPanel?.classList.add('is-hidden');
+            invPanel?.classList.remove('is-hidden');
+        }
+    });
 })();

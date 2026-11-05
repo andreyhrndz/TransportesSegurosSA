@@ -126,7 +126,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 </div>
             </div>
             <div class="field">
-                <label class="label" for="password">Contraseña</label>
+                <div class="is-flex is-justify-content-space-between is-align-items-center mb-1">
+                    <label class="label mb-0" for="password">Contraseña</label>
+                    <a href="/auth/recuperar.php" class="is-size-7 has-text-grey-light">¿Olvidaste tu contraseña?</a>
+                </div>
                 <div class="control input-with-icon">
                     <?= svg_icon('lock', '', 'input-icon') ?>
                     <input id="password" class="input" name="password" type="password" placeholder="Ingresa tu contraseña" autocomplete="current-password" maxlength="1024" required>
