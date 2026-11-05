@@ -118,29 +118,73 @@ async function runLoteVerification() {
             }
             console.log('  [OK] Ausencia total de campo Código de solicitud verificada.');
 
-            // 3.2 Verificar estado inicial antes de seleccionar cliente
+            // 3.2 Verificar estado inicial antes de seleccionar cliente (Objetivo A: radios interactivos desde inicio)
             const initialRadioState = await page.evaluate(() => {
                 const rMismo = document.getElementById('modo-mismo-cliente');
                 const rTercero = document.getElementById('modo-tercero');
                 const sec = document.getElementById('seccion-destinatario');
                 const ayuda = document.getElementById('ayuda-modo-destinatario');
+                const nom = document.getElementById('destinatario-nombre');
                 return {
-                    rMismoDisabled: rMismo ? rMismo.disabled : false,
-                    rTerceroDisabled: rTercero ? rTercero.disabled : false,
+                    rMismoDisabled: rMismo ? rMismo.disabled : true,
+                    rTerceroDisabled: rTercero ? rTercero.disabled : true,
+                    rMismoChecked: rMismo ? rMismo.checked : false,
+                    rTerceroChecked: rTercero ? rTercero.checked : false,
                     secHidden: sec ? window.getComputedStyle(sec).display === 'none' : false,
+                    nomDisabled: nom ? nom.disabled : false,
                     ayudaTexto: ayuda ? ayuda.textContent.trim() : ''
                 };
             });
             console.log('  Estado inicial sin cliente:', JSON.stringify(initialRadioState));
-            if (!initialRadioState.rMismoDisabled || !initialRadioState.rTerceroDisabled) {
-                throw new Error('Los radios de destinatario deben iniciar deshabilitados antes de elegir cliente.');
+            if (initialRadioState.rMismoDisabled || initialRadioState.rTerceroDisabled) {
+                throw new Error('Los radios de destinatario DEBEN estar habilitados e interactivos desde la apertura sin cliente.');
             }
-            if (!initialRadioState.secHidden) {
-                throw new Error('La sección de destinatario debe estar oculta antes de elegir cliente.');
+            if (!initialRadioState.rMismoChecked || initialRadioState.rTerceroChecked) {
+                throw new Error('Por defecto, "El mismo cliente" debe estar seleccionado inicialmente.');
             }
-            console.log('  [OK] Estado inicial sin cliente verificado: radios deshabilitados y sección oculta.');
+            if (!initialRadioState.secHidden || !initialRadioState.nomDisabled) {
+                throw new Error('La sección de destinatario debe estar oculta y con campos disabled inicialmente.');
+            }
+            console.log('  [OK] Radios interactivos y habilitados desde el inicio sin cliente seleccionado.');
 
-            // 3.3 Seleccionar cliente físico disponible
+            // 3.3 Conmutar a "Otra persona autorizada" SIN haber seleccionado cliente aún
+            await page.click('#texto-modo-tercero');
+            await page.waitForTimeout(300);
+
+            const preClientTercero = await page.evaluate(() => {
+                const rTercero = document.getElementById('modo-tercero');
+                const sec = document.getElementById('seccion-destinatario');
+                const nom = document.getElementById('destinatario-nombre');
+                return {
+                    terceroChecked: rTercero ? rTercero.checked : false,
+                    secVisible: sec ? window.getComputedStyle(sec).display !== 'none' : false,
+                    nomEnabled: nom ? !nom.disabled : false,
+                    nomRequired: nom ? nom.required : false
+                };
+            });
+            console.log('  Estado conmutado a tercero sin cliente:', JSON.stringify(preClientTercero));
+            if (!preClientTercero.terceroChecked || !preClientTercero.secVisible || !preClientTercero.nomEnabled || !preClientTercero.nomRequired) {
+                throw new Error('Conmutar a tercero sin cliente debe mostrar la sección y habilitar campos obligatorios.');
+            }
+
+            // Escribir en destinatario-nombre y conmutar a mismo cliente
+            await page.fill('#destinatario-nombre', 'Receptor Previo');
+            await page.click('#modo-mismo-cliente');
+            await page.waitForTimeout(200);
+
+            // Volver a tercero y verificar persistencia
+            await page.click('#modo-tercero');
+            await page.waitForTimeout(200);
+            const preservedPreClient = await page.evaluate(() => {
+                const nom = document.getElementById('destinatario-nombre');
+                return nom ? nom.value : '';
+            });
+            if (preservedPreClient !== 'Receptor Previo') {
+                throw new Error('El valor escrito debe conservarse en el DOM al conmutar entre modos.');
+            }
+            console.log('  [OK] Interacción y persistencia sin cliente verificado con éxito.');
+
+            // 3.4 Seleccionar cliente físico disponible
             await page.evaluate(() => {
                 const sel = document.getElementById('solicitud-cliente');
                 if (sel) {
@@ -155,54 +199,16 @@ async function runLoteVerification() {
             });
             await page.waitForTimeout(400);
 
-            // Verificar cliente físico recién seleccionado: El mismo cliente checked, sección oculta, campos disabled
-            const fisicaState = await page.evaluate(() => {
-                const rMismo = document.getElementById('modo-mismo-cliente');
-                const rTercero = document.getElementById('modo-tercero');
-                const sec = document.getElementById('seccion-destinatario');
-                const nom = document.getElementById('destinatario-nombre');
-                return {
-                    mismoChecked: rMismo ? rMismo.checked : false,
-                    terceroChecked: rTercero ? rTercero.checked : false,
-                    mismoEnabled: rMismo ? !rMismo.disabled : false,
-                    terceroEnabled: rTercero ? !rTercero.disabled : false,
-                    secHidden: sec ? window.getComputedStyle(sec).display === 'none' : false,
-                    nomDisabled: nom ? nom.disabled : false
-                };
-            });
-            console.log('  Estado con cliente físico:', JSON.stringify(fisicaState));
-            if (!fisicaState.mismoChecked || fisicaState.terceroChecked || !fisicaState.secHidden || !fisicaState.nomDisabled) {
-                throw new Error('Cliente físico debe activar modo "El mismo cliente" por defecto con sección oculta y campos disabled.');
-            }
-            console.log('  [OK] Cliente físico activa recepción propia por defecto.');
+            // Cambiar a El mismo cliente con cliente físico seleccionado
+            await page.click('#modo-mismo-cliente');
+            await page.waitForTimeout(200);
 
             // Captura estado 1: modo mismo cliente
             await page.screenshot({ path: path.join(screenshotDir, `modal_solicitud_mismo_cliente_${resolution.width}x${resolution.height}.png`) });
 
-            // 3.4 Clic sobre el TEXTO del segundo radio ("Otra persona autorizada")
+            // 3.5 Clic sobre el TEXTO del segundo radio ("Otra persona autorizada") con cliente físico
             await page.click('#texto-modo-tercero');
             await page.waitForTimeout(300);
-
-            const terceroState = await page.evaluate(() => {
-                const rMismo = document.getElementById('modo-mismo-cliente');
-                const rTercero = document.getElementById('modo-tercero');
-                const sec = document.getElementById('seccion-destinatario');
-                const nom = document.getElementById('destinatario-nombre');
-                const ap1 = document.getElementById('destinatario-apellido1');
-                return {
-                    mismoChecked: rMismo ? rMismo.checked : false,
-                    terceroChecked: rTercero ? rTercero.checked : false,
-                    secVisible: sec ? window.getComputedStyle(sec).display !== 'none' : false,
-                    nomEnabled: nom ? !nom.disabled : false,
-                    nomRequired: nom ? nom.required : false,
-                    ap1Required: ap1 ? ap1.required : false
-                };
-            });
-            console.log('  Estado tras clic en texto "Otra persona autorizada":', JSON.stringify(terceroState));
-            if (terceroState.mismoChecked || !terceroState.terceroChecked || !terceroState.secVisible || !terceroState.nomEnabled || !terceroState.nomRequired) {
-                throw new Error('Al hacer clic en texto de tercero, debe marcarse rTercero, desmarcarse rMismo y habilitarse los campos.');
-            }
-            console.log('  [OK] Clic sobre texto conmuta a tercero y despliega sección.');
 
             // Escribir datos de prueba para verificar persistencia tras conmutar
             await page.fill('#destinatario-nombre', 'Receptor Temporal');
@@ -210,7 +216,7 @@ async function runLoteVerification() {
             // Captura estado 2: modo tercero visible
             await page.screenshot({ path: path.join(screenshotDir, `modal_solicitud_tercero_visible_${resolution.width}x${resolution.height}.png`) });
 
-            // 3.5 Clic sobre el CÍRCULO del primer radio (input#modo-mismo-cliente)
+            // 3.6 Clic sobre el CÍRCULO del primer radio (input#modo-mismo-cliente)
             await page.click('#modo-mismo-cliente');
             await page.waitForTimeout(200);
 
@@ -235,13 +241,6 @@ async function runLoteVerification() {
             }
             console.log('  [OK] Conmutación inversa oculta campos sin destruir datos escritos.');
 
-            // 3.6 Ejecutar alternancias repetidas mismo -> tercero -> mismo -> tercero
-            for (let i = 0; i < 3; i++) {
-                await page.click('#modo-tercero');
-                await page.click('#modo-mismo-cliente');
-            }
-            console.log('  [OK] Alternancias rápidas mismo/tercero ejecutadas sin bloqueos de radio.');
-
             // 3.7 Cambiar a persona Jurídica
             await page.evaluate(() => {
                 const sel = document.getElementById('solicitud-cliente');
@@ -264,16 +263,170 @@ async function runLoteVerification() {
                 const sec = document.getElementById('seccion-destinatario');
                 return {
                     labelMismoHidden: labelMismo ? labelMismo.style.display === 'none' : false,
+                    rMismoDisabled: rMismo ? rMismo.disabled : false,
                     terceroChecked: rTercero ? rTercero.checked : false,
                     secVisible: sec ? window.getComputedStyle(sec).display !== 'none' : false
                 };
             });
-            if (!juridicaCheck.labelMismoHidden || !juridicaCheck.terceroChecked || !juridicaCheck.secVisible) {
-                throw new Error('Cliente jurídico debe ocultar opción de mismo cliente y forzar receptor físico autorizado.');
+            if (!juridicaCheck.labelMismoHidden || !juridicaCheck.rMismoDisabled || !juridicaCheck.terceroChecked || !juridicaCheck.secVisible) {
+                throw new Error('Cliente jurídico debe ocultar y deshabilitar opción de mismo cliente y forzar receptor físico autorizado.');
             }
             console.log('  [OK] Cliente jurídico fuerza obligatoriamente receptor físico autorizado.');
 
+            // 3.8 Cambiar nuevamente a persona física: restaurar visibilidad de "El mismo cliente"
+            await page.evaluate(() => {
+                const sel = document.getElementById('solicitud-cliente');
+                if (sel) {
+                    for (let i = 0; i < sel.options.length; i++) {
+                        if (sel.options[i].dataset.tipo === 'FISICA') {
+                            sel.selectedIndex = i;
+                            sel.dispatchEvent(new Event('change', { bubbles: true }));
+                            break;
+                        }
+                    }
+                }
+            });
+            await page.waitForTimeout(400);
+
+            const restoreFisicaCheck = await page.evaluate(() => {
+                const rMismo = document.getElementById('modo-mismo-cliente');
+                const labelMismo = document.getElementById('label-mismo-cliente');
+                return {
+                    labelMismoVisible: labelMismo ? labelMismo.style.display !== 'none' : false,
+                    rMismoEnabled: rMismo ? !rMismo.disabled : false,
+                    rMismoChecked: rMismo ? rMismo.checked : false
+                };
+            });
+            if (!restoreFisicaCheck.labelMismoVisible || !restoreFisicaCheck.rMismoEnabled || !restoreFisicaCheck.rMismoChecked) {
+                throw new Error('Al conmutar de jurídica a física, "El mismo cliente" debe reaparecer habilitado y seleccionado.');
+            }
+            console.log('  [OK] Retorno de jurídica a física restaura opción de recepción propia.');
+
+            // 3.9 Verificar etiqueta Nombre(s) * en destinatario
+            const labelDestNombre = await page.evaluate(() => {
+                const lbl = document.querySelector('label[for="destinatario-nombre"]');
+                return lbl ? lbl.textContent.trim() : '';
+            });
+            if (!labelDestNombre.includes('Nombre(s)')) {
+                throw new Error(`La etiqueta de destinatario debe ser "Nombre(s) *", encontrado: "${labelDestNombre}"`);
+            }
+            console.log('  [OK] Etiqueta de destinatario verificada: "Nombre(s) *".');
+
             // Cerrar modal
+            await page.click('#modal-contenido button[data-close-modal]');
+            await page.waitForFunction(() => {
+                const m = document.querySelector('#modal-contenido');
+                return !m || m.classList.contains('is-hidden') || m.innerHTML.trim() === '';
+            });
+
+            // -------------------------------------------------------------
+            // 3.10 Clientes: Verificación etiqueta Nombre(s) *
+            // -------------------------------------------------------------
+            await page.goto(`${BASE_URL}/clientes.php`);
+            await page.waitForSelector('.toolbar-panel .button.is-primary', { timeout: 8000 });
+            await page.click('.toolbar-panel .button.is-primary');
+            await page.waitForSelector('#modal-contenido .modal-card', { timeout: 8000 });
+
+            const cliNombreLabel = await page.evaluate(() => {
+                const lbl = document.querySelector('#modal-contenido label[for="nombre"]');
+                return lbl ? lbl.textContent.trim() : '';
+            });
+            console.log('  Etiqueta Nombre en Alta de Cliente:', cliNombreLabel);
+            if (!cliNombreLabel.includes('Nombre(s)')) {
+                throw new Error(`La etiqueta de nombre en alta de cliente debe ser "Nombre(s) *", encontrado: "${cliNombreLabel}"`);
+            }
+            await page.screenshot({ path: path.join(screenshotDir, `modal_cliente_nombre_${resolution.width}x${resolution.height}.png`) });
+            console.log('  [OK] Etiqueta "Nombre(s) *" confirmada en alta de cliente físico.');
+
+            // Cerrar modal cliente
+            await page.click('#modal-contenido button[data-close-modal]');
+            await page.waitForFunction(() => {
+                const m = document.querySelector('#modal-contenido');
+                return !m || m.classList.contains('is-hidden') || m.innerHTML.trim() === '';
+            });
+
+            // -------------------------------------------------------------
+            // 3.11 Usuarios: Invitación con checklist de permisos, buscador y contador
+            // -------------------------------------------------------------
+            await page.goto(`${BASE_URL}/usuarios.php`);
+            await page.waitForSelector('.toolbar-panel .button.is-primary', { timeout: 8000 });
+            await page.click('.toolbar-panel .button.is-primary');
+            await page.waitForSelector('#modal-contenido .modal-card', { timeout: 8000 });
+
+            const usrModalCheck = await page.evaluate(() => {
+                const modal = document.querySelector('#modal-contenido .modal-card');
+                const isWide = modal ? modal.classList.contains('modal-card-wide') : false;
+                const filtro = document.getElementById('filtro-permisos-invitacion');
+                const contador = document.getElementById('contador-permisos-invitacion');
+                const avisoCero = document.getElementById('aviso-cero-permisos');
+                const checkboxes = Array.from(document.querySelectorAll('.chk-permiso'));
+                const checkedCount = checkboxes.filter(c => c.checked).length;
+                return {
+                    isWide,
+                    hasFiltro: Boolean(filtro),
+                    contadorTexto: contador ? contador.textContent.trim() : '',
+                    avisoCeroVisible: avisoCero ? window.getComputedStyle(avisoCero).display !== 'none' : false,
+                    totalCheckboxes: checkboxes.length,
+                    checkedCount
+                };
+            });
+            console.log('  Evaluación modal invitar usuario:', JSON.stringify(usrModalCheck));
+            if (!usrModalCheck.isWide) {
+                throw new Error('El modal de invitar usuario debe tener la clase modal-card-wide.');
+            }
+            if (!usrModalCheck.hasFiltro) {
+                throw new Error('Debe existir el input de búsqueda/filtro de permisos (#filtro-permisos-invitacion).');
+            }
+            if (usrModalCheck.checkedCount !== 0 || !usrModalCheck.contadorTexto.includes('0 permisos seleccionados')) {
+                throw new Error(`Por defecto debe haber 0 permisos seleccionados, encontrado: ${usrModalCheck.contadorTexto}`);
+            }
+            if (!usrModalCheck.avisoCeroVisible) {
+                throw new Error('El aviso de 0 permisos seleccionados debe estar visible inicialmente.');
+            }
+            console.log('  [OK] Modal ancho, buscador, contador en 0 y aviso preventivo confirmados.');
+
+            // Probar interacción con buscador
+            await page.fill('#filtro-permisos-invitacion', 'CLIENTES');
+            await page.waitForTimeout(200);
+            const searchFilteredCount = await page.evaluate(() => {
+                const filas = Array.from(document.querySelectorAll('.item-permiso-fila'));
+                return filas.filter(f => window.getComputedStyle(f).display !== 'none').length;
+            });
+            console.log(`  Permisos visibles filtrando por "CLIENTES": ${searchFilteredCount}`);
+            if (searchFilteredCount === 0 || searchFilteredCount >= usrModalCheck.totalCheckboxes) {
+                throw new Error('El buscador de permisos en tiempo real no filtró correctamente.');
+            }
+
+            // Limpiar buscador
+            await page.fill('#filtro-permisos-invitacion', '');
+            await page.waitForTimeout(200);
+
+            // Seleccionar 2 permisos y verificar contador y ocultación de aviso
+            await page.evaluate(() => {
+                const chks = document.querySelectorAll('.chk-permiso');
+                if (chks.length >= 2) {
+                    chks[0].click();
+                    chks[1].click();
+                }
+            });
+            await page.waitForTimeout(200);
+
+            const postCheck = await page.evaluate(() => {
+                const contador = document.getElementById('contador-permisos-invitacion');
+                const avisoCero = document.getElementById('aviso-cero-permisos');
+                return {
+                    contadorTexto: contador ? contador.textContent.trim() : '',
+                    avisoCeroHidden: avisoCero ? window.getComputedStyle(avisoCero).display === 'none' : false
+                };
+            });
+            if (!postCheck.contadorTexto.includes('2 permisos seleccionados') || !postCheck.avisoCeroHidden) {
+                throw new Error(`Contador o aviso no reaccionaron a selección: ${JSON.stringify(postCheck)}`);
+            }
+            console.log('  [OK] Contador dinámico actualiza a 2 y aviso de cero permisos se oculta.');
+
+            await page.screenshot({ path: path.join(screenshotDir, `modal_invitar_permisos_${resolution.width}x${resolution.height}.png`) });
+
+            // Cerrar modal invitar usuario
             await page.click('#modal-contenido button[data-close-modal]');
             await page.waitForFunction(() => {
                 const m = document.querySelector('#modal-contenido');
@@ -353,6 +506,16 @@ async function runLoteVerification() {
             console.log('  [OK] Onboarding perfectamente centrado en pantalla de escritorio.');
 
             await page.screenshot({ path: path.join(screenshotDir, `onboarding_paso1_${resolution.width}x${resolution.height}.png`) });
+
+            // 5.1b Verificar etiqueta Nombre(s) * en Onboarding
+            const onbNombreLabel = await page.evaluate(() => {
+                const lbl = document.querySelector('label[for="onb-nombre"]');
+                return lbl ? lbl.textContent.trim() : '';
+            });
+            if (!onbNombreLabel.includes('Nombre(s)')) {
+                throw new Error(`La etiqueta en onboarding debe ser "Nombre(s) *", encontrado: "${onbNombreLabel}"`);
+            }
+            console.log('  [OK] Etiqueta "Nombre(s) *" confirmada en Onboarding.');
 
             // 5.2 Intentar continuar con campos vacíos -> debe bloquear y mostrar aviso
             await page.click('#btn-onb-continuar');

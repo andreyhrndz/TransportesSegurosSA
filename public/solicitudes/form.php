@@ -71,15 +71,15 @@ try {
                     <label class="label">¿Quién recibirá la mercancía? <span class="required">*</span></label>
                     <div class="control" id="grupo-modo-destinatario">
                         <label class="radio mr-4" id="label-mismo-cliente">
-                            <input type="radio" name="modo_destinatario" value="mismo_cliente" id="modo-mismo-cliente" disabled>
+                            <input type="radio" name="modo_destinatario" value="mismo_cliente" id="modo-mismo-cliente" checked>
                             <span id="texto-modo-mismo-cliente">El mismo cliente (recepción propia)</span>
                         </label>
                         <label class="radio" id="label-tercero">
-                            <input type="radio" name="modo_destinatario" value="tercero" id="modo-tercero" disabled>
+                            <input type="radio" name="modo_destinatario" value="tercero" id="modo-tercero">
                             <span id="texto-modo-tercero">Otra persona autorizada</span>
                         </label>
                     </div>
-                    <p class="help" id="ayuda-modo-destinatario">Selecciona un cliente para indicar quién recibe la mercancía.</p>
+                    <p class="help" id="ayuda-modo-destinatario">Por defecto recibe el cliente registrado, o puedes indicar una persona autorizada.</p>
                 </div>
 
                 <div id="seccion-destinatario" class="p-3 mb-3" style="display: none; background: var(--color-surface-subtle); border: 1px solid var(--color-border); border-radius: var(--radius-md);">
@@ -103,7 +103,7 @@ try {
                     <div class="columns">
                         <div class="column">
                             <div class="field">
-                                <label class="label" for="destinatario-nombre">Nombre <span class="required">*</span></label>
+                                <label class="label" for="destinatario-nombre">Nombre(s) <span class="required">*</span></label>
                                 <input class="input" id="destinatario-nombre" name="destinatario_nombre" maxlength="150" disabled>
                             </div>
                         </div>

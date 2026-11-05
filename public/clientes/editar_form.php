@@ -64,7 +64,7 @@ $isPhysical = $customer['tipo_cliente'] === 'FISICA';
                     <div class="columns">
                         <div class="column">
                             <div class="field">
-                                <label class="label" for="edit-nombre">Nombre <span class="required">*</span></label>
+                                <label class="label" for="edit-nombre">Nombre(s) <span class="required">*</span></label>
                                 <input class="input" id="edit-nombre" name="nombre" maxlength="100" value="<?= e($customer['nombre']) ?>" required autofocus>
                             </div>
                         </div>

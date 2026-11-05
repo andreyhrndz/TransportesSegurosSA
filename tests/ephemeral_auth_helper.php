@@ -84,6 +84,10 @@ if ($action === 'cleanup_onboarding_user') {
         $stmtInv->execute([$target, $target]);
         $stmtInv->closeCursor();
 
+        $stmtPerms = $connection->prepare("DELETE FROM dbo.usuarios_permisos WHERE usuario_id IN (SELECT usuario_id FROM dbo.usuarios WHERE nombre_usuario = ? OR correo_acceso = ?)");
+        $stmtPerms->execute([$target, $target]);
+        $stmtPerms->closeCursor();
+
         $stmtAud = $connection->prepare("DELETE FROM dbo.auditorias WHERE usuario_id IN (SELECT usuario_id FROM dbo.usuarios WHERE nombre_usuario = ? OR correo_acceso = ?)");
         $stmtAud->execute([$target, $target]);
         $stmtAud->closeCursor();

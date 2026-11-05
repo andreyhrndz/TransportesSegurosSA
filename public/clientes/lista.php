@@ -38,6 +38,10 @@ if ($isJson) {
             'value' => (string)(int)$customer['cliente_id'],
             'text' => trim((string)$customer['nombre']) . ' · ' . (string)$customer['identificacion'],
             'subtext' => (string)($customer['correo'] ?? ''),
+            'tipo_cliente' => (string)($customer['tipo_cliente'] ?? ''),
+            'nombre' => (string)($customer['nombre'] ?? ''),
+            'identificacion' => (string)($customer['identificacion'] ?? ''),
+            'telefono' => (string)($customer['telefono'] ?? ''),
         ];
     }
     echo json_encode($options, JSON_UNESCAPED_UNICODE);

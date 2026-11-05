@@ -29,7 +29,7 @@ $tipo = ($_GET['tipo'] ?? '') === 'juridico' ? 'juridico' : 'fisico';
           <div id="hacienda-cli-aviso" class="mt-2" hidden></div>
         </div>
         <?php if ($tipo === 'fisico'): ?>
-          <div class="columns"><div class="column"><div class="field"><label class="label" for="nombre">Nombre <span class="required">*</span></label><input class="input" id="nombre" name="nombre" maxlength="100" required></div></div><div class="column"><div class="field"><label class="label" for="primer_apellido">Primer apellido <span class="required">*</span></label><input class="input" id="primer_apellido" name="primer_apellido" maxlength="100" required></div></div></div>
+          <div class="columns"><div class="column"><div class="field"><label class="label" for="nombre">Nombre(s) <span class="required">*</span></label><input class="input" id="nombre" name="nombre" maxlength="100" required></div></div><div class="column"><div class="field"><label class="label" for="primer_apellido">Primer apellido <span class="required">*</span></label><input class="input" id="primer_apellido" name="primer_apellido" maxlength="100" required></div></div></div>
           <div class="field"><label class="label" for="segundo_apellido">Segundo apellido</label><input class="input" id="segundo_apellido" name="segundo_apellido" maxlength="100"></div>
           <div class="field"><label class="label" for="telefono">Teléfono</label><input class="input" id="telefono" name="telefono" type="tel" maxlength="30"></div>
         <?php else: ?>

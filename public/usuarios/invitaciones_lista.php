@@ -28,6 +28,7 @@ try {
                 <th>Correo electrónico</th>
                 <th>Estado</th>
                 <th>Entrega</th>
+                <th>Permisos planificados</th>
                 <th>Invitado por</th>
                 <th>Fecha de emisión</th>
                 <th>Vigencia</th>
@@ -37,7 +38,7 @@ try {
         <tbody>
             <?php if (empty($invitaciones)): ?>
                 <tr>
-                    <td colspan="7"><?= empty_state('Sin invitaciones', 'No se han emitido invitaciones en el sistema.') ?></td>
+                    <td colspan="8"><?= empty_state('Sin invitaciones', 'No se han emitido invitaciones en el sistema.') ?></td>
                 </tr>
             <?php endif; ?>
             <?php foreach ($invitaciones as $inv): ?>
@@ -48,6 +49,8 @@ try {
                 $isPendiente = ($estado === 'PENDIENTE');
                 $isCompletada = ($estado === 'COMPLETADA');
                 $enviosContador = (int)($inv['envios_contador'] ?? 1);
+                $totalPerms = (int)($inv['total_permisos'] ?? 0);
+                $permisosCodigos = (string)($inv['permisos_codigos'] ?? '');
                 ?>
                 <tr>
                     <td><strong><?= e($inv['correo_destino']) ?></strong></td>
@@ -56,6 +59,15 @@ try {
                         <?= status_tag($estadoEnvio) ?>
                         <?php if ($enviosContador > 1): ?>
                             <span class="tag is-dark is-small" title="Número total de envíos emitidos"><?= $enviosContador ?> envíos</span>
+                        <?php endif; ?>
+                    </td>
+                    <td>
+                        <?php if ($totalPerms > 0): ?>
+                            <span class="tag is-info is-light" title="<?= e($permisosCodigos) ?>">
+                                <?= $totalPerms ?> <?= $totalPerms === 1 ? 'permiso' : 'permisos' ?>
+                            </span>
+                        <?php else: ?>
+                            <span class="has-text-grey is-size-7">0 permisos</span>
                         <?php endif; ?>
                     </td>
                     <td><?= e($inv['creado_por_nombre'] ?? 'Sistema') ?></td>

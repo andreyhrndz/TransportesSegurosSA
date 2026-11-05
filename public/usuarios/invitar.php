@@ -19,15 +19,67 @@ if ($correoRaw === '' || !filter_var($correoRaw, FILTER_VALIDATE_EMAIL) || strle
 
 $email = strtolower($correoRaw);
 
+// Validación de permisos solicitados
+$permisosPost = $_POST['permisos'] ?? [];
+if (!is_array($permisosPost)) {
+    http_response_code(422);
+    echo ui_notice('La lista de permisos enviada no tiene un formato válido.', 'danger');
+    exit;
+}
+
+$canManagePermissions = has_permission('USUARIOS_GESTIONAR_PERMISOS');
+
+// Si no tiene permiso para gestionar permisos pero envió una lista de permisos, denegar
+if (!empty($permisosPost) && !$canManagePermissions) {
+    http_response_code(403);
+    echo ui_notice('No tienes autorización para asignar permisos individuales en la invitación.', 'danger');
+    exit;
+}
+
+$permisosSanitizados = [];
+if ($canManagePermissions && !empty($permisosPost)) {
+    foreach ($permisosPost as $codigo) {
+        $cod = trim((string)$codigo);
+        if ($cod === '') continue;
+
+        if (!preg_match('/^[A-Z0-9_]{3,100}$/', $cod)) {
+            http_response_code(422);
+            echo ui_notice("Código de permiso inválido: {$cod}", 'danger');
+            exit;
+        }
+
+        // Prevención estricta de elevación de privilegios: el actor debe tener el permiso
+        if (!has_permission($cod)) {
+            http_response_code(403);
+            echo ui_notice("No puedes otorgar el permiso '{$cod}' porque tu propia cuenta no lo posee.", 'danger');
+            exit;
+        }
+
+        $permisosSanitizados[] = $cod;
+    }
+    $permisosSanitizados = array_values(array_unique($permisosSanitizados));
+}
+
+// Si puede gestionar permisos pero seleccionó 0, exigir confirmación explícita
+if ($canManagePermissions && empty($permisosSanitizados) && empty($_POST['confirmar_sin_permisos'])) {
+    http_response_code(422);
+    echo ui_notice('No has seleccionado ningún permiso para el colaborador. Si deseas invitarlo con cero permisos, marca la casilla de confirmación.', 'warning');
+    exit;
+}
+
+$db = db();
+$invitacionId = 0;
+
 try {
     // Generar token seguro de uso único con CSPRNG (32 bytes = 64 caracteres hex)
     $token = bin2hex(random_bytes(32));
     $tokenHash = hash('sha256', $token);
 
+    $db->beginTransaction();
+
     $sql = 'DECLARE @inv_id INT; EXEC dbo.sp_crear_invitacion_usuario @correo_destino=?, @token_hash=?, @horas_vigencia=24, @invitacion_id=@inv_id OUTPUT; SELECT @inv_id AS invitacion_id;';
-    $stmt = db()->prepare($sql);
+    $stmt = $db->prepare($sql);
     $stmt->execute([$email, $tokenHash]);
-    $invitacionId = 0;
     do {
         if ($stmt->columnCount() > 0) {
             $row = $stmt->fetch();
@@ -37,6 +89,21 @@ try {
         }
     } while ($stmt->nextRowset());
     $stmt->closeCursor();
+
+    if ($invitacionId < 1) {
+        throw new RuntimeException('No se pudo generar la invitación.');
+    }
+
+    // Asignar los permisos preseleccionados dentro de la misma transacción
+    if (!empty($permisosSanitizados)) {
+        $stmtPerm = $db->prepare('EXEC dbo.sp_asignar_permiso_invitacion @invitacion_id=?, @codigo=?;');
+        foreach ($permisosSanitizados as $codPerm) {
+            $stmtPerm->execute([$invitacionId, $codPerm]);
+            $stmtPerm->closeCursor();
+        }
+    }
+
+    $db->commit();
 
     // Despacho de correo según transporte configurado
     $transportInfo = get_mail_transport_info();
@@ -53,12 +120,15 @@ try {
     }
 
     if ($invitacionId > 0) {
-        $stmtStatus = db()->prepare('EXEC dbo.sp_actualizar_estado_envio_invitacion @invitacion_id=?, @estado_envio=?;');
+        $stmtStatus = $db->prepare('EXEC dbo.sp_actualizar_estado_envio_invitacion @invitacion_id=?, @estado_envio=?;');
         $stmtStatus->execute([$invitacionId, $deliveryStatus]);
         $stmtStatus->closeCursor();
     }
 
 } catch (PDOException $exception) {
+    if ($db->inTransaction()) {
+        $db->rollBack();
+    }
     $driverCode = (int)($exception->errorInfo[1] ?? 0);
     $sqlMessage = (string)($exception->errorInfo[2] ?? $exception->getMessage());
     error_log('[invitar.php] Error de base de datos [' . $driverCode . ']: ' . $sqlMessage);
@@ -72,11 +142,16 @@ try {
         echo ui_notice('Se ha alcanzado el límite de 5 invitaciones para este correo en un período de 24 horas.', 'warning');
     } elseif ($driverCode === 50440 || str_contains($sqlMessage, '50440')) {
         echo ui_notice('Debes esperar al menos 60 segundos antes de reenviar una invitación a este correo.', 'warning');
+    } elseif ($driverCode === 50445 || str_contains($sqlMessage, '50445')) {
+        echo ui_notice('No puedes otorgar un permiso que tu propia cuenta no posee.', 'danger');
     } else {
         echo ui_notice('No se pudo procesar la invitación debido a una regla del sistema. Por favor revise los datos ingresados.', 'danger');
     }
     exit;
 } catch (Throwable $e) {
+    if ($db->inTransaction()) {
+        $db->rollBack();
+    }
     error_log('[invitar.php] Excepción inesperada: ' . $e->getMessage());
     http_response_code(500);
     echo ui_notice('Ocurrió un error inesperado al procesar la invitación. Por favor intente nuevamente más tarde.', 'danger');
@@ -85,11 +160,12 @@ try {
 
 // Éxito: notificar al cliente HTMX para refrescar tablas
 header('HX-Trigger: {"usuarioActualizado": true, "invitacionActualizada": true}');
+$totalPermsConfig = count($permisosSanitizados);
 ?>
 <?php if ($transportInfo['is_brevo'] && $sent): ?>
     <div class="notification notification-success mb-4" role="status">
         <?= svg_icon('activate') ?>
-        <span><strong>¡Invitación emitida y aceptada por Brevo!</strong> Se solicitó el despacho del correo transaccional a <strong><?= e($email) ?></strong> con el enlace de activación seguro (la entrega final al buzón depende de los filtros del proveedor de correo).</span>
+        <span><strong>¡Invitación emitida y aceptada por Brevo!</strong> Se solicitó el despacho a <strong><?= e($email) ?></strong> con <strong><?= $totalPermsConfig ?></strong> permiso(s) planificado(s).</span>
     </div>
 <?php elseif ($transportInfo['is_brevo'] && !$sent): ?>
     <?php
@@ -105,12 +181,12 @@ header('HX-Trigger: {"usuarioActualizado": true, "invitacionActualizada": true}'
     ?>
     <div class="notification notification-warning mb-4" role="status">
         <?= svg_icon('alert-triangle') ?>
-        <span><strong>Invitación registrada en el sistema</strong>, pero no pudo completarse el despacho del correo vía Brevo (<?= e($catMensaje) ?>). La invitación quedó en estado pendiente y puedes reenviarla desde el listado.</span>
+        <span><strong>Invitación registrada en el sistema con <?= $totalPermsConfig ?> permiso(s) planificado(s)</strong>, pero no pudo completarse el despacho del correo vía Brevo (<?= e($catMensaje) ?>).</span>
     </div>
 <?php else: ?>
     <div class="notification notification-info mb-4" role="status">
         <?= svg_icon('info') ?>
-        <span><strong>Invitación registrada con éxito (Modo Simulación / Fake).</strong> En este entorno de pruebas el correo no fue enviado a buzones externos, sino capturado de forma segura localmente. El token y el enlace temporal quedaron válidos por 24 horas.</span>
+        <span><strong>Invitación registrada con éxito (Modo Simulación / Fake) con <?= $totalPermsConfig ?> permiso(s) planificado(s).</strong> El token quedó válido por 24 horas y los permisos se asignarán automáticamente tras el onboarding.</span>
     </div>
 <?php endif; ?>
 <div class="has-text-right">

@@ -198,7 +198,7 @@ $todayUtc = gmdate('Y-m-d');
                     <div class="columns">
                         <div class="column">
                             <div class="field">
-                                <label class="label" for="cond-nombre">Nombre <span class="required">*</span></label>
+                                <label class="label" for="cond-nombre">Nombre(s) <span class="required">*</span></label>
                                 <input class="input" id="cond-nombre" name="nombre" maxlength="100" value="<?= e($record['nombre'] ?? '') ?>" required <?= $isEdit ? 'autofocus' : '' ?>>
                             </div>
                         </div>

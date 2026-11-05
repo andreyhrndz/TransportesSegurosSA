@@ -182,6 +182,10 @@
                                 value: String(item.value ?? ''),
                                 text: String(item.text ?? ''),
                                 subtext: String(item.subtext ?? ''),
+                                tipo_cliente: item.tipo_cliente ? String(item.tipo_cliente) : '',
+                                nombre: item.nombre ? String(item.nombre) : '',
+                                identificacion: item.identificacion ? String(item.identificacion) : '',
+                                telefono: item.telefono ? String(item.telefono) : '',
                             })));
                         })
                         .catch(() => callback([]));
@@ -919,6 +923,7 @@
 
     let clienteSolicitudCache = null;
     let clienteFetchSeq = 0;
+    let modoForzadoPorJuridico = false;
 
     function actualizarModoDestinatario() {
         const radioMismo = document.getElementById('modo-mismo-cliente');
@@ -939,35 +944,50 @@
 
         const camposTercero = [inputId, inputNom, inputAp1, inputAp2, inputTel];
 
-        // 1. Estado sin cliente seleccionado
+        // 1. Estado sin cliente seleccionado: los radios deben ser interactivos
         if (!clienteSolicitudCache || !clienteSolicitudCache.tipo_cliente) {
-            radioMismo.disabled = true;
-            radioTercero.disabled = true;
-            radioMismo.checked = false;
-            radioTercero.checked = false;
             if (labelMismo) labelMismo.style.display = 'inline-flex';
-            if (ayudaModo) ayudaModo.textContent = 'Selecciona un cliente para indicar quién recibe la mercancía.';
-            seccionDest.style.display = 'none';
-            camposTercero.forEach((el) => {
-                if (el) {
-                    el.disabled = true;
-                    el.required = false;
-                }
-            });
-            if (btnHacienda) btnHacienda.disabled = true;
-            setHaciendaAviso(avisoHacienda, '', '');
+            radioMismo.disabled = false;
+            radioTercero.disabled = false;
+
+            if (!radioMismo.checked && !radioTercero.checked) {
+                radioMismo.checked = true;
+            }
+
+            if (radioMismo.checked) {
+                if (ayudaModo) ayudaModo.textContent = 'Por defecto recibe el cliente registrado, o puedes indicar una persona autorizada.';
+                seccionDest.style.display = 'none';
+                camposTercero.forEach((el) => {
+                    if (el) {
+                        el.disabled = true;
+                        el.required = false;
+                    }
+                });
+                if (btnHacienda) btnHacienda.disabled = true;
+                setHaciendaAviso(avisoHacienda, '', '');
+            } else {
+                if (ayudaModo) ayudaModo.textContent = 'Indica los datos de la persona física autorizada para recibir la entrega.';
+                seccionDest.style.display = 'block';
+                camposTercero.forEach((el) => {
+                    if (el) el.disabled = false;
+                });
+                if (inputNom) inputNom.required = true;
+                if (inputAp1) inputAp1.required = true;
+                if (inputAp2) inputAp2.required = false;
+                if (btnHacienda) btnHacienda.disabled = false;
+            }
             return;
         }
-
-        // Habilitar controles de destinatario
-        radioTercero.disabled = false;
 
         // 2. Cliente Jurídico (Empresa): obligatorio designar persona física autorizada
         if (clienteSolicitudCache.tipo_cliente === 'JURIDICA') {
             if (labelMismo) labelMismo.style.display = 'none';
             radioMismo.disabled = true;
             radioMismo.checked = false;
+            radioTercero.disabled = false;
             radioTercero.checked = true;
+            modoForzadoPorJuridico = true;
+
             if (ayudaModo) ayudaModo.textContent = 'Para clientes jurídicos (empresas), es obligatorio registrar la persona física autorizada para recibir la entrega.';
             seccionDest.style.display = 'block';
             camposTercero.forEach((el) => {
@@ -983,9 +1003,14 @@
         // 3. Cliente Físico
         if (labelMismo) labelMismo.style.display = 'inline-flex';
         radioMismo.disabled = false;
+        radioTercero.disabled = false;
 
-        // Si venía sin selección o de cliente jurídico, marcar mismo_cliente por defecto
-        if (!radioMismo.checked && !radioTercero.checked) {
+        // Si venía de forzado por jurídica, restaurar mismo_cliente por defecto
+        if (modoForzadoPorJuridico) {
+            radioMismo.checked = true;
+            radioTercero.checked = false;
+            modoForzadoPorJuridico = false;
+        } else if (!radioMismo.checked && !radioTercero.checked) {
             radioMismo.checked = true;
         }
 
@@ -1015,9 +1040,32 @@
         }
     }
 
+    function actualizarContadorPermisosInvitacion() {
+        const cont = document.getElementById('contador-permisos-invitacion');
+        const aviso = document.getElementById('aviso-cero-permisos');
+        const chks = document.querySelectorAll('.chk-permiso:checked');
+        const count = chks.length;
+        if (cont) {
+            cont.textContent = count === 1 ? '1 permiso seleccionado' : `${count} permisos seleccionados`;
+            if (count > 0) {
+                cont.className = 'tag is-primary is-light';
+            } else {
+                cont.className = 'tag is-info is-light';
+            }
+        }
+        if (aviso) {
+            aviso.style.display = count === 0 ? 'block' : 'none';
+        }
+    }
+
     document.addEventListener('change', (event) => {
         const target = event.target;
         if (!target) return;
+
+        if (target.classList.contains('chk-permiso')) {
+            actualizarContadorPermisosInvitacion();
+            return;
+        }
 
         if (target.id === 'solicitud-cliente') {
             const clienteId = target.value;
@@ -1026,32 +1074,28 @@
 
             if (!clienteId) {
                 clienteSolicitudCache = null;
+                modoForzadoPorJuridico = false;
                 actualizarModoDestinatario();
                 return;
             }
 
-            // Sincronización inmediata con atributo data-tipo del option seleccionado
+            // Sincronización inmediata con metadatos de option estática o de Tom Select (si existen)
             const opt = target.options ? target.options[target.selectedIndex] : null;
-            const tipoInmediato = opt?.dataset?.tipo || 'FISICA';
-            const anteriorTipo = clienteSolicitudCache?.tipo_cliente;
+            const tsOpt = target.tomselect?.options ? target.tomselect.options[clienteId] : null;
+            const tipoInmediato = opt?.dataset?.tipo || tsOpt?.tipo_cliente || null;
 
-            clienteSolicitudCache = {
-                cliente_id: parseInt(clienteId, 10),
-                tipo_cliente: tipoInmediato,
-                nombre: opt?.dataset?.nombre || '',
-                identificacion: opt?.dataset?.identificacion || '',
-                telefono: opt?.dataset?.telefono || ''
-            };
-
-            // Si venía de jurídica y cambia a física, restablecer a mismo_cliente
-            if (anteriorTipo === 'JURIDICA' && tipoInmediato === 'FISICA') {
-                const radioMismo = document.getElementById('modo-mismo-cliente');
-                if (radioMismo) radioMismo.checked = true;
+            if (tipoInmediato) {
+                clienteSolicitudCache = {
+                    cliente_id: parseInt(clienteId, 10),
+                    tipo_cliente: tipoInmediato,
+                    nombre: opt?.dataset?.nombre || tsOpt?.nombre || '',
+                    identificacion: opt?.dataset?.identificacion || tsOpt?.identificacion || '',
+                    telefono: opt?.dataset?.telefono || tsOpt?.telefono || ''
+                };
+                actualizarModoDestinatario();
             }
 
-            actualizarModoDestinatario();
-
-            // Confirmación asíncrona segura con verificación de secuencia para evitar race conditions
+            // Confirmación asíncrona autoritativa desde /clientes/info.php (sin asumir FISICA)
             fetch('/clientes/info.php?cliente_id=' + encodeURIComponent(clienteId))
                 .then((res) => (res.ok ? res.json() : null))
                 .then((data) => {
@@ -1060,7 +1104,15 @@
                         actualizarModoDestinatario();
                     }
                 })
-                .catch(() => {});
+                .catch(() => {
+                    if (seq === clienteFetchSeq) {
+                        const ayudaModo = document.getElementById('ayuda-modo-destinatario');
+                        if (ayudaModo) {
+                            ayudaModo.textContent = 'No se pudo verificar el tipo de cliente. Por favor reintenta la selección.';
+                            ayudaModo.classList.add('has-text-danger');
+                        }
+                    }
+                });
             return;
         }
 
@@ -1164,7 +1216,7 @@
                 return;
             }
             if (!nomVal) {
-                mostrarErrorOnb('Por favor ingresa tu nombre.');
+                mostrarErrorOnb('Por favor ingresa al menos un nombre.');
                 inputNom?.focus();
                 return;
             }
@@ -1251,6 +1303,36 @@
         });
     }
 
+    // Interacción al hacer clic sobre texto o círculo de modo de destinatario
+    document.addEventListener('click', (event) => {
+        const radioLabel = event.target.closest('#label-mismo-cliente, #label-tercero');
+        if (radioLabel) {
+            const radio = radioLabel.querySelector('input[type="radio"]');
+            if (radio && !radio.disabled) {
+                radio.checked = true;
+                actualizarModoDestinatario();
+            }
+        }
+    });
+
+    // Filtro interactivo de permisos en modal de invitar usuario
+    document.addEventListener('input', (event) => {
+        if (event.target.id === 'filtro-permisos-invitacion') {
+            const term = (event.target.value || '').toLowerCase().trim();
+            const filas = document.querySelectorAll('.item-permiso-fila');
+            filas.forEach((fila) => {
+                const cod = fila.dataset.codigo ? fila.dataset.codigo.toLowerCase() : '';
+                const nom = fila.dataset.nombre ? fila.dataset.nombre.toLowerCase() : '';
+                const match = !term || cod.includes(term) || nom.includes(term);
+                fila.style.display = match ? 'block' : 'none';
+            });
+            document.querySelectorAll('.grupo-permisos-seccion').forEach((sec) => {
+                const visibles = sec.querySelectorAll('.item-permiso-fila:not([style*="display: none"])');
+                sec.style.display = visibles.length > 0 ? 'block' : 'none';
+            });
+        }
+    });
+
     // Inicializar wizard de onboarding si estamos en la página
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', inicializarOnboardingWizard);
@@ -1264,17 +1346,26 @@
             const selCli = document.getElementById('solicitud-cliente');
             if (selCli) {
                 clienteSolicitudCache = null;
+                modoForzadoPorJuridico = false;
                 if (selCli.value) {
                     const opt = selCli.options ? selCli.options[selCli.selectedIndex] : null;
-                    clienteSolicitudCache = {
-                        cliente_id: parseInt(selCli.value, 10),
-                        tipo_cliente: opt?.dataset?.tipo || 'FISICA',
-                        nombre: opt?.dataset?.nombre || '',
-                        identificacion: opt?.dataset?.identificacion || '',
-                        telefono: opt?.dataset?.telefono || ''
-                    };
+                    const tsOpt = selCli.tomselect?.options ? selCli.tomselect.options[selCli.value] : null;
+                    const tipo = opt?.dataset?.tipo || tsOpt?.tipo_cliente || null;
+                    if (tipo) {
+                        clienteSolicitudCache = {
+                            cliente_id: parseInt(selCli.value, 10),
+                            tipo_cliente: tipo,
+                            nombre: opt?.dataset?.nombre || tsOpt?.nombre || '',
+                            identificacion: opt?.dataset?.identificacion || tsOpt?.identificacion || '',
+                            telefono: opt?.dataset?.telefono || tsOpt?.telefono || ''
+                        };
+                    }
                 }
                 actualizarModoDestinatario();
+            }
+
+            if (document.getElementById('contador-permisos-invitacion')) {
+                actualizarContadorPermisosInvitacion();
             }
         }
     });
