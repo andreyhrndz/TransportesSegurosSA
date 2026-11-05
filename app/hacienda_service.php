@@ -66,7 +66,21 @@ final class HaciendaService
             return self::$cache[$limpia];
         }
 
-        $url = 'https://api.hacienda.go.cr/fe/ae?identificacion=' . rawurlencode($limpia);
+        $baseUrl = trim((string)(getenv('HACIENDA_API_URL') ?: ($_ENV['HACIENDA_API_URL'] ?? 'https://api.hacienda.go.cr/fe/ae')));
+        if ($baseUrl === '') {
+            $baseUrl = 'https://api.hacienda.go.cr/fe/ae';
+        }
+        if (!str_starts_with($baseUrl, 'https://') && !str_starts_with($baseUrl, 'http://127.0.0.1')) {
+            $baseUrl = 'https://api.hacienda.go.cr/fe/ae';
+        }
+
+        $timeoutSec = (int)(getenv('HACIENDA_TIMEOUT_SECONDS') ?: ($_ENV['HACIENDA_TIMEOUT_SECONDS'] ?? 5));
+        if ($timeoutSec <= 0) {
+            $timeoutSec = 5;
+        }
+
+        $sep = str_contains($baseUrl, '?') ? '&' : '?';
+        $url = $baseUrl . $sep . 'identificacion=' . rawurlencode($limpia);
 
         if (!function_exists('curl_init')) {
             return [
@@ -77,17 +91,25 @@ final class HaciendaService
         }
 
         $ch = curl_init($url);
-        curl_setopt_array($ch, [
+        $caInfo = ini_get('curl.cainfo');
+        $curlOpts = [
             CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 5,
-            CURLOPT_CONNECTTIMEOUT => 3,
+            CURLOPT_TIMEOUT => $timeoutSec,
+            CURLOPT_CONNECTTIMEOUT => min(3, $timeoutSec),
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_USERAGENT => 'TransportesSegurosSA/1.0 (Sistema Logistico)',
             CURLOPT_HTTPHEADER => [
                 'Accept: application/json',
             ],
-        ]);
+        ];
+        if (!empty($caInfo) && file_exists($caInfo)) {
+            $curlOpts[CURLOPT_CAINFO] = $caInfo;
+        } elseif (file_exists('C:/AdmBD2026/Herramientas/PHP/8.4/extras/ssl/cacert.pem')) {
+            $curlOpts[CURLOPT_CAINFO] = 'C:/AdmBD2026/Herramientas/PHP/8.4/extras/ssl/cacert.pem';
+        }
+
+        curl_setopt_array($ch, $curlOpts);
 
         $responseBody = curl_exec($ch);
         $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);

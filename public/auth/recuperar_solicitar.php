@@ -47,7 +47,10 @@ if ($error === null) {
             $resetLink = get_app_base_url() . '/auth/reset_password.php?token=' . urlencode($token);
             $mailSender = get_mail_sender();
             $mailHtml = render_password_reset_email($resetLink, $email);
-            $mailSender->send($email, 'Restablecer contraseña — Transportes Seguros S.A.', $mailHtml);
+            $sent = $mailSender->send($email, 'Restablecer contraseña — Transportes Seguros S.A.', $mailHtml);
+            if (!$sent && $mailSender instanceof BrevoApiSender) {
+                error_log(sprintf('[recuperar_solicitar] Error de entrega Brevo [categoría: %s, HTTP: %d]', $mailSender->getLastCategory(), $mailSender->getLastHttpCode()));
+            }
         }
     } catch (Throwable $e) {
         error_log('TSSA password recovery error: ' . $e->getMessage());

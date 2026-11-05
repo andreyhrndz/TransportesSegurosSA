@@ -34,14 +34,18 @@ function get_mail_transport_info(): array
 {
     $mode = get_mail_transport_mode();
     $apiKey = trim((string)(getenv('BREVO_API_KEY') ?: ''));
-    $senderEmail = trim((string)(getenv('BREVO_SENDER_EMAIL') ?: 'notificaciones@transportesseguros.cr'));
+    $senderEmail = trim((string)(getenv('BREVO_SENDER_EMAIL') ?: ''));
     $senderName = trim((string)(getenv('BREVO_SENDER_NAME') ?: 'Transportes Seguros S.A.'));
+
+    $hasApiKey = ($apiKey !== '');
+    $hasSender = ($senderEmail !== '' && filter_var($senderEmail, FILTER_VALIDATE_EMAIL) !== false);
 
     return [
         'mode' => $mode,
         'is_brevo' => ($mode === 'brevo'),
-        'has_api_key' => ($apiKey !== ''),
-        'is_ready' => ($mode === 'fake' || ($mode === 'brevo' && $apiKey !== '' && $senderEmail !== '')),
+        'has_api_key' => $hasApiKey,
+        'has_sender_email' => $hasSender,
+        'is_ready' => ($mode === 'fake') || ($mode === 'brevo' && $hasApiKey && $hasSender),
         'sender_email' => $senderEmail,
         'sender_name' => $senderName,
         'app_url' => get_app_base_url(),
@@ -51,13 +55,14 @@ function get_mail_transport_info(): array
 function get_mail_sender(): MailSender
 {
     $mode = get_mail_transport_mode();
-    $apiKey = trim((string)(getenv('BREVO_API_KEY') ?: ''));
-    $senderEmail = trim((string)(getenv('BREVO_SENDER_EMAIL') ?: 'notificaciones@transportesseguros.cr'));
-    $senderName = trim((string)(getenv('BREVO_SENDER_NAME') ?: 'Transportes Seguros S.A.'));
+    if ($mode === 'brevo') {
+        $apiKey = trim((string)(getenv('BREVO_API_KEY') ?: ''));
+        $senderEmail = trim((string)(getenv('BREVO_SENDER_EMAIL') ?: ''));
+        $senderName = trim((string)(getenv('BREVO_SENDER_NAME') ?: 'Transportes Seguros S.A.'));
+        $baseUrl = trim((string)(getenv('BREVO_API_BASE_URL') ?: 'https://api.brevo.com/v3'));
 
-    // Si el modo configurado es Brevo y dispone de clave y remitente, usar el cliente HTTP API
-    if ($mode === 'brevo' && $apiKey !== '' && $senderEmail !== '') {
-        return new BrevoApiSender($apiKey, $senderEmail, $senderName);
+        // Cuando el transporte es Brevo, se utiliza siempre el cliente HTTP oficial sin caídas silenciosas a fake.
+        return new BrevoApiSender($apiKey, $senderEmail, $senderName, $baseUrl);
     }
 
     // Modo fake de captura segura para pruebas locales y desarrollo

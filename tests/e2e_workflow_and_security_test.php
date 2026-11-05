@@ -181,11 +181,11 @@ try {
     $pdo->exec("DELETE FROM dbo.viaje_solicitudes WHERE viaje_id IN (SELECT viaje_id FROM dbo.viajes WHERE codigo_viaje LIKE '__E2E%')");
     $pdo->exec("DELETE FROM dbo.paradas_viaje WHERE viaje_id IN (SELECT viaje_id FROM dbo.viajes WHERE codigo_viaje LIKE '__E2E%')");
     $pdo->exec("DELETE FROM dbo.viajes WHERE codigo_viaje LIKE '__E2E%'");
-    $pdo->exec("DELETE FROM dbo.mercancias WHERE solicitud_id IN (SELECT solicitud_id FROM dbo.solicitudes WHERE codigo_solicitud LIKE '__E2E%')");
-    $pdo->exec("DELETE FROM dbo.incidencias WHERE solicitud_id IN (SELECT solicitud_id FROM dbo.solicitudes WHERE codigo_solicitud LIKE '__E2E%')");
-    $pdo->exec("DELETE FROM dbo.documentos WHERE solicitud_id IN (SELECT solicitud_id FROM dbo.solicitudes WHERE codigo_solicitud LIKE '__E2E%')");
-    $pdo->exec("DELETE FROM dbo.historial_estados_solicitud WHERE solicitud_id IN (SELECT solicitud_id FROM dbo.solicitudes WHERE codigo_solicitud LIKE '__E2E%')");
-    $pdo->exec("DELETE FROM dbo.solicitudes WHERE codigo_solicitud LIKE '__E2E%'");
+    $pdo->exec("DELETE FROM dbo.mercancias WHERE solicitud_id IN (SELECT solicitud_id FROM dbo.solicitudes WHERE cliente_id IN (SELECT cliente_id FROM dbo.clientes WHERE identificacion LIKE '__E2E%') OR codigo_solicitud LIKE '__E2E%')");
+    $pdo->exec("DELETE FROM dbo.incidencias WHERE solicitud_id IN (SELECT solicitud_id FROM dbo.solicitudes WHERE cliente_id IN (SELECT cliente_id FROM dbo.clientes WHERE identificacion LIKE '__E2E%') OR codigo_solicitud LIKE '__E2E%')");
+    $pdo->exec("DELETE FROM dbo.documentos WHERE solicitud_id IN (SELECT solicitud_id FROM dbo.solicitudes WHERE cliente_id IN (SELECT cliente_id FROM dbo.clientes WHERE identificacion LIKE '__E2E%') OR codigo_solicitud LIKE '__E2E%')");
+    $pdo->exec("DELETE FROM dbo.historial_estados_solicitud WHERE solicitud_id IN (SELECT solicitud_id FROM dbo.solicitudes WHERE cliente_id IN (SELECT cliente_id FROM dbo.clientes WHERE identificacion LIKE '__E2E%') OR codigo_solicitud LIKE '__E2E%')");
+    $pdo->exec("DELETE FROM dbo.solicitudes WHERE cliente_id IN (SELECT cliente_id FROM dbo.clientes WHERE identificacion LIKE '__E2E%') OR codigo_solicitud LIKE '__E2E%'");
     $pdo->exec("DELETE FROM dbo.clientes_fisicos WHERE cliente_id IN (SELECT cliente_id FROM dbo.clientes WHERE identificacion LIKE '__E2E%')");
     $pdo->exec("DELETE FROM dbo.clientes_juridicos WHERE cliente_id IN (SELECT cliente_id FROM dbo.clientes WHERE identificacion LIKE '__E2E%')");
     $pdo->exec("DELETE FROM dbo.clientes WHERE identificacion LIKE '__E2E%'");
@@ -243,15 +243,14 @@ try {
     $createdClientIds[] = $clientId;
 
     // 1.4 Registrar solicitud de transporte con mercancías
-    $reqCode = '__E2E_REQ_' . $suffix;
     $futureDelivery = (new DateTimeImmutable('+2 days', new DateTimeZone('UTC')))->format('Y-m-d\TH:i');
-    [$reqStatus, $reqBody] = e2e_request($base . '/solicitudes/guardar.php', $adminCookie, true, [
+    [$reqStatus, $reqBody, $reqHeaders] = e2e_request($base . '/solicitudes/guardar.php', $adminCookie, true, [
         'csrf_token' => $adminCsrf,
-        'codigo' => $reqCode,
         'cliente_id' => $clientId,
         'origen_id' => 1, // Nicoya
         'destino_id' => 3, // Liberia
         'fecha_entrega' => $futureDelivery,
+        'modo_destinatario' => 'tercero',
         'destinatario_nombre' => 'María',
         'destinatario_apellido1' => 'Gómez',
         'destinatario_apellido2' => 'Salas',
@@ -267,12 +266,22 @@ try {
         ],
     ]);
     e2e_assert($reqStatus === 200, "El alta HTTP de solicitud debe responder 200 (obtenido {$reqStatus}).");
-    $fetchReq = $pdo->prepare('SELECT solicitud_id, estado FROM dbo.solicitudes WHERE codigo_solicitud = ?');
-    $fetchReq->execute([$reqCode]);
+    $solicitudId = 0;
+    foreach ($reqHeaders as $h) {
+        if (preg_match('/HX-Redirect:\s*\/solicitudes\/detalle\.php\?id=(\d+)/i', $h, $mId)) {
+            $solicitudId = (int)$mId[1];
+        }
+    }
+    if ($solicitudId === 0 && preg_match('/detalle\.php\?id=(\d+)/', $reqBody, $mId)) {
+        $solicitudId = (int)$mId[1];
+    }
+    e2e_assert($solicitudId > 0, 'No se pudo obtener el ID de la solicitud creada.');
+    $fetchReq = $pdo->prepare('SELECT codigo_solicitud, estado FROM dbo.solicitudes WHERE solicitud_id = ?');
+    $fetchReq->execute([$solicitudId]);
     $reqRow = $fetchReq->fetch();
     $fetchReq->closeCursor();
-    e2e_assert(is_array($reqRow) && (int)$reqRow['solicitud_id'] > 0, 'La solicitud debe existir en BD.');
-    $solicitudId = (int)$reqRow['solicitud_id'];
+    e2e_assert(is_array($reqRow) && !empty($reqRow['codigo_solicitud']), 'La solicitud debe existir en BD.');
+    $reqCode = (string)$reqRow['codigo_solicitud'];
     $createdSolicitudIds[] = $solicitudId;
     e2e_assert($reqRow['estado'] === 'REGISTRADA', 'La solicitud debe iniciar en estado REGISTRADA.');
 
@@ -527,14 +536,13 @@ try {
     $createdClientIds[] = $blockedCliId;
 
     // Crear solicitud activa para este cliente
-    $blockedReqCode = '__E2E_RBLK_' . $suffix;
-    [$bReqStatus, $bReqBody] = e2e_request($base . '/solicitudes/guardar.php', $adminCookie, true, [
+    [$bReqStatus, $bReqBody, $bReqHeaders] = e2e_request($base . '/solicitudes/guardar.php', $adminCookie, true, [
         'csrf_token' => $adminCsrf,
-        'codigo' => $blockedReqCode,
         'cliente_id' => $blockedCliId,
         'origen_id' => 1,
         'destino_id' => 3,
         'fecha_entrega' => $futureDelivery,
+        'modo_destinatario' => 'tercero',
         'destinatario_nombre' => 'Test',
         'destinatario_apellido1' => 'Bloqueo',
         'destinatario_apellido2' => 'Segundo',
@@ -543,10 +551,17 @@ try {
         ],
     ]);
     e2e_assert($bReqStatus === 200, "La solicitud activa del cliente debe crearse (obtenido {$bReqStatus}): {$bReqBody}");
-    $fetchBlockedReq = $pdo->prepare('SELECT solicitud_id FROM dbo.solicitudes WHERE codigo_solicitud = ?');
-    $fetchBlockedReq->execute([$blockedReqCode]);
-    $createdSolicitudIds[] = (int)$fetchBlockedReq->fetchColumn();
-    $fetchBlockedReq->closeCursor();
+    $bSolId = 0;
+    foreach ($bReqHeaders as $h) {
+        if (preg_match('/HX-Redirect:\s*\/solicitudes\/detalle\.php\?id=(\d+)/i', $h, $mId)) {
+            $bSolId = (int)$mId[1];
+        }
+    }
+    if ($bSolId === 0 && preg_match('/detalle\.php\?id=(\d+)/', $bReqBody, $mId)) {
+        $bSolId = (int)$mId[1];
+    }
+    e2e_assert($bSolId > 0, 'No se pudo obtener el ID de la solicitud bloqueada.');
+    $createdSolicitudIds[] = $bSolId;
 
     // Intentar desactivar cliente bloqueado -> debe responder 409 Conflict
     [$deactBlockedStatus, $deactBlockedBody] = e2e_request($base . '/clientes/desactivar.php', $adminCookie, true, [
@@ -805,8 +820,13 @@ try {
 
     // Detener servidor HTTP
     if (is_resource($process)) {
-        proc_terminate($process);
-        proc_close($process);
+        $st = proc_get_status($process);
+        if (!empty($st['pid']) && strncasecmp(PHP_OS, 'WIN', 3) === 0) {
+            @exec("taskkill /F /T /PID " . (int)$st['pid'] . " 2>&1");
+        } else {
+            proc_terminate($process);
+        }
+        @proc_close($process);
     }
     if (file_exists($log)) {
         @unlink($log);

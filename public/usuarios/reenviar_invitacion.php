@@ -72,6 +72,7 @@ try {
 } catch (PDOException $e) {
     $driverCode = (int)($e->errorInfo[1] ?? 0);
     $sqlMessage = (string)($e->errorInfo[2] ?? $e->getMessage());
+    error_log('[reenviar_invitacion.php] Error de base de datos [' . $driverCode . ']: ' . $sqlMessage);
 
     http_response_code(422);
     if ($driverCode === 50440 || str_contains($sqlMessage, '50440')) {
@@ -81,12 +82,13 @@ try {
     } elseif ($driverCode === 50430 || str_contains($sqlMessage, '50430')) {
         echo ui_notice('El correo ya pertenece a una cuenta activa en el sistema.', 'danger');
     } else {
-        echo ui_notice('Error al reenviar la invitación: ' . e($sqlMessage), 'danger');
+        echo ui_notice('No se pudo reenviar la invitación en este momento. Verifique el estado de la solicitud.', 'danger');
     }
     exit;
 } catch (Throwable $e) {
+    error_log('[reenviar_invitacion.php] Excepción inesperada: ' . $e->getMessage());
     http_response_code(500);
-    echo ui_notice('Error inesperado al reenviar el correo: ' . e($e->getMessage()), 'danger');
+    echo ui_notice('Ocurrió un error inesperado al procesar el reenvío de la invitación.', 'danger');
     exit;
 }
 

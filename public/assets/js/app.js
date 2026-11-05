@@ -822,9 +822,9 @@
                         const inputAp2 = document.getElementById('destinatario-apellido2');
                         const parsed = descomponerNombreCR(rawNombre);
 
-                        if (inputNom) inputNom.value = parsed.nombre;
-                        if (inputAp1) inputAp1.value = parsed.primerApellido || 'Cliente';
-                        if (inputAp2) inputAp2.value = parsed.segundoApellido || '-';
+                        if (inputNom) inputNom.value = parsed.nombre || '';
+                        if (inputAp1) inputAp1.value = parsed.primerApellido || '';
+                        if (inputAp2) inputAp2.value = parsed.segundoApellido || '';
                         setHaciendaAviso(avisoEl, 'success', 'Registro oficial encontrado: ' + rawNombre);
                     }
                 } else if (data.status === 'no_encontrado') {
@@ -867,16 +867,18 @@
     });
 
     /* ======================================================================
-       SOLICITUD: DESTINATARIO Y CAMBIO DE CLIENTE
+       SOLICITUD: DESTINATARIO Y CAMBIO DE CLIENTE CONDICIONAL
        ====================================================================== */
 
     let clienteSolicitudCache = null;
 
-    function rellenarDestinatarioDesdeCliente() {
+    function actualizarModoDestinatario() {
         const radioMismo = document.getElementById('modo-mismo-cliente');
         const radioTercero = document.getElementById('modo-tercero');
         const labelMismo = document.getElementById('label-mismo-cliente');
-        const textoTercero = document.getElementById('texto-modo-tercero');
+        const ayudaModo = document.getElementById('ayuda-modo-destinatario');
+        const seccionDest = document.getElementById('seccion-destinatario');
+
         const inputId = document.getElementById('destinatario-id');
         const inputNom = document.getElementById('destinatario-nombre');
         const inputAp1 = document.getElementById('destinatario-apellido1');
@@ -885,36 +887,72 @@
         const btnHacienda = document.getElementById('btn-consultar-hacienda-dest');
         const avisoHacienda = document.getElementById('hacienda-dest-aviso');
 
-        if (!clienteSolicitudCache) return;
+        if (!seccionDest) return;
 
+        const camposTercero = [inputId, inputNom, inputAp1, inputAp2, inputTel];
+
+        // 1. Estado sin cliente seleccionado
+        if (!clienteSolicitudCache) {
+            if (labelMismo) labelMismo.style.display = 'inline-flex';
+            if (radioMismo) radioMismo.checked = true;
+            if (ayudaModo) ayudaModo.textContent = 'Selecciona primero un cliente para configurar el destinatario de la entrega.';
+            seccionDest.style.display = 'none';
+            camposTercero.forEach((el) => {
+                if (el) {
+                    el.disabled = true;
+                    el.required = false;
+                    el.value = '';
+                }
+            });
+            if (btnHacienda) btnHacienda.disabled = true;
+            setHaciendaAviso(avisoHacienda, '', '');
+            return;
+        }
+
+        // 2. Cliente Jurídico (Empresa): no puede recibir físicamente "el mismo cliente"
         if (clienteSolicitudCache.tipo_cliente === 'JURIDICA') {
             if (labelMismo) labelMismo.style.display = 'none';
             if (radioTercero) radioTercero.checked = true;
-            if (textoTercero) textoTercero.textContent = 'Persona física autorizada por la empresa';
-            if (inputNom) inputNom.value = '';
-            if (inputAp1) inputAp1.value = '';
-            if (inputAp2) inputAp2.value = '';
-            if (inputId) inputId.value = '';
-            if (inputTel) inputTel.value = clienteSolicitudCache.telefono || '';
-            [inputNom, inputAp1, inputAp2, inputId, inputTel].forEach((el) => { if (el) el.readOnly = false; });
+            if (ayudaModo) ayudaModo.textContent = 'Para clientes jurídicos (empresas), es obligatorio registrar la persona física autorizada para recibir la entrega.';
+            seccionDest.style.display = 'block';
+            camposTercero.forEach((el) => {
+                if (el) el.disabled = false;
+            });
+            if (inputNom) inputNom.required = true;
+            if (inputAp1) inputAp1.required = true;
+            if (inputAp2) inputAp2.required = false;
             if (btnHacienda) btnHacienda.disabled = false;
-            setHaciendaAviso(avisoHacienda, 'info', 'Para empresas jurídicas, registra la persona física autorizada para recibir.');
+            return;
+        }
+
+        // 3. Cliente Físico
+        if (labelMismo) labelMismo.style.display = 'inline-flex';
+        if (ayudaModo) ayudaModo.textContent = 'Para clientes físicos, la recepción por defecto es directa sin requerir datos adicionales.';
+
+        if (radioMismo && radioMismo.checked) {
+            // Modo "El mismo cliente": ocultar y deshabilitar sección de tercero por completo
+            seccionDest.style.display = 'none';
+            camposTercero.forEach((el) => {
+                if (el) {
+                    el.disabled = true;
+                    el.required = false;
+                    el.value = '';
+                }
+            });
+            if (btnHacienda) btnHacienda.disabled = true;
+            setHaciendaAviso(avisoHacienda, '', '');
         } else {
-            if (labelMismo) labelMismo.style.display = 'inline-flex';
-            if (textoTercero) textoTercero.textContent = 'Otra persona autorizada';
-            if (radioMismo && radioMismo.checked) {
-                if (inputId) inputId.value = clienteSolicitudCache.identificacion || '';
-                if (inputTel) inputTel.value = clienteSolicitudCache.telefono || '';
-                if (inputNom) inputNom.value = clienteSolicitudCache.nombre || '';
-                if (inputAp1) inputAp1.value = clienteSolicitudCache.primer_apellido || 'Cliente';
-                if (inputAp2) inputAp2.value = clienteSolicitudCache.segundo_apellido || 'Titular';
-                [inputNom, inputAp1, inputAp2, inputId, inputTel].forEach((el) => { if (el) el.readOnly = true; });
-                if (btnHacienda) btnHacienda.disabled = true;
-                setHaciendaAviso(avisoHacienda, '', '');
-            } else {
-                [inputNom, inputAp1, inputAp2, inputId, inputTel].forEach((el) => { if (el) el.readOnly = false; });
-                if (btnHacienda) btnHacienda.disabled = false;
-                setHaciendaAviso(avisoHacienda, '', '');
+            // Modo "Otra persona autorizada": mostrar campos y habilitar validaciones requeridas
+            seccionDest.style.display = 'block';
+            camposTercero.forEach((el) => {
+                if (el) el.disabled = false;
+            });
+            if (inputNom) inputNom.required = true;
+            if (inputAp1) inputAp1.required = true;
+            if (inputAp2) inputAp2.required = false;
+            if (btnHacienda) btnHacienda.disabled = false;
+            if (inputNom && !inputNom.value) {
+                inputNom.focus();
             }
         }
     }
@@ -927,37 +965,36 @@
             const clienteId = target.value;
             if (!clienteId) {
                 clienteSolicitudCache = null;
+                actualizarModoDestinatario();
                 return;
             }
+            // Sincronización inmediata con atributo data-tipo del option seleccionado
+            const opt = target.options ? target.options[target.selectedIndex] : null;
+            if (opt && opt.dataset.tipo) {
+                clienteSolicitudCache = {
+                    cliente_id: parseInt(clienteId, 10),
+                    tipo_cliente: opt.dataset.tipo,
+                    nombre: opt.dataset.nombre || '',
+                    identificacion: opt.dataset.identificacion || '',
+                    telefono: opt.dataset.telefono || ''
+                };
+                actualizarModoDestinatario();
+            }
+            // Confirmación autoritativa desde API de cliente
             fetch('/clientes/info.php?cliente_id=' + encodeURIComponent(clienteId))
                 .then((res) => (res.ok ? res.json() : null))
                 .then((data) => {
                     if (data) {
                         clienteSolicitudCache = data;
-                        rellenarDestinatarioDesdeCliente();
+                        actualizarModoDestinatario();
                     }
                 })
                 .catch(() => {});
             return;
         }
 
-        if (target.id === 'modo-mismo-cliente') {
-            rellenarDestinatarioDesdeCliente();
-            return;
-        }
-
-        if (target.id === 'modo-tercero') {
-            const inputNom = document.getElementById('destinatario-nombre');
-            const inputAp1 = document.getElementById('destinatario-apellido1');
-            const inputAp2 = document.getElementById('destinatario-apellido2');
-            const inputId = document.getElementById('destinatario-id');
-            const inputTel = document.getElementById('destinatario-telefono');
-            const btnHacienda = document.getElementById('btn-consultar-hacienda-dest');
-            const avisoHacienda = document.getElementById('hacienda-dest-aviso');
-
-            [inputNom, inputAp1, inputAp2, inputId, inputTel].forEach((el) => { if (el) el.readOnly = false; });
-            if (btnHacienda) btnHacienda.disabled = false;
-            setHaciendaAviso(avisoHacienda, '', '');
+        if (target.id === 'modo-mismo-cliente' || target.id === 'modo-tercero') {
+            actualizarModoDestinatario();
             return;
         }
 

@@ -125,7 +125,53 @@ async function runLoteVerification() {
                 throw new Error(`El botón primario no está a la izquierda del botón de cancelar`);
             }
 
-            await page.screenshot({ path: path.join(screenshotDir, `modal_solicitud_pinned_${resolution.width}x${resolution.height}.png`) });
+            // Verificar que no existe campo de código de solicitud
+            const hasCodigoInput = await page.evaluate(() => {
+                const inputs = Array.from(document.querySelectorAll('#modal-contenido input'));
+                return inputs.some(i => (i.value && i.value.includes('Código asignado')) || (i.name && i.name === 'codigo'));
+            });
+            if (hasCodigoInput) {
+                throw new Error('El campo Código de solicitud todavía está presente en el modal.');
+            }
+            console.log('  [OK] Ausencia total de campo Código de solicitud verificada.');
+
+            // Captura estado 1: modo mismo cliente (sección destinatario oculta)
+            await page.screenshot({ path: path.join(screenshotDir, `modal_solicitud_mismo_cliente_${resolution.width}x${resolution.height}.png`) });
+
+            // Seleccionar primer cliente físico disponible para inicializar el contexto
+            await page.evaluate(() => {
+                const sel = document.getElementById('solicitud-cliente');
+                if (sel && sel.options.length > 1) {
+                    sel.selectedIndex = 1;
+                    sel.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+            await page.waitForTimeout(300);
+
+            // Cambiar a "Otra persona autorizada"
+            await page.click('#modo-tercero');
+            const destVisible = await page.evaluate(() => {
+                const sec = document.getElementById('seccion-destinatario');
+                return sec && window.getComputedStyle(sec).display !== 'none';
+            });
+            if (!destVisible) {
+                throw new Error('Al elegir "Otra persona autorizada", la sección de destinatario debe mostrarse.');
+            }
+            console.log('  [OK] Sección de tercero autorizada mostrada al conmutar radio.');
+
+            // Captura estado 2: modo tercero visible
+            await page.screenshot({ path: path.join(screenshotDir, `modal_solicitud_tercero_visible_${resolution.width}x${resolution.height}.png`) });
+
+            // Volver a "El mismo cliente"
+            await page.click('#modo-mismo-cliente');
+            const destHiddenAgain = await page.evaluate(() => {
+                const sec = document.getElementById('seccion-destinatario');
+                return sec && window.getComputedStyle(sec).display === 'none';
+            });
+            if (!destHiddenAgain) {
+                throw new Error('Al volver a "El mismo cliente", la sección de destinatario debe ocultarse.');
+            }
+            console.log('  [OK] Sección de destinatario ocultada nuevamente al volver a mismo cliente.');
 
             // Cerrar modal
             await page.click('#modal-contenido button[data-close-modal]');

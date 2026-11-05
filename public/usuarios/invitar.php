@@ -45,6 +45,8 @@ try {
     $mailHtml = render_invitation_email($inviteLink, $email);
     $sent = $mailSender->send($email, 'Invitación a Transportes Seguros S.A.', $mailHtml);
 
+    $mailCategory = ($mailSender instanceof BrevoApiSender) ? $mailSender->getLastCategory() : 'unknown';
+
     $deliveryStatus = 'SIMULADO';
     if ($transportInfo['is_brevo']) {
         $deliveryStatus = $sent ? 'ENVIADO' : 'FALLIDO';
@@ -59,6 +61,7 @@ try {
 } catch (PDOException $exception) {
     $driverCode = (int)($exception->errorInfo[1] ?? 0);
     $sqlMessage = (string)($exception->errorInfo[2] ?? $exception->getMessage());
+    error_log('[invitar.php] Error de base de datos [' . $driverCode . ']: ' . $sqlMessage);
 
     http_response_code(422);
     if ($driverCode === 50430 || str_contains($sqlMessage, '50430')) {
@@ -70,12 +73,13 @@ try {
     } elseif ($driverCode === 50440 || str_contains($sqlMessage, '50440')) {
         echo ui_notice('Debes esperar al menos 60 segundos antes de reenviar una invitación a este correo.', 'warning');
     } else {
-        echo ui_notice('No se pudo procesar la invitación: ' . e($sqlMessage), 'danger');
+        echo ui_notice('No se pudo procesar la invitación debido a una regla del sistema. Por favor revise los datos ingresados.', 'danger');
     }
     exit;
 } catch (Throwable $e) {
+    error_log('[invitar.php] Excepción inesperada: ' . $e->getMessage());
     http_response_code(500);
-    echo ui_notice('Error inesperado al generar o enviar la invitación: ' . e($e->getMessage()), 'danger');
+    echo ui_notice('Ocurrió un error inesperado al procesar la invitación. Por favor intente nuevamente más tarde.', 'danger');
     exit;
 }
 
@@ -85,12 +89,23 @@ header('HX-Trigger: {"usuarioActualizado": true, "invitacionActualizada": true}'
 <?php if ($transportInfo['is_brevo'] && $sent): ?>
     <div class="notification notification-success mb-4" role="status">
         <?= svg_icon('activate') ?>
-        <span><strong>¡Invitación emitida y aceptada por Brevo!</strong> Se solicitó el despacho del correo transaccional a <strong><?= e($email) ?></strong> con el enlace de activación seguro.</span>
+        <span><strong>¡Invitación emitida y aceptada por Brevo!</strong> Se solicitó el despacho del correo transaccional a <strong><?= e($email) ?></strong> con el enlace de activación seguro (la entrega final al buzón depende de los filtros del proveedor de correo).</span>
     </div>
 <?php elseif ($transportInfo['is_brevo'] && !$sent): ?>
+    <?php
+    $catMensaje = match ($mailCategory) {
+        'config_invalid' => 'Configuración de remitente o credenciales inválida.',
+        'curl_missing' => 'La extensión cURL no está disponible en el servidor.',
+        'dns' => 'Error de resolución DNS al conectar con Brevo.',
+        'tls' => 'Error de validación de certificados de seguridad TLS.',
+        'timeout' => 'Tiempo de espera agotado al comunicar con Brevo.',
+        'provider_reject' => 'El proveedor Brevo rechazó el despacho (verifique si el remitente está autorizado).',
+        default => 'Fallo de comunicación con el servicio de correo.',
+    };
+    ?>
     <div class="notification notification-warning mb-4" role="status">
         <?= svg_icon('alert-triangle') ?>
-        <span><strong>Invitación registrada en el sistema</strong>, pero la API de Brevo rechazó o no pudo completar la entrega del correo (verifica credenciales o remitente verificado). Puedes reenviarla desde el listado una vez corregida la configuración.</span>
+        <span><strong>Invitación registrada en el sistema</strong>, pero no pudo completarse el despacho del correo vía Brevo (<?= e($catMensaje) ?>). La invitación quedó en estado pendiente y puedes reenviarla desde el listado.</span>
     </div>
 <?php else: ?>
     <div class="notification notification-info mb-4" role="status">

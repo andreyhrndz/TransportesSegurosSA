@@ -22,24 +22,14 @@ try {
                 <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
                 <div id="mensaje-solicitud" role="alert"></div>
 
-                <div class="columns">
-                    <div class="column">
-                        <div class="field">
-                            <label class="label">Código de solicitud</label>
-                            <input class="input is-static has-text-subtle" type="text" value="Código asignado al guardar (automático)" readonly tabindex="-1">
-                        </div>
-                    </div>
-                    <div class="column">
-                        <div class="field">
-                            <label class="label" for="solicitud-cliente">Cliente <span class="required">*</span></label>
-                            <select id="solicitud-cliente" name="cliente_id" data-combobox data-remote-url="/clientes/lista.php" data-placeholder="Buscar cliente por nombre o identificación…" required>
-                                <option value="">Selecciona o escribe para buscar…</option>
-                                <?php foreach ($clientes as $cliente): ?>
-                                    <option value="<?= (int)$cliente['cliente_id'] ?>" data-tipo="<?= e($cliente['tipo_cliente'] ?? 'FISICA') ?>" data-nombre="<?= e($cliente['nombre'] ?? '') ?>" data-identificacion="<?= e($cliente['identificacion'] ?? '') ?>" data-telefono="<?= e($cliente['telefono'] ?? '') ?>" data-subtext="<?= e($cliente['correo'] ?? '') ?>"><?= e(trim((string)$cliente['nombre']) . ' · ' . $cliente['identificacion']) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                    </div>
+                <div class="field mb-4">
+                    <label class="label" for="solicitud-cliente">Cliente <span class="required">*</span></label>
+                    <select id="solicitud-cliente" name="cliente_id" data-combobox data-remote-url="/clientes/lista.php" data-placeholder="Buscar cliente por nombre o identificación…" required>
+                        <option value="">Selecciona o escribe para buscar…</option>
+                        <?php foreach ($clientes as $cliente): ?>
+                            <option value="<?= (int)$cliente['cliente_id'] ?>" data-tipo="<?= e($cliente['tipo_cliente'] ?? 'FISICA') ?>" data-nombre="<?= e($cliente['nombre'] ?? '') ?>" data-identificacion="<?= e($cliente['identificacion'] ?? '') ?>" data-telefono="<?= e($cliente['telefono'] ?? '') ?>" data-subtext="<?= e($cliente['correo'] ?? '') ?>"><?= e(trim((string)$cliente['nombre']) . ' · ' . $cliente['identificacion']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
 
                 <div class="columns">
@@ -74,10 +64,10 @@ try {
                 </div>
 
                 <div class="panel-box-header mt-4 mb-2">
-                    <h3 class="title is-6 mb-0">Destinatario previsto de la orden</h3>
+                    <h3 class="title is-6 mb-0">Destinatario previsto de la entrega</h3>
                 </div>
 
-                <div class="field mb-3">
+                <div class="field mb-3" id="wrap-modo-destinatario">
                     <label class="label">¿Quién recibirá la mercancía? <span class="required">*</span></label>
                     <div class="control" id="grupo-modo-destinatario">
                         <label class="radio mr-4" id="label-mismo-cliente">
@@ -89,23 +79,24 @@ try {
                             <span id="texto-modo-tercero">Otra persona autorizada</span>
                         </label>
                     </div>
+                    <p class="help" id="ayuda-modo-destinatario">Para clientes físicos, la recepción por defecto es directa sin requerir datos adicionales.</p>
                 </div>
 
-                <div id="seccion-destinatario" class="p-3 mb-3" style="background: var(--color-surface-subtle); border: 1px solid var(--color-border); border-radius: var(--radius-md);">
+                <div id="seccion-destinatario" class="p-3 mb-3" style="display: none; background: var(--color-surface-subtle); border: 1px solid var(--color-border); border-radius: var(--radius-md);">
                     <div class="field mb-3" id="wrap-destinatario-id">
-                        <label class="label" for="destinatario-id">Identificación <span class="required" id="dest-id-req">*</span></label>
+                        <label class="label" for="destinatario-id">Identificación del receptor</label>
                         <div class="field has-addons">
                             <div class="control is-expanded">
-                                <input class="input" id="destinatario-id" name="destinatario_identificacion" maxlength="30" placeholder="Ej. 1-0111-0222">
+                                <input class="input" id="destinatario-id" name="destinatario_identificacion" maxlength="30" placeholder="Ej. 1-0111-0222" disabled>
                             </div>
                             <div class="control">
-                                <button class="button button-secondary" type="button" id="btn-consultar-hacienda-dest">
+                                <button class="button button-secondary" type="button" id="btn-consultar-hacienda-dest" disabled>
                                     <?= svg_icon('search') ?>
                                     <span>Consultar Hacienda</span>
                                 </button>
                             </div>
                         </div>
-                        <p class="help" id="dest-id-help">Consulta la base del Ministerio de Hacienda para autocompletar el nombre.</p>
+                        <p class="help" id="dest-id-help">Opcional. Consulta la base del Ministerio de Hacienda para autocompletar el nombre de la persona autorizada.</p>
                         <div id="hacienda-dest-aviso" class="mt-2" hidden></div>
                     </div>
 
@@ -113,19 +104,19 @@ try {
                         <div class="column">
                             <div class="field">
                                 <label class="label" for="destinatario-nombre">Nombre <span class="required">*</span></label>
-                                <input class="input" id="destinatario-nombre" name="destinatario_nombre" maxlength="150" required>
+                                <input class="input" id="destinatario-nombre" name="destinatario_nombre" maxlength="150" disabled>
                             </div>
                         </div>
                         <div class="column">
                             <div class="field">
                                 <label class="label" for="destinatario-apellido1">Primer apellido <span class="required">*</span></label>
-                                <input class="input" id="destinatario-apellido1" name="destinatario_apellido1" maxlength="100" required>
+                                <input class="input" id="destinatario-apellido1" name="destinatario_apellido1" maxlength="100" disabled>
                             </div>
                         </div>
                         <div class="column">
                             <div class="field">
-                                <label class="label" for="destinatario-apellido2">Segundo apellido <span class="required">*</span></label>
-                                <input class="input" id="destinatario-apellido2" name="destinatario_apellido2" maxlength="100" required>
+                                <label class="label" for="destinatario-apellido2">Segundo apellido</label>
+                                <input class="input" id="destinatario-apellido2" name="destinatario_apellido2" maxlength="100" disabled>
                             </div>
                         </div>
                     </div>
@@ -134,7 +125,7 @@ try {
                         <div class="column is-half">
                             <div class="field">
                                 <label class="label" for="destinatario-telefono">Teléfono de contacto</label>
-                                <input class="input" id="destinatario-telefono" name="destinatario_telefono" maxlength="30" placeholder="Ej. 8888-8888">
+                                <input class="input" id="destinatario-telefono" name="destinatario_telefono" maxlength="30" placeholder="Ej. 8888-8888" disabled>
                             </div>
                         </div>
                     </div>
