@@ -1,9 +1,34 @@
 <?php
+declare(strict_types=1);
+
 require_once __DIR__ . '/../app/bootstrap.php';
-require_permission('CLIENTES_CREAR');
+require_permission('CLIENTES_VER');
 require_once __DIR__ . '/../app/layout.php';
-layout_start('clientes', 'Clientes', 'Administra el registro de personas físicas y empresas.');
+layout_start('clientes', 'Clientes', 'Administra el directorio de personas y empresas con trazabilidad de solicitudes e historial.');
 ?>
-<div class="panel-white clients-toolbar"><div><h2 class="title is-5 mb-1">Directorio de clientes</h2><p class="has-text-grey">Consulta y registra clientes utilizando los procedimientos almacenados.</p></div><div class="buttons"><button class="button is-primary" hx-get="/clientes/form.php?tipo=fisico" hx-target="#modal-contenido">+ Cliente físico</button><button class="button is-outline-brand" hx-get="/clientes/form.php?tipo=juridico" hx-target="#modal-contenido">+ Empresa</button></div></div>
-<div class="panel-white"><div class="search-wrap"><label class="label" for="buscar">Buscar clientes</label><input class="input" id="buscar" type="search" name="buscar" placeholder="Nombre, identificación, correo o empresa..." autocomplete="off" hx-get="/clientes/lista.php" hx-trigger="keyup changed delay:350ms, search" hx-target="#clientes-resultado" hx-include="this" aria-controls="clientes-resultado"></div><div id="clientes-resultado" hx-get="/clientes/lista.php" hx-trigger="load, clienteCreado from:body" hx-include="#buscar" hx-swap="innerHTML"><p class="has-text-grey">Cargando clientes...</p></div></div>
+<section class="toolbar-panel" aria-label="Filtros y acciones de clientes">
+    <form class="filter-form" id="clientes-filtros" hx-get="/clientes/lista.php" hx-target="#clientes-resultado" hx-trigger="keyup changed delay:350ms from:input, change" hx-include="this">
+        <div class="input-with-icon">
+            <?= svg_icon('search', '', 'input-icon') ?>
+            <input class="input" id="buscar" type="search" name="buscar" maxlength="120" placeholder="Buscar clientes por nombre, identificación o correo" autocomplete="off" aria-label="Buscar clientes" aria-controls="clientes-resultado">
+        </div>
+        <div class="select">
+            <select id="clientes-activo" name="activo" data-combobox data-allow-clear="false" data-placeholder="Todos los estados" aria-label="Estado del cliente">
+                <option value="">Todos los estados</option>
+                <option value="1">Activos</option>
+                <option value="0">Inactivos</option>
+            </select>
+        </div>
+    </form>
+    <?php if (has_permission('CLIENTES_CREAR')): ?>
+        <div class="buttons">
+            <button class="button is-primary" type="button" hx-get="/clientes/form.php?tipo=fisico" hx-target="#modal-contenido"><?= svg_icon('plus') ?><span>Nuevo cliente</span></button>
+            <button class="button button-secondary" type="button" hx-get="/clientes/form.php?tipo=juridico" hx-target="#modal-contenido"><?= svg_icon('plus') ?><span>Nueva empresa</span></button>
+        </div>
+    <?php endif; ?>
+</section>
+
+<section class="panel-box table-panel">
+    <div id="clientes-resultado" hx-get="/clientes/lista.php" hx-trigger="load, clienteCreado from:body, clienteActualizado from:body" hx-include="#clientes-filtros" hx-swap="innerHTML"></div>
+</section>
 <?php layout_end(); ?>

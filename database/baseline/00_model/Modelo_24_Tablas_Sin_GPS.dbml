@@ -1,0 +1,739 @@
+Project TransportesSegurosSA_V4 {
+
+  database_type: 'SQL Server'
+
+  Note: 'Modelo V4: multiples solicitudes por viaje y una entrega por solicitud.'
+
+}
+
+// ============================================
+
+// 1. CLIENTES
+
+// ============================================
+
+Table clientes {
+
+  cliente_id int [pk, increment]
+
+  identificacion nvarchar(30) [not null, unique]
+
+  correo nvarchar(150) [not null]
+
+  telefono nvarchar(30)
+
+  direccion nvarchar(250)
+
+  activo bit [not null, default: 1]
+
+  fecha_registro datetime2 [not null, default: `SYSUTCDATETIME()`]
+
+}
+
+Table clientes_fisicos {
+
+  cliente_id int [pk]
+
+  nombre nvarchar(100) [not null]
+
+  primer_apellido nvarchar(100) [not null]
+
+  segundo_apellido nvarchar(100)
+
+}
+
+Table clientes_juridicos {
+
+  cliente_id int [pk]
+
+  razon_social nvarchar(150) [not null]
+
+  nombre_comercial nvarchar(150)
+
+  representante_legal nvarchar(150)
+
+}
+
+// ============================================
+
+// 2. UBICACIONES Y SOLICITUDES
+
+// ============================================
+
+Table ubicaciones {
+
+  ubicacion_id int [pk, increment]
+
+  nombre nvarchar(150) [not null]
+
+  direccion nvarchar(250) [not null]
+
+  latitud decimal(9,6)
+
+  longitud decimal(9,6)
+
+  activo bit [not null, default: 1]
+
+}
+
+Table solicitudes {
+
+  solicitud_id int [pk, increment]
+
+  codigo_solicitud nvarchar(30) [not null, unique]
+
+  cliente_id int [not null]
+
+  origen_id int [not null]
+
+  destino_id int [not null]
+
+  // Destinatario previsto
+
+  destinatario_nombre nvarchar(150) [not null]
+  destinatario_apellido1 nvarchar(100) [not null]
+  destinatario_apellido2 nvarchar(100) [not null]
+
+  destinatario_identificacion nvarchar(30)
+
+  destinatario_telefono nvarchar(30)
+
+  instrucciones_entrega nvarchar(500)
+
+  fecha_solicitud datetime2 [not null, default: `SYSUTCDATETIME()`]
+
+  fecha_entrega_requerida datetime2 [not null]
+
+  prioridad_calculada varchar(10) [not null]
+
+  prioridad_actual varchar(10) [not null]
+
+  justificacion_prioridad nvarchar(500)
+
+  // REGISTRADA, PENDIENTE_ASIGNACION,
+
+  // ASIGNADA, EN_TRANSITO, ENTREGADA,
+
+  // ENTREGA_FALLIDA, CANCELADA
+
+  estado varchar(30) [not null, default: 'REGISTRADA']
+
+  observaciones nvarchar(500)
+
+  fecha_creacion datetime2 [not null, default: `SYSUTCDATETIME()`]
+
+  fecha_actualizacion datetime2 [not null, default: `SYSUTCDATETIME()`]
+
+  Note: 'Una solicitud pertenece como maximo a un viaje. La recepcion real se registra en entregas.'
+
+}
+
+// ============================================
+
+// 3. MERCANCIAS
+
+// ============================================
+
+Table tipos_mercancia {
+
+  tipo_mercancia_id int [pk, increment]
+
+  nombre nvarchar(100) [not null, unique]
+
+  descripcion nvarchar(250)
+
+  activo bit [not null, default: 1]
+
+}
+
+Table mercancias {
+
+  mercancia_id int [pk, increment]
+
+  solicitud_id int [not null]
+
+  tipo_mercancia_id int [not null]
+
+  descripcion nvarchar(250) [not null]
+
+  peso_kg decimal(12,2) [not null]
+
+  volumen_m3 decimal(12,3)
+
+  observaciones nvarchar(500)
+
+}
+
+// ============================================
+
+// 4. VEHICULOS
+
+// ============================================
+
+Table vehiculos {
+
+  vehiculo_id int [pk, increment]
+
+  placa nvarchar(20) [not null, unique]
+
+  marca nvarchar(80) [not null]
+
+  modelo nvarchar(80) [not null]
+
+  anio smallint [not null]
+
+  capacidad_carga_kg decimal(12,2) [not null]
+
+  capacidad_volumen_m3 decimal(12,3)
+
+  kilometraje_actual decimal(12,1) [not null, default: 0]
+
+  estado varchar(20) [not null, default: 'DISPONIBLE']
+
+  activo bit [not null, default: 1]
+
+  fecha_registro datetime2 [not null, default: `SYSUTCDATETIME()`]
+
+}
+
+// ============================================
+
+// 5. USUARIOS Y PERMISOS
+
+// ============================================
+
+Table usuarios {
+
+  usuario_id int [pk, increment]
+
+  nombre_usuario nvarchar(80) [not null, unique]
+
+  correo_acceso nvarchar(150) [not null, unique]
+
+  password_hash nvarchar(255) [not null]
+
+  activo bit [not null, default: 1]
+
+  fecha_creacion datetime2 [not null, default: `SYSUTCDATETIME()`]
+
+  ultimo_acceso datetime2
+
+}
+
+Table permisos {
+
+  permiso_id int [pk, increment]
+
+  codigo nvarchar(100) [not null, unique]
+
+  nombre nvarchar(150) [not null]
+
+  descripcion nvarchar(250)
+
+  activo bit [not null, default: 1]
+
+}
+
+Table usuarios_permisos {
+
+  usuario_id int [not null]
+
+  permiso_id int [not null]
+
+  fecha_asignacion datetime2 [not null, default: `SYSUTCDATETIME()`]
+
+  indexes {
+
+    (usuario_id, permiso_id) [pk]
+
+  }
+
+  Note: 'Tabla intermedia simple; la PK compuesta impide repetir permisos.'
+
+}
+
+// ============================================
+
+// 6. CONDUCTORES
+
+// ============================================
+
+Table conductores {
+
+  conductor_id int [pk, increment]
+
+  usuario_id int
+
+  identificacion nvarchar(30) [not null, unique]
+
+  nombre nvarchar(100) [not null]
+
+  primer_apellido nvarchar(100) [not null]
+
+  segundo_apellido nvarchar(100)
+
+  telefono nvarchar(30)
+
+  correo nvarchar(150)
+
+  numero_licencia nvarchar(50) [not null, unique]
+
+  fecha_vencimiento_licencia date [not null]
+
+  estado_operativo varchar(20) [not null, default: 'DISPONIBLE']
+
+  activo bit [not null, default: 1]
+
+  fecha_registro datetime2 [not null, default: `SYSUTCDATETIME()`]
+
+  Note: 'Si usuario_id no es NULL, debe ser exclusivo. Usar indice UNIQUE filtrado en SQL Server.'
+
+}
+
+// ============================================
+
+// 7. RUTAS
+
+// ============================================
+
+Table rutas {
+
+  ruta_id int [pk, increment]
+
+  nombre nvarchar(150) [not null]
+
+  origen_id int [not null]
+
+  destino_id int [not null]
+
+  distancia_km decimal(10,2) [not null]
+
+  duracion_estimada_min int [not null]
+
+  activo bit [not null, default: 1]
+
+  indexes {
+
+    (origen_id, destino_id, nombre) [unique]
+
+  }
+
+  Note: 'La ruta es reutilizable. Cada viaje define sus paradas.'
+
+}
+
+// ============================================
+
+// 8. VIAJES
+
+// ============================================
+
+Table viajes {
+
+  viaje_id int [pk, increment]
+
+  codigo_viaje nvarchar(30) [not null, unique]
+
+  vehiculo_id int [not null]
+
+  conductor_id int [not null]
+
+  ruta_id int [not null]
+
+  fecha_programada_salida datetime2 [not null]
+
+  fecha_salida_real datetime2
+
+  fecha_llegada_real datetime2
+
+  // PLANIFICADO, EN_CURSO,
+
+  // FINALIZADO, CANCELADO
+
+  estado varchar(20) [not null, default: 'PLANIFICADO']
+
+  observaciones nvarchar(500)
+
+  fecha_creacion datetime2 [not null, default: `SYSUTCDATETIME()`]
+
+  Note: 'Un viaje puede transportar varias solicitudes. Debe impedirse el solapamiento de vehiculos y conductores.'
+
+}
+
+// ============================================
+
+// 9. PARADAS DEL VIAJE
+
+// ============================================
+
+Table paradas_viaje {
+
+  parada_id int [pk, increment]
+
+  viaje_id int [not null]
+
+  ubicacion_id int [not null]
+
+  orden int [not null]
+
+  // RECOGIDA, ENTREGA, MIXTA, INTERMEDIA
+
+  tipo_parada varchar(20) [not null]
+
+  // PENDIENTE, EN_CURSO,
+
+  // COMPLETADA, OMITIDA
+
+  estado varchar(20) [not null, default: 'PENDIENTE']
+
+  llegada_programada datetime2
+
+  llegada_real datetime2
+
+  salida_real datetime2
+
+  observaciones nvarchar(500)
+
+  indexes {
+
+    (viaje_id, orden) [unique]
+
+    (viaje_id, parada_id) [unique]
+
+  }
+
+  Note: 'Una parada puede servir para recoger o entregar varias solicitudes.'
+
+}
+
+// ============================================
+
+// 10. SOLICITUDES ASIGNADAS A VIAJES
+
+// ============================================
+
+Table viaje_solicitudes {
+
+  viaje_solicitud_id int [pk, increment]
+
+  viaje_id int [not null]
+
+  solicitud_id int [not null, unique]
+
+  parada_recogida_id int [not null]
+
+  parada_entrega_id int [not null]
+
+  fecha_asignacion datetime2 [not null, default: `SYSUTCDATETIME()`]
+
+  // PLANIFICADA, CARGADA, EN_TRANSITO,
+
+  // ENTREGADA, FALLIDA, RETIRADA
+
+  estado varchar(20) [not null, default: 'PLANIFICADA']
+
+  observaciones nvarchar(500)
+
+  Note: 'Cada solicitud puede estar en un solo viaje. Las paradas deben pertenecer al mismo viaje.'
+
+}
+
+// ============================================
+
+// 11. ENTREGAS
+
+// ============================================
+
+Table entregas {
+
+  entrega_id int [pk, increment]
+
+  // Una entrega por solicitud asignada
+
+  viaje_solicitud_id int [not null, unique]
+
+  // ENTREGADA o FALLIDA
+
+  estado varchar(15) [not null]
+
+  fecha_resultado datetime2 [not null, default: `SYSUTCDATETIME()`]
+
+  // Receptor real
+
+  receptor_nombre nvarchar(150)
+
+  receptor_identificacion nvarchar(30)
+
+  receptor_telefono nvarchar(30)
+
+  fecha_recepcion datetime2
+
+  comprobante_url nvarchar(500)
+
+  registrado_por_usuario_id int [not null]
+
+  motivo_fallo nvarchar(500)
+
+  observaciones nvarchar(500)
+
+  Note: 'Una sola entrega por solicitud. Si es ENTREGADA exige receptor y fecha de recepcion. Si es FALLIDA exige motivo. No hay segundos intentos.'
+
+}
+
+// ============================================
+
+// 12. INCIDENCIAS
+
+// ============================================
+
+Table tipos_incidencia {
+
+  tipo_incidencia_id int [pk, increment]
+
+  nombre nvarchar(100) [not null, unique]
+
+  descripcion nvarchar(250)
+
+  activo bit [not null, default: 1]
+
+}
+
+Table incidencias {
+
+  incidencia_id int [pk, increment]
+
+  solicitud_id int [not null]
+
+  tipo_incidencia_id int [not null]
+
+  responsable_usuario_id int [not null]
+
+  descripcion nvarchar(500) [not null]
+
+  estado varchar(20) [not null, default: 'ABIERTA']
+
+  fecha_reporte datetime2 [not null, default: `SYSUTCDATETIME()`]
+
+  fecha_resolucion datetime2
+
+  resolucion nvarchar(500)
+
+  Note: 'Una incidencia pertenece a una solicitud. Si ya esta asignada, el viaje se obtiene desde viaje_solicitudes.'
+
+}
+
+// ============================================
+
+// 13. NOTIFICACIONES
+
+// ============================================
+
+Table notificaciones {
+
+  notificacion_id bigint [pk, increment]
+
+  solicitud_id int [not null]
+
+  tipo_evento varchar(30) [not null]
+
+  correo_destinatario nvarchar(150) [not null]
+
+  asunto nvarchar(250) [not null]
+
+  fecha_intento datetime2 [not null, default: `SYSUTCDATETIME()`]
+
+  fecha_envio datetime2
+
+  estado_envio varchar(20) [not null, default: 'PENDIENTE']
+
+  error_envio nvarchar(500)
+
+}
+
+// ============================================
+
+// 14. DOCUMENTOS
+
+// ============================================
+
+Table tipos_documento {
+
+  tipo_documento_id int [pk, increment]
+
+  nombre nvarchar(100) [not null, unique]
+
+  descripcion nvarchar(250)
+
+  activo bit [not null, default: 1]
+
+}
+
+Table documentos {
+
+  documento_id int [pk, increment]
+
+  solicitud_id int [not null]
+
+  tipo_documento_id int [not null]
+
+  numero_referencia nvarchar(100)
+
+  fecha_documento date
+
+  archivo_url nvarchar(500)
+
+  observaciones nvarchar(500)
+
+  fecha_registro datetime2 [not null, default: `SYSUTCDATETIME()`]
+
+}
+
+// ============================================
+
+// 15. HISTORIAL DE ESTADOS
+
+// ============================================
+
+Table historial_estados_solicitud {
+
+  historial_estado_id bigint [pk, increment]
+
+  solicitud_id int [not null]
+
+  usuario_id int
+
+  estado_anterior varchar(30)
+
+  estado_nuevo varchar(30) [not null]
+
+  fecha_cambio datetime2 [not null, default: `SYSUTCDATETIME()`]
+
+  observacion nvarchar(500)
+
+}
+
+// ============================================
+
+// 16. AUDITORIA
+
+// ============================================
+
+Table auditorias {
+
+  auditoria_id bigint [pk, increment]
+
+  usuario_id int
+
+  entidad nvarchar(100) [not null]
+
+  registro_id nvarchar(100) [not null]
+
+  accion varchar(20) [not null]
+
+  fecha_hora datetime2 [not null, default: `SYSUTCDATETIME()`]
+
+  valores_anteriores nvarchar(max)
+
+  valores_nuevos nvarchar(max)
+
+}
+
+// ============================================
+
+// 17. RELACIONES
+
+// ============================================
+
+// CLIENTES
+
+Ref: clientes_fisicos.cliente_id - clientes.cliente_id
+
+Ref: clientes_juridicos.cliente_id - clientes.cliente_id
+
+// SOLICITUDES
+
+Ref: solicitudes.cliente_id > clientes.cliente_id
+
+Ref: solicitudes.origen_id > ubicaciones.ubicacion_id
+
+Ref: solicitudes.destino_id > ubicaciones.ubicacion_id
+
+// MERCANCIAS
+
+Ref: mercancias.solicitud_id > solicitudes.solicitud_id
+
+Ref: mercancias.tipo_mercancia_id > tipos_mercancia.tipo_mercancia_id
+
+// SEGURIDAD
+
+Ref: usuarios_permisos.usuario_id > usuarios.usuario_id
+
+Ref: usuarios_permisos.permiso_id > permisos.permiso_id
+
+Ref: conductores.usuario_id > usuarios.usuario_id
+
+// RUTAS
+
+Ref: rutas.origen_id > ubicaciones.ubicacion_id
+
+Ref: rutas.destino_id > ubicaciones.ubicacion_id
+
+// VIAJES
+
+Ref: viajes.vehiculo_id > vehiculos.vehiculo_id
+
+Ref: viajes.conductor_id > conductores.conductor_id
+
+Ref: viajes.ruta_id > rutas.ruta_id
+
+// PARADAS
+
+Ref: paradas_viaje.viaje_id > viajes.viaje_id
+
+Ref: paradas_viaje.ubicacion_id > ubicaciones.ubicacion_id
+
+// SOLICITUDES POR VIAJE
+
+Ref: viaje_solicitudes.viaje_id > viajes.viaje_id
+
+Ref: viaje_solicitudes.solicitud_id - solicitudes.solicitud_id
+
+// GARANTIZAR QUE LAS PARADAS SEAN DEL MISMO VIAJE
+
+Ref: viaje_solicitudes.(viaje_id, parada_recogida_id) > paradas_viaje.(viaje_id, parada_id)
+
+Ref: viaje_solicitudes.(viaje_id, parada_entrega_id) > paradas_viaje.(viaje_id, parada_id)
+
+// ENTREGA UNICA POR SOLICITUD
+
+Ref: entregas.viaje_solicitud_id - viaje_solicitudes.viaje_solicitud_id
+
+Ref: entregas.registrado_por_usuario_id > usuarios.usuario_id
+
+// INCIDENCIAS
+
+Ref: incidencias.solicitud_id > solicitudes.solicitud_id
+
+Ref: incidencias.tipo_incidencia_id > tipos_incidencia.tipo_incidencia_id
+
+Ref: incidencias.responsable_usuario_id > usuarios.usuario_id
+
+// NOTIFICACIONES
+
+Ref: notificaciones.solicitud_id > solicitudes.solicitud_id
+
+// DOCUMENTOS
+
+Ref: documentos.solicitud_id > solicitudes.solicitud_id
+
+Ref: documentos.tipo_documento_id > tipos_documento.tipo_documento_id
+
+// HISTORIAL
+
+Ref: historial_estados_solicitud.solicitud_id > solicitudes.solicitud_id
+
+Ref: historial_estados_solicitud.usuario_id > usuarios.usuario_id
+
+// AUDITORIA
+
+Ref: auditorias.usuario_id > usuarios.usuario_id

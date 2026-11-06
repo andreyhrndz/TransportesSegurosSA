@@ -1,0 +1,34 @@
+<?php
+declare(strict_types=1);
+
+require_once __DIR__ . '/../app/bootstrap.php';
+require_once __DIR__ . '/../app/transport_request_tvp.php';
+
+function write_assert(bool $condition, string $message): void { if (!$condition) { throw new RuntimeException($message); } }
+function write_error_code(PDOException $exception): int { return (int)($exception->errorInfo[1] ?? 0); }
+function write_expect_code(callable $callback, int $expected, string $message): void { try { $callback(); } catch (PDOException $exception) { if (write_error_code($exception) === $expected) { return; } throw new RuntimeException($message . ' Código inesperado: ' . write_error_code($exception)); } throw new RuntimeException($message . ' No se rechazó la operación.'); }
+function write_exec(PDO $connection, string $sql, array $params = []): void { $statement=$connection->prepare($sql);$statement->execute($params);while($statement->nextRowset()){}$statement->closeCursor(); }
+function write_output_id(PDO $connection, string $sql, array $params, string $column): int { $statement=$connection->prepare($sql);$statement->execute($params);$id=0;do{if($statement->columnCount()>0){$row=$statement->fetch();if(is_array($row)&&isset($row[$column])){$id=(int)$row[$column];}}}while($statement->nextRowset());$statement->closeCursor();write_assert($id>0,'El procedimiento no devolvió '.$column.'.');return $id; }
+
+if (configured_database_name() !== 'TransportesSegurosSA_Test') { throw new RuntimeException('Esta prueba requiere TSSA_DB_DATABASE=TransportesSegurosSA_Test.'); }
+$connection=db(); require_test_database($connection);
+try {
+    $context=$connection->prepare("EXEC sys.sp_set_session_context @key=N'usuario_id', @value=?");$context->execute([-1]);$context->closeCursor();
+    write_expect_code(fn()=>write_exec($connection,'EXEC dbo.sp_iniciar_viaje @viaje_id=?;',[1]),50316,'Una identidad sin permiso debe ser denegada.');
+    $context=$connection->prepare("EXEC sys.sp_set_session_context @key=N'usuario_id', @value=?");$context->execute([1]);$context->closeCursor();$connection->beginTransaction();
+    $suffix=bin2hex(random_bytes(5));$date=(new DateTimeImmutable('+2 days',new DateTimeZone('UTC')))->format('Y-m-d H:i:s');$rows=build_tipo_mercancias_tvp([['tipo_mercancia_id'=>1,'descripcion'=>'Carga de prueba '.$suffix,'peso_kg'=>'10.50','volumen_m3'=>'1.000']])['tipo_mercancias'];
+    $requestSql='DECLARE @solicitud_id INT; DECLARE @mercancias dbo.tipo_mercancias; INSERT INTO @mercancias (tipo_mercancia_id,descripcion,peso_kg,volumen_m3) VALUES (?,?,?,?); EXEC dbo.sp_crear_solicitud @codigo=?,@cliente_id=?,@origen_id=?,@destino_id=?,@destinatario_nombre=?,@destinatario_apellido1=?,@destinatario_apellido2=?,@destinatario_identificacion=?,@destinatario_telefono=?,@fecha_entrega_requerida=?,@mercancias=@mercancias,@solicitud_id=@solicitud_id OUTPUT; SELECT @solicitud_id AS solicitud_id;';
+    $first=write_output_id($connection,$requestSql,array_merge($rows[0],['__OPS_CANCEL_'.$suffix,1,1,2,'Destinatario','Prueba','Segundo',null,null,$date]),'solicitud_id');
+    write_exec($connection,'EXEC dbo.sp_ajustar_prioridad @solicitud_id=?,@prioridad=?,@justificacion=?;',[$first,'ALTA','Prueba transaccional.']);write_exec($connection,'EXEC dbo.sp_cancelar_solicitud @solicitud_id=?,@motivo=?;',[$first,'Prueba transaccional.']);
+    $request=write_output_id($connection,$requestSql,array_merge($rows[0],['__OPS_FLOW_'.$suffix,1,1,2,'Destinatario','Prueba','Segundo',null,null,$date]),'solicitud_id');
+    $trip=write_output_id($connection,'DECLARE @viaje_id INT; EXEC dbo.sp_crear_viaje @codigo=?,@vehiculo_id=?,@conductor_id=?,@ruta_id=?,@fecha_programada=?,@viaje_id=@viaje_id OUTPUT; SELECT @viaje_id AS viaje_id;',['__OPS_TRIP_'.$suffix,1,1,1,$date],'viaje_id');$stateQuery=$connection->prepare('SELECT estado FROM dbo.viajes WHERE viaje_id=?;');$stateQuery->execute([$trip]);write_assert($stateQuery->fetchColumn()==='PLANIFICADO','El viaje recién creado debe permanecer PLANIFICADO.');$stateQuery->closeCursor();
+    $pickup=write_output_id($connection,'DECLARE @parada_id INT; EXEC dbo.sp_agregar_parada @viaje_id=?,@ubicacion_id=?,@orden=?,@tipo_parada=?,@parada_id=@parada_id OUTPUT; SELECT @parada_id AS parada_id;',[$trip,1,1,'RECOGIDA'],'parada_id');
+    $delivery=write_output_id($connection,'DECLARE @parada_id INT; EXEC dbo.sp_agregar_parada @viaje_id=?,@ubicacion_id=?,@orden=?,@tipo_parada=?,@parada_id=@parada_id OUTPUT; SELECT @parada_id AS parada_id;',[$trip,2,2,'ENTREGA'],'parada_id');
+    $assignment=write_output_id($connection,'DECLARE @viaje_solicitud_id INT; EXEC dbo.sp_asignar_solicitud_viaje @viaje_id=?,@solicitud_id=?,@parada_recogida_id=?,@parada_entrega_id=?,@viaje_solicitud_id=@viaje_solicitud_id OUTPUT; SELECT @viaje_solicitud_id AS viaje_solicitud_id;',[$trip,$request,$pickup,$delivery],'viaje_solicitud_id');
+    write_exec($connection,'EXEC dbo.sp_iniciar_viaje @viaje_id=?;',[$trip]);
+    write_expect_code(fn()=>write_exec($connection,'EXEC dbo.sp_registrar_entrega @viaje_solicitud_id=?,@estado=?,@receptor_nombre=?,@receptor_identificacion=?,@receptor_telefono=?,@comprobante_url=?,@motivo_fallo=?;',[$assignment,'ENTREGADA','Receptor',null,null,null,null]),50321,'No debe registrar éxito sin comprobante.');
+    write_exec($connection,'EXEC dbo.sp_registrar_entrega @viaje_solicitud_id=?,@estado=?,@receptor_nombre=?,@receptor_identificacion=?,@receptor_telefono=?,@comprobante_url=?,@motivo_fallo=?;',[$assignment,'ENTREGADA','Receptor de prueba',null,null,'https://example.test/comprobante/'.$suffix,null]);
+    $incident=write_output_id($connection,'DECLARE @incidencia_id INT; EXEC dbo.sp_registrar_incidencia @solicitud_id=?,@tipo_incidencia_id=?,@descripcion=?,@incidencia_id=@incidencia_id OUTPUT; SELECT @incidencia_id AS incidencia_id;',[$request,1,'Incidencia transaccional '.$suffix],'incidencia_id');write_exec($connection,'EXEC dbo.sp_resolver_incidencia @incidencia_id=?,@resolucion=?;',[$incident,'Resuelta en prueba.']);write_expect_code(fn()=>write_exec($connection,'EXEC dbo.sp_resolver_incidencia @incidencia_id=?,@resolucion=?;',[$incident,'Otra resolución.']),50405,'No debe resolver una incidencia dos veces.');
+    $document=write_output_id($connection,'DECLARE @documento_id INT; EXEC dbo.sp_registrar_documento @solicitud_id=?,@tipo_documento_id=?,@numero_referencia=?,@archivo_url=?,@documento_id=@documento_id OUTPUT; SELECT @documento_id AS documento_id;',[$request,1,'REF-'.$suffix,'https://example.test/documento/'.$suffix],'documento_id');write_assert($document>0,'No se registró el documento.');write_exec($connection,'EXEC dbo.sp_finalizar_viaje @viaje_id=?;',[$trip]);
+    $connection->rollBack(); echo "OK: flujos de solicitud, viaje, entrega, incidencia y documento verificados y revertidos en TransportesSegurosSA_Test.\n";
+} catch (Throwable $exception) { if($connection->inTransaction()){$connection->rollBack();} throw $exception; }

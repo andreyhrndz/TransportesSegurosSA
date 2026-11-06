@@ -4,7 +4,13 @@
 
 La instantánea inicial compartida incluye `app/layout.php`, `app/bootstrap.php`, `public/index.php`, `public/clientes.php`, `public/clientes/*`, `public/assets/css/estilos.css` y `public/assets/js/app.js`. El CSS inicial está centralizado, pero comprimido y con valores de estilo repartidos. No asumir que el repositorio local coincide exactamente.
 
-## Enfoque
+## Goals / Non-Goals
+
+**Goals:** una base visual accesible que conserve login, dashboard y clientes.
+
+**Non-Goals:** crear módulos, permisos o contratos SQL.
+
+## Decisions
 
 1. Auditar UI actual y extraer inventario de controles, estados, eventos HTMX y variantes.
 2. Definir tokens semánticos para color, tipografía, spacing, radios, sombras, focos y breakpoints en una hoja CSS mantenible; preservar Bulma.
@@ -13,6 +19,8 @@ La instantánea inicial compartida incluye `app/layout.php`, `app/bootstrap.php`
 5. Sustituir iconos improvisados por SVG homogéneos, con texto accesible o etiqueta cuando solo exista icono.
 6. Mantener eventos HTMX, objetivos de swap, confirmaciones, modal, CSRF y mensajes de resultado. Los cambios DOM no deben romper los identificadores usados por JS.
 7. Formatear fechas visibles de forma local, mostrando UTC cuando sea imprescindible; no modificar SQL.
+
+La alternativa de mantener estilos por página queda descartada: impediría tokens, contraste y consistencia entre módulos.
 
 ## Diseño visual
 
@@ -28,6 +36,16 @@ Consultar `docs/guia-visual.md` y verificar contraste real de la paleta. Evitar 
 ## Integraciones y límites
 
 No alterar `app/bootstrap.php` salvo ajustes estrictamente necesarios y justificados. Sin cambios a conexión SQL, datos ni SP. El contenido del sidebar no puede prometer módulos aún inoperativos.
+
+## Risks / Trade-offs
+
+- [Regresión de IDs/eventos HTMX] → conservar contratos DOM y probar swaps/CSRF.
+- [Contraste insuficiente] → validar los tokens antes de aplicarlos.
+- [Navegación móvil oculta] → control explícito, foco y pruebas táctiles.
+
+## Migration Plan
+
+Aplicar tokens y componentes antes de rediseñar vistas; revertir el commit de frontend si falla smoke. No hay migración SQL.
 
 ## Estrategia de validación
 

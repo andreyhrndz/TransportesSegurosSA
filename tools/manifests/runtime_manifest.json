@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TransportesSegurosSA Runtime Manifest",
+  "description": "Especificación oficial y reproducible del runtime PHP 8.4 y controladores Microsoft SQL Server para Windows x64",
+  "generated_at": "2026-11-05T21:15:00Z",
+  "system": {
+    "os": "Windows Server 2022 / Windows 11 (x64)",
+    "architecture": "x64"
+  },
+  "components": {
+    "php": {
+      "version": "8.4.27",
+      "flavor": "NTS Visual C++ 2022 x64",
+      "official_download_url": "https://windows.php.net/downloads/releases/php-8.4.27-nts-Win32-vs17-x64.zip",
+      "binaries": {
+        "php.exe": {
+          "sha256": "69F59F1E561C24C5204800AD8ECC1585D79DFA03D07A644D66F4241C86B5991E"
+        }
+      }
+    },
+    "drivers": {
+      "microsoft_drivers_for_php_for_sql_server": {
+        "version": "6.0.0-preview / 5.12+",
+        "release_url": "https://github.com/microsoft/msphpsql/releases",
+        "binaries": {
+          "php_pdo_sqlsrv_84_nts_x64.dll": {
+            "sha256": "6BF961C7FB9A8DF261006CBB8C4CFE642433BA75AF5C79C8E31BA6C8197F448F"
+          },
+          "php_sqlsrv_84_nts_x64.dll": {
+            "sha256": "B09762CA5EEAD8C77DD04C9CA3F91777C9FE543818FF17D14F209F10A6B025E7"
+          }
+        }
+      },
+      "odbc_driver_for_sql_server": {
+        "name": "ODBC Driver 17 for SQL Server / ODBC Driver 18 for SQL Server",
+        "download_url": "https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server"
+      }
+    },
+    "required_extensions": [
+      "pdo",
+      "pdo_sqlsrv",
+      "sqlsrv",
+      "openssl",
+      "mbstring",
+      "curl",
+      "fileinfo"
+    ]
+  }
+}
