@@ -1,0 +1,83 @@
+; ==============================================================================
+; Transportes Seguros S.A. — Plantilla de Configuración PHP 8.4 (NTS x64)
+; ==============================================================================
+; Esta plantilla contiene las directivas necesarias para ejecutar el aplicativo
+; con seguridad, UTF-8 estricto y conectividad nativa a Microsoft SQL Server 2025.
+;
+; INSTRUCCIONES:
+; 1. Copiar este archivo como php.ini en la raíz de la instalación de PHP 8.4.
+; 2. Ajustar extension_dir si PHP se instala en una ruta distinta a C:\AdmBD2026\Herramientas\PHP\8.4.
+; ==============================================================================
+
+[PHP]
+engine = On
+short_open_tag = Off
+precision = 14
+output_buffering = 4096
+zlib.output_compression = Off
+implicit_flush = Off
+serialize_precision = -1
+
+; Límites de ejecución y memoria
+max_execution_time = 30
+max_input_time = 60
+memory_limit = 256M
+
+; Registro de errores (Seguridad ASVS 16.3.4: no filtrar trazas en producción)
+error_reporting = E_ALL
+display_errors = Off
+display_startup_errors = Off
+log_errors = On
+log_errors_max_len = 1024
+ignore_repeated_errors = Off
+ignore_repeated_source = Off
+report_memleaks = On
+
+; Cargas de archivos
+file_uploads = On
+upload_max_filesize = 10M
+max_file_uploads = 20
+post_max_size = 12M
+
+; Rutas y extensiones
+; En Windows NTS, extension_dir debe apuntar a la subcarpeta "ext"
+extension_dir = "ext"
+enable_dl = Off
+
+; Extensiones requeridas para Transportes Seguros S.A.
+extension=curl
+extension=fileinfo
+extension=mbstring
+extension=openssl
+extension=pdo_sqlsrv_84_nts_x64
+extension=sqlsrv_84_nts_x64
+
+[Date]
+; Zona horaria estandarizada a UTC
+date.timezone = "UTC"
+
+[Pdo_sqlsrv]
+pdo_sqlsrv.client_buffer_max_kb_size = 10240
+pdo_sqlsrv.log_severity = 0
+
+[sqlsrv]
+sqlsrv.LogSeverity = 0
+sqlsrv.ClientBufferMaxKBSize = 10240
+
+[Session]
+session.save_handler = files
+session.use_strict_mode = 1
+session.use_cookies = 1
+session.use_only_cookies = 1
+session.name = TSSA_SESSID
+session.auto_start = 0
+session.cookie_lifetime = 0
+session.cookie_path = /
+session.cookie_domain =
+session.cookie_httponly = 1
+session.cookie_samesite = "Lax"
+session.gc_probability = 1
+session.gc_divisor = 1000
+session.gc_maxlifetime = 1800
+session.cache_limiter = nocache
+session.cache_expire = 180

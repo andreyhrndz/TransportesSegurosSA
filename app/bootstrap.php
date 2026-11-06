@@ -1,13 +1,122 @@
 <?php
-/**
- * Funciones compartidas del proyecto.
- * IMPORTANTE: este archivo se mantiene fuera de public/.
- */
+/** Funciones compartidas fuera de public/. */
 declare(strict_types=1);
 
+ini_set('default_charset', 'UTF-8');
+
+/**
+ * Carga de forma segura variables de entorno desde el archivo .env raíz si existe,
+ * sin sobreescribir variables ya inyectadas por el entorno de ejecución del proceso.
+ */
+function load_env_file(?string $path = null): void
+{
+    $envPath = $path ?? dirname(__DIR__) . DIRECTORY_SEPARATOR . '.env';
+    if (!file_exists($envPath) || !is_readable($envPath)) {
+        return;
+    }
+
+    $content = file_get_contents($envPath);
+    if ($content === false) {
+        return;
+    }
+
+    $lines = preg_split('/\r\n|\r|\n/', $content);
+    if (!is_array($lines)) {
+        return;
+    }
+
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '' || str_starts_with($line, '#')) {
+            continue;
+        }
+
+        $pos = strpos($line, '=');
+        if ($pos === false) {
+            continue;
+        }
+
+        $key = trim(substr($line, 0, $pos));
+        $val = trim(substr($line, $pos + 1));
+
+        if ((str_starts_with($val, '"') && str_ends_with($val, '"'))
+            || (str_starts_with($val, "'") && str_ends_with($val, "'"))) {
+            $val = substr($val, 1, -1);
+        }
+
+        if (getenv($key) === false) {
+            putenv("{$key}={$val}");
+            $_ENV[$key] = $val;
+            $_SERVER[$key] = $val;
+        }
+    }
+}
+
+load_env_file();
+
+function is_https(): bool
+{
+    return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['SERVER_PORT'] ?? '') === '443');
+}
+
+function is_htmx_request(): bool
+{
+    return ($_SERVER['HTTP_HX_REQUEST'] ?? '') === 'true';
+}
+
+function configured_database_name(): string
+{
+    // ASVS 1.2.4: el nombre de base no se interpola desde entrada libre; sólo
+    // se admiten los destinos locales conocidos para evitar cambiar el DSN.
+    $database = trim((string)(getenv('TSSA_DB_DATABASE') ?: 'TransportesSegurosSA'));
+    if (!in_array($database, ['TransportesSegurosSA', 'TransportesSegurosSA_Test'], true)) {
+        throw new LogicException('Configuración de base de datos no permitida.');
+    }
+
+    return $database;
+}
+
+function require_test_database(PDO $connection): void
+{
+    // ASVS 16.5.3: las pruebas de escritura deben fallar cerradas si no están
+    // conectadas a la copia aislada esperada.
+    $effectiveDatabase = (string)$connection->query('SELECT DB_NAME()')->fetchColumn();
+    if ($effectiveDatabase !== 'TransportesSegurosSA_Test') {
+        throw new LogicException('Las pruebas de escritura requieren TransportesSegurosSA_Test.');
+    }
+}
+
+function session_cookie_name(): string
+{
+    // ASVS 3.3.1-3.3.3: aislar la cookie de esta aplicación; el prefijo
+    // __Host- sólo se usa cuando la petición realmente está protegida por HTTPS.
+    return is_https() ? '__Host-TSSA_TRANSPORTES_SESSION' : 'TSSA_TRANSPORTES_SESSION';
+}
+
+function send_security_headers(): void
+{
+    if (headers_sent()) {
+        return;
+    }
+    // ASVS 3.2.1, 3.4.4-3.4.6: limitar interpretación y contenido ejecutable, asegurando UTF-8 de extremo a extremo.
+    header('Content-Type: text/html; charset=utf-8');
+    header('X-Content-Type-Options: nosniff');
+    header('Referrer-Policy: strict-origin-when-cross-origin');
+    header('X-Frame-Options: DENY');
+    header('Permissions-Policy: camera=(), geolocation=(), microphone=()');
+    header("Content-Security-Policy: default-src 'self'; style-src 'self' https://cdn.jsdelivr.net; script-src 'self'; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+    if (is_https()) {
+        header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+    }
+}
+
+send_security_headers();
+
 if (session_status() !== PHP_SESSION_ACTIVE) {
-    $https = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
-    session_name('TSSA_SESSION');
+    $https = is_https();
+    // ASVS 3.3.1-3.3.4: cookie host-only, Secure, HttpOnly y SameSite en HTTPS.
+    // HTTP se conserva sólo para el entorno local de desarrollo.
+    session_name(session_cookie_name());
     session_set_cookie_params([
         'lifetime' => 0,
         'path' => '/',
@@ -16,7 +125,13 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
         'samesite' => 'Lax',
     ]);
     ini_set('session.use_strict_mode', '1');
-    session_start();
+    session_cache_limiter('nocache');
+    if (!session_start()) {
+        // ASVS 16.3.4: no continuar una petición sin almacenamiento de sesión.
+        error_log('TSSA security: unable to start PHP session');
+        http_response_code(503);
+        exit('El servicio no está disponible temporalmente. Inténtalo más tarde.');
+    }
 }
 
 function db(): PDO
@@ -26,30 +141,48 @@ function db(): PDO
         return $pdo;
     }
 
-    // Para esta primera prueba local se reutiliza la autenticación integrada
-    // de Windows, comprobada previamente en este equipo.
-    $server = getenv('TSSA_DB_SERVER') ?: 'localhost';
-    $database = 'TransportesSegurosSA';
-    $dsn = "sqlsrv:Server={$server};Database={$database};Encrypt=yes;TrustServerCertificate=yes";
+    $server = trim((string)(getenv('TSSA_DB_SERVER') ?: 'localhost'));
+    $database = configured_database_name();
+    $user = trim((string)(getenv('TSSA_DB_USER') ?: ''));
+    $pass = (string)(getenv('TSSA_DB_PASSWORD') ?: '');
+    $port = trim((string)(getenv('TSSA_DB_PORT') ?: ''));
+
+    $options = [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES => false,
+    ];
+    if (defined('PDO::SQLSRV_ATTR_ENCODING') && defined('PDO::SQLSRV_ENCODING_UTF8')) {
+        $options[PDO::SQLSRV_ATTR_ENCODING] = PDO::SQLSRV_ENCODING_UTF8;
+    }
+
+    $serverTarget = ($port !== '' && !str_contains($server, ',')) ? "{$server},{$port}" : $server;
+    $dsn = "sqlsrv:Server={$serverTarget};Database={$database};Encrypt=yes;TrustServerCertificate=yes";
 
     try {
-        $pdo = new PDO($dsn, null, null, [
-    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    PDO::ATTR_EMULATE_PREPARES => false,
-]);
+        if ($user !== '') {
+            $pdo = new PDO($dsn, $user, $pass, $options);
+        } else {
+            $pdo = new PDO($dsn, null, null, $options);
+        }
         return $pdo;
-    } catch (PDOException $ex) {
-        error_log('TSSA: no se pudo conectar a SQL Server: ' . $ex->getMessage());
+    } catch (Throwable $ex) {
+        error_log("TSSA: no se pudo conectar a SQL Server ({$serverTarget}/{$database}): " . $ex->getMessage());
+        if (PHP_SAPI === 'cli') {
+            throw $ex;
+        }
         http_response_code(503);
-        exit('No se pudo acceder a la base de datos. Revisa SQL Server y el registro de PHP.');
+        exit('El servicio no está disponible temporalmente. Inténtalo más tarde.');
     }
 }
 
 function e(mixed $value): string
 {
+    // ASVS 1.2.1: codificación HTML contextual en vistas PHP.
     return htmlspecialchars((string)($value ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
+
+require_once __DIR__ . '/components.php';
 
 function csrf_token(): string
 {
@@ -61,12 +194,48 @@ function csrf_token(): string
 
 function valid_csrf(?string $token): bool
 {
+    // ASVS 3.5.1: token anti-forgery de sesión comparado en tiempo constante.
     return is_string($token) && hash_equals(csrf_token(), $token);
+}
+
+function destroy_session(): void
+{
+    $_SESSION = [];
+    if (ini_get('session.use_cookies')) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), '', [
+            'expires' => time() - 42000,
+            'path' => $params['path'] ?? '/',
+            'domain' => $params['domain'] ?? '',
+            'secure' => (bool)($params['secure'] ?? false),
+            'httponly' => (bool)($params['httponly'] ?? true),
+            'samesite' => $params['samesite'] ?? 'Lax',
+        ]);
+    }
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_destroy();
+    }
+}
+
+function session_is_current(): bool
+{
+    $now = time();
+    $lastActivity = (int)($_SESSION['last_activity_at'] ?? 0);
+    $authenticatedAt = (int)($_SESSION['authenticated_at'] ?? 0);
+    $idleLimit = 30 * 60;
+    $absoluteLimit = 8 * 60 * 60;
+    if ($lastActivity === 0 || $authenticatedAt === 0 || $now - $lastActivity > $idleLimit || $now - $authenticatedAt > $absoluteLimit) {
+        return false;
+    }
+    $_SESSION['last_activity_at'] = $now;
+    return true;
 }
 
 function require_login(): array
 {
-    if (empty($_SESSION['usuario_id'])) {
+    // ASVS 7.2.1, 7.3.1-7.3.2: validar la sesión y sus límites temporales.
+    if (empty($_SESSION['usuario_id']) || !session_is_current()) {
+        destroy_session();
         redirect_login();
     }
     $id = (int)$_SESSION['usuario_id'];
@@ -74,15 +243,12 @@ function require_login(): array
     $stmt->execute([$id]);
     $usuario = $stmt->fetch();
     $stmt->closeCursor();
-
     if (!$usuario) {
-        unset($_SESSION['usuario_id']);
+        destroy_session();
         redirect_login();
     }
 
-    // En la misma conexión SQL de la petición, asociamos el usuario de la
-    // sesión PHP al contexto que consultan los procedimientos almacenados.
-    // Cada petición PHP abre una conexión no persistente.
+    // El contexto SQL procede exclusivamente de una sesión PHP ya validada.
     static $contextSet = false;
     if (!$contextSet) {
         $ctx = db()->prepare("EXEC sys.sp_set_session_context @key=N'usuario_id', @value=?, @read_only=1");
@@ -95,9 +261,9 @@ function require_login(): array
 
 function redirect_login(): never
 {
-    if (($_SERVER['HTTP_HX_REQUEST'] ?? '') === 'true') {
+    if (is_htmx_request()) {
         header('HX-Redirect: /auth/login.php');
-        http_response_code(200);
+        http_response_code(401);
         exit;
     }
     header('Location: /auth/login.php', true, 302);
@@ -120,7 +286,34 @@ function has_permission(string $codigo): bool
 
 function require_permission(string $codigo): void
 {
+    // ASVS 8.2.1, 8.3.1: permiso individual validado del lado del servidor.
     if (!has_permission($codigo)) {
+        error_log('TSSA security: authorization denied for permission ' . $codigo);
+        if (is_htmx_request()) {
+            http_response_code(403);
+            header('Content-Type: text/html; charset=UTF-8');
+            exit(ui_notice('No tienes permiso para realizar esta acción.', 'danger'));
+        }
+        http_response_code(403);
+        exit('No tienes permiso para acceder a esta función.');
+    }
+}
+
+function has_any_permission(array $codigos): bool
+{
+    foreach ($codigos as $codigo) {
+        if (has_permission($codigo)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+function require_any_permission(array $codigos): void
+{
+    // ASVS 8.2.1: un módulo compuesto exige al menos una capacidad explícita.
+    if (!has_any_permission($codigos)) {
         http_response_code(403);
         exit('No tienes permiso para acceder a esta función.');
     }
