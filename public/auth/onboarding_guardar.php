@@ -12,9 +12,33 @@ $isJson = (
     strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
 );
 
-// Soporte para visualización GET de pantalla de éxito
+// Soporte para visualización GET de pantalla de éxito protegida y de un solo uso
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     if (($_GET['exito'] ?? '') === '1') {
+        if (session_status() !== PHP_SESSION_ACTIVE) {
+            session_start();
+        }
+
+        $reqTicket = trim((string)($_GET['ticket'] ?? ''));
+        $sessionData = $_SESSION['onboarding_activation_success'] ?? null;
+
+        $isLegit = (
+            is_array($sessionData) &&
+            !empty($sessionData['ticket']) &&
+            $reqTicket !== '' &&
+            hash_equals((string)$sessionData['ticket'], $reqTicket) &&
+            empty($sessionData['consumed']) &&
+            time() <= (int)($sessionData['expires_at'] ?? 0)
+        );
+
+        // Consumo inmediato de un solo uso: el ticket se destruye de la sesión
+        unset($_SESSION['onboarding_activation_success']);
+
+        if (!$isLegit) {
+            // Rechazo inmediato de acceso directo, ticket inexistente/vencido o reutilización
+            header('Location: /auth/login.php');
+            exit;
+        }
         ?>
 <!DOCTYPE html>
 <html lang="es" data-theme="dark">
@@ -210,6 +234,22 @@ if ($error === null) {
     }
 }
 
+// Si la activación fue legítima y completada exitosamente, emitir ticket efímero de un solo uso en sesión
+$redirectUrl = '';
+if ($error === null && $targetUserId > 0) {
+    if (session_status() !== PHP_SESSION_ACTIVE) {
+        session_start();
+    }
+    $successTicket = bin2hex(random_bytes(16));
+    $_SESSION['onboarding_activation_success'] = [
+        'ticket' => $successTicket,
+        'usuario_id' => $targetUserId,
+        'expires_at' => time() + 120, // 2 minutos de validez máxima
+        'consumed' => false,
+    ];
+    $redirectUrl = '/auth/onboarding_guardar.php?exito=1&ticket=' . urlencode($successTicket);
+}
+
 // Respuesta estructurada para cliente JS (fetch)
 if ($isJson) {
     if ($error !== null) {
@@ -228,7 +268,7 @@ if ($isJson) {
     header('Content-Type: application/json; charset=utf-8');
     echo json_encode([
         'ok' => true,
-        'redirect' => '/auth/onboarding_guardar.php?exito=1',
+        'redirect' => $redirectUrl,
     ], JSON_UNESCAPED_UNICODE);
     exit;
 }
@@ -236,15 +276,14 @@ if ($isJson) {
 // Fallback HTML tradicional sin JavaScript
 if ($error !== null) {
     http_response_code($httpStatus);
-}
-?>
+    ?>
 <!DOCTYPE html>
 <html lang="es" data-theme="dark">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="color-scheme" content="dark">
-    <title>Activar cuenta — Transportes Seguros S.A.</title>
+    <title>Error de activación — Transportes Seguros S.A.</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
     <link rel="stylesheet" href="/assets/css/estilos.css">
@@ -254,32 +293,29 @@ if ($error !== null) {
     <div class="onboarding-box">
         <div class="has-text-centered mb-5">
             <strong class="is-size-5 has-text-primary">Transportes Seguros S.A.</strong>
-            <h1 class="title is-3 mt-2"><?= $error !== null ? 'Error de activación' : '¡Cuenta activada!' ?></h1>
+            <h1 class="title is-3 mt-2">Error de activación</h1>
         </div>
-
-        <?php if ($error !== null): ?>
-            <div class="notification notification-danger mb-5" role="alert">
-                <?= svg_icon('alert-triangle') ?>
-                <span><?= e($error) ?></span>
-            </div>
-            <div class="is-flex is-justify-content-center" style="gap: 1rem;">
-                <a href="/auth/onboarding.php?token=<?= urlencode($tokenRaw) ?>" class="button is-primary">Volver al formulario</a>
-                <a href="/auth/login.php" class="button button-secondary">Ir a inicio de sesión</a>
-            </div>
-        <?php else: ?>
-            <div class="notification notification-success mb-5" role="status">
-                <?= svg_icon('activate') ?>
-                <span>Tu cuenta ha sido activada exitosamente. Ya puedes iniciar sesión con tu nombre de usuario o correo y la contraseña que acabas de configurar.</span>
-            </div>
-            <p class="has-text-grey-light mb-5 has-text-centered">Los permisos asignados a tu cuenta por el administrador han sido configurados según tus funciones operativas.</p>
-            <div class="has-text-centered">
-                <a href="/auth/login.php" class="button is-primary is-medium is-fullwidth">
-                    <span>Iniciar sesión ahora</span>
-                    <?= svg_icon('chevron-right') ?>
-                </a>
-            </div>
-        <?php endif; ?>
+        <div class="notification notification-danger mb-5" role="alert">
+            <?= svg_icon('alert-triangle') ?>
+            <span><?= e($error) ?></span>
+        </div>
+        <div class="is-flex is-justify-content-center" style="gap: 1rem;">
+            <a href="/auth/onboarding.php?token=<?= urlencode($tokenRaw) ?>" class="button is-primary">Volver al formulario</a>
+            <a href="/auth/login.php" class="button button-secondary">Ir a inicio de sesión</a>
+        </div>
     </div>
 </div>
 </body>
 </html>
+    <?php
+    exit;
+}
+
+// Si es fallback sin JS y tuvo éxito: redirección PRG a la pantalla protegida
+if ($redirectUrl !== '') {
+    header('Location: ' . $redirectUrl);
+    exit;
+}
+
+header('Location: /auth/login.php');
+exit;
