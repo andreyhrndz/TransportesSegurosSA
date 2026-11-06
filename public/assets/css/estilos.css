@@ -1113,6 +1113,20 @@ html.preload-no-transition *::after {
     font-size: 0.78rem;
 }
 
+.help.is-danger,
+.field-error-text {
+    color: var(--color-danger-fg) !important;
+    font-size: 0.80rem;
+    font-weight: 600;
+    margin-top: 0.25rem;
+}
+
+.input.is-danger,
+.textarea.is-danger {
+    border-color: var(--color-danger) !important;
+    background-color: var(--color-danger-bg) !important;
+}
+
 .input,
 .textarea,
 .select select {
@@ -1686,6 +1700,16 @@ input[type="radio"] {
     margin-bottom: var(--space-4);
     font-size: 0.89rem;
     font-weight: 500;
+}
+
+.notification[hidden],
+#onb-general-error[hidden],
+[hidden] {
+    display: none !important;
+}
+
+#onb-general-error:empty {
+    display: none !important;
 }
 
 .notification-info {

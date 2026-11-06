@@ -78,9 +78,9 @@ if ($tokenRaw === '' || strlen($tokenRaw) !== 64 || !ctype_xdigit($tokenRaw)) {
                 </div>
             </div>
 
-            <div id="onb-general-error" class="notification notification-danger mb-4" role="alert" hidden></div>
+            <div id="onb-general-error" class="notification notification-danger mb-4" role="alert" aria-live="assertive" hidden></div>
 
-            <form action="/auth/onboarding_guardar.php" method="post" id="form-onboarding">
+            <form action="/auth/onboarding_guardar.php" method="post" id="form-onboarding" novalidate>
                 <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
                 <input type="hidden" name="token" value="<?= e($tokenRaw) ?>">
 
@@ -104,7 +104,7 @@ if ($tokenRaw === '' || strlen($tokenRaw) !== 64 || !ctype_xdigit($tokenRaw)) {
                             <label class="label" for="onb-identificacion">Cédula o identificación nacional <span class="required">*</span></label>
                             <div class="field has-addons">
                                 <div class="control is-expanded">
-                                    <input class="input" id="onb-identificacion" name="identificacion" maxlength="30" placeholder="Ej. 208820984" autocomplete="off" required>
+                                    <input class="input" id="onb-identificacion" name="identificacion" maxlength="30" placeholder="Ej. 208820984" autocomplete="off" required aria-describedby="onb-hacienda-help onb-identificacion-error">
                                 </div>
                                 <div class="control">
                                     <button type="button" class="button is-info" id="btn-onb-hacienda">
@@ -114,18 +114,21 @@ if ($tokenRaw === '' || strlen($tokenRaw) !== 64 || !ctype_xdigit($tokenRaw)) {
                                 </div>
                             </div>
                             <p class="help" id="onb-hacienda-help">Ingresa tu cédula física (9 dígitos) o jurídica (10 dígitos) para autocompletar tus nombres oficiales.</p>
+                            <p class="help is-danger" id="onb-identificacion-error" role="alert" hidden></p>
                         </div>
 
                         <div class="field mb-3">
                             <label class="label" for="onb-nombre">Nombre(s) <span class="required">*</span></label>
-                            <input class="input" id="onb-nombre" name="nombre" maxlength="100" required autocomplete="given-name" placeholder="Ej. Andrey Josué">
+                            <input class="input" id="onb-nombre" name="nombre" maxlength="100" required autocomplete="given-name" placeholder="Ej. Andrey Josué" aria-describedby="onb-nombre-error">
+                            <p class="help is-danger" id="onb-nombre-error" role="alert" hidden></p>
                         </div>
 
                         <div class="columns is-variable is-2 mb-0">
                             <div class="column">
                                 <div class="field mb-3">
                                     <label class="label" for="onb-primer-apellido">Primer apellido <span class="required">*</span></label>
-                                    <input class="input" id="onb-primer-apellido" name="primer_apellido" maxlength="100" required autocomplete="family-name" placeholder="Ej. Tijerino">
+                                    <input class="input" id="onb-primer-apellido" name="primer_apellido" maxlength="100" required autocomplete="family-name" placeholder="Ej. Tijerino" aria-describedby="onb-primer-apellido-error">
+                                    <p class="help is-danger" id="onb-primer-apellido-error" role="alert" hidden></p>
                                 </div>
                             </div>
                             <div class="column">
@@ -156,26 +159,30 @@ if ($tokenRaw === '' || strlen($tokenRaw) !== 64 || !ctype_xdigit($tokenRaw)) {
                             <label class="label" for="onb-usuario">Nombre de usuario <span class="required">*</span></label>
                             <div class="control input-with-icon">
                                 <?= svg_icon('user', '', 'input-icon') ?>
-                                <input class="input" id="onb-usuario" name="nombre_usuario" maxlength="80" autocomplete="username" placeholder="Ej. andrey.tijerino">
+                                <input class="input" id="onb-usuario" name="nombre_usuario" maxlength="80" autocomplete="username" placeholder="Ej. andrey.tijerino" aria-describedby="onb-usuario-help onb-usuario-error">
                             </div>
-                            <p class="help">Entre 3 y 80 caracteres (letras, números, punto, guion o guion bajo).</p>
+                            <p class="help" id="onb-usuario-help">Entre 3 y 80 caracteres (letras, números, punto, guion o guion bajo).</p>
+                            <p class="help is-danger" id="onb-usuario-error" role="alert" hidden></p>
                         </div>
 
                         <div class="field mb-3">
                             <label class="label" for="onb-password">Contraseña <span class="required">*</span></label>
                             <div class="control input-with-icon">
                                 <?= svg_icon('lock', '', 'input-icon') ?>
-                                <input class="input" id="onb-password" name="password" type="password" minlength="12" maxlength="72" autocomplete="new-password" placeholder="Mínimo 12 caracteres seguros">
+                                <input class="input" id="onb-password" name="password" type="password" maxlength="72" autocomplete="new-password" placeholder="Mínimo 12 caracteres seguros" aria-describedby="onb-password-help onb-password-error">
                             </div>
-                            <p class="help">Mínimo 12 caracteres. Se almacenará de forma segura como hash bcrypt.</p>
+                            <p class="help" id="onb-password-help">Mínimo 12 caracteres (máximo 72 bytes). Se almacenará de forma segura como hash criptográfico.</p>
+                            <p class="help is-danger" id="onb-password-error" role="alert" hidden></p>
                         </div>
 
                         <div class="field mb-2">
                             <label class="label" for="onb-password-confirm">Confirmar contraseña <span class="required">*</span></label>
                             <div class="control input-with-icon">
                                 <?= svg_icon('lock', '', 'input-icon') ?>
-                                <input class="input" id="onb-password-confirm" name="password_confirmacion" type="password" minlength="12" maxlength="72" autocomplete="new-password" placeholder="Repite tu contraseña exactamente">
+                                <input class="input" id="onb-password-confirm" name="password_confirmacion" type="password" maxlength="72" autocomplete="new-password" placeholder="Repite tu contraseña exactamente" aria-describedby="onb-password-confirm-help onb-password-confirm-error">
                             </div>
+                            <p class="help" id="onb-password-confirm-help">Vuelve a ingresar la misma contraseña para verificarla.</p>
+                            <p class="help is-danger" id="onb-password-confirm-error" role="alert" hidden></p>
                         </div>
                     </div>
 

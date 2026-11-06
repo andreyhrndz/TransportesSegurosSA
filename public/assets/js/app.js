@@ -1241,14 +1241,62 @@
         const badge1 = document.getElementById('badge-step-1');
         const errorBox = document.getElementById('onb-general-error');
 
+        const inputEmail = document.getElementById('onb-email');
         const inputId = document.getElementById('onb-identificacion');
+        const errId = document.getElementById('onb-identificacion-error');
         const inputNom = document.getElementById('onb-nombre');
+        const errNom = document.getElementById('onb-nombre-error');
         const inputAp1 = document.getElementById('onb-primer-apellido');
-        const inputUsuario = document.getElementById('onb-usuario');
-        const inputPass = document.getElementById('onb-password');
-        const inputPassConf = document.getElementById('onb-password-confirm');
+        const errAp1 = document.getElementById('onb-primer-apellido-error');
+        const inputAp2 = document.getElementById('onb-segundo-apellido');
 
-        function mostrarErrorOnb(msg) {
+        const inputUsuario = document.getElementById('onb-usuario');
+        const errUsuario = document.getElementById('onb-usuario-error');
+        const inputPass = document.getElementById('onb-password');
+        const errPass = document.getElementById('onb-password-error');
+        const inputPassConf = document.getElementById('onb-password-confirm');
+        const errPassConf = document.getElementById('onb-password-confirm-error');
+
+        const camposLista = [
+            { input: inputId, err: errId },
+            { input: inputNom, err: errNom },
+            { input: inputAp1, err: errAp1 },
+            { input: inputUsuario, err: errUsuario },
+            { input: inputPass, err: errPass },
+            { input: inputPassConf, err: errPassConf },
+        ];
+
+        function limpiarErrores() {
+            if (errorBox) {
+                errorBox.hidden = true;
+                errorBox.textContent = '';
+            }
+            camposLista.forEach(({ input, err }) => {
+                if (input) {
+                    input.classList.remove('is-danger');
+                    input.removeAttribute('aria-invalid');
+                }
+                if (err) {
+                    err.hidden = true;
+                    err.textContent = '';
+                }
+            });
+        }
+
+        function mostrarErrorCampo(input, errEl, mensaje) {
+            if (input) {
+                input.classList.add('is-danger');
+                input.setAttribute('aria-invalid', 'true');
+            }
+            if (errEl) {
+                errEl.hidden = false;
+                errEl.textContent = mensaje;
+            }
+            input?.focus();
+            input?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function mostrarErrorGeneral(msg) {
             if (!errorBox) return;
             if (!msg) {
                 errorBox.hidden = true;
@@ -1260,105 +1308,288 @@
             errorBox.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
+        function restaurarBotones() {
+            if (btnSubmit) {
+                btnSubmit.disabled = false;
+                btnSubmit.classList.remove('is-loading');
+            }
+            if (btnVolver) {
+                btnVolver.disabled = false;
+            }
+            if (btnContinuar) {
+                btnContinuar.disabled = false;
+                btnContinuar.classList.remove('is-loading');
+            }
+        }
+
+        function irAPaso(paso) {
+            if (paso === 1) {
+                if (paso2) paso2.hidden = true;
+                if (paso1) paso1.hidden = false;
+
+                pill2?.classList.remove('is-active');
+                pill1?.classList.add('is-active');
+                pill1?.classList.remove('is-completed');
+                if (badge1) badge1.textContent = '1';
+            } else if (paso === 2) {
+                if (paso1) paso1.hidden = true;
+                if (paso2) paso2.hidden = false;
+
+                pill1?.classList.remove('is-active');
+                pill1?.classList.add('is-completed');
+                if (badge1) badge1.textContent = '✓';
+
+                pill2?.classList.add('is-active');
+                pill2?.classList.remove('is-completed');
+            }
+        }
+
+        // Limpieza de error en tiempo real al escribir en cada campo
+        camposLista.forEach(({ input, err }) => {
+            if (!input) return;
+            input.addEventListener('input', () => {
+                if (input.classList.contains('is-danger')) {
+                    input.classList.remove('is-danger');
+                    input.removeAttribute('aria-invalid');
+                }
+                if (err && !err.hidden) {
+                    err.hidden = true;
+                    err.textContent = '';
+                }
+            });
+        });
+
+        // Validaciones síncronas idénticas a las reglas del servidor
+        function validarUsername(usr) {
+            const val = (usr || '').trim();
+            if (val === '') {
+                return 'El nombre de usuario es obligatorio.';
+            }
+            if (val.length < 3 || val.length > 80 || !/^[A-Za-z0-9._-]+$/.test(val)) {
+                return 'El nombre de usuario debe tener entre 3 y 80 caracteres (letras, números, punto, guion o guion bajo).';
+            }
+            return null;
+        }
+
+        function contarBytesUtf8(str) {
+            if (typeof TextEncoder !== 'undefined') {
+                return new TextEncoder().encode(str).length;
+            }
+            let b = 0;
+            for (let i = 0; i < str.length; i++) {
+                const code = str.charCodeAt(i);
+                if (code <= 0x7f) b += 1;
+                else if (code <= 0x7ff) b += 2;
+                else if (code >= 0xd800 && code <= 0xdbff) { b += 4; i++; }
+                else b += 3;
+            }
+            return b;
+        }
+
+        function validarPassword(pass, user, email) {
+            // ASVS 6.2.8: No aplicar trim() a la contraseña original
+            if (!pass) {
+                return 'La contraseña es obligatoria.';
+            }
+            const charCount = Array.from(pass).length;
+            if (charCount < 12) {
+                return 'La contraseña debe tener al menos 12 caracteres.';
+            }
+            const byteLen = contarBytesUtf8(pass);
+            if (byteLen > 72) {
+                return 'La contraseña no puede superar los 72 bytes para preservar su integridad.';
+            }
+
+            const norm = pass.toLowerCase().trim();
+            const blockedExact = [
+                '123456789012', '1234567890123', '12345678901234',
+                'password1234', 'password12345', 'qwertyuiop12', 'qwerty123456',
+                'administrador', 'administrador1', 'changeme1234', 'welcome12345',
+                'transportes1', 'transportes2026', 'transportesseguros'
+            ];
+            if (blockedExact.includes(norm)) {
+                return 'Elige una contraseña menos predecible.';
+            }
+
+            const contextWords = [user, email, (email || '').split('@')[0]];
+            for (const cw of contextWords) {
+                const w = (cw || '').toLowerCase().trim();
+                if (w.length >= 3 && norm.includes(w)) {
+                    return 'La contraseña no debe contener el usuario ni el correo electrónico.';
+                }
+            }
+            if (norm.includes('transportes')) {
+                return 'La contraseña no debe contener el nombre de la empresa.';
+            }
+
+            return null;
+        }
+
+        function validarConfirmacion(pass, conf) {
+            if (!conf) {
+                return 'Por favor confirma tu contraseña.';
+            }
+            if (pass !== conf) {
+                return 'La confirmación de la contraseña no coincide.';
+            }
+            return null;
+        }
+
         // Paso 1 -> Paso 2
         btnContinuar?.addEventListener('click', (e) => {
             e.preventDefault();
-            mostrarErrorOnb('');
+            limpiarErrores();
 
             const idVal = (inputId?.value || '').trim();
             const nomVal = (inputNom?.value || '').trim();
             const ap1Val = (inputAp1?.value || '').trim();
 
             if (!idVal) {
-                mostrarErrorOnb('Por favor ingresa tu número de cédula o identificación nacional.');
-                inputId?.focus();
+                mostrarErrorCampo(inputId, errId, 'El número de cédula o identificación es obligatorio.');
+                return;
+            }
+            if (idVal.length > 30) {
+                mostrarErrorCampo(inputId, errId, 'El número de identificación no puede superar 30 caracteres.');
                 return;
             }
             if (!nomVal) {
-                mostrarErrorOnb('Por favor ingresa al menos un nombre.');
-                inputNom?.focus();
+                mostrarErrorCampo(inputNom, errNom, 'El nombre es obligatorio.');
+                return;
+            }
+            if (nomVal.length > 100) {
+                mostrarErrorCampo(inputNom, errNom, 'El nombre no puede superar 100 caracteres.');
                 return;
             }
             if (!ap1Val) {
-                mostrarErrorOnb('Por favor ingresa tu primer apellido.');
-                inputAp1?.focus();
+                mostrarErrorCampo(inputAp1, errAp1, 'El primer apellido es obligatorio.');
+                return;
+            }
+            if (ap1Val.length > 100) {
+                mostrarErrorCampo(inputAp1, errAp1, 'El primer apellido no puede superar 100 caracteres.');
                 return;
             }
 
-            // Ocultar paso 1, mostrar paso 2
-            if (paso1) paso1.hidden = true;
-            if (paso2) paso2.hidden = false;
-
-            // Actualizar indicadores
-            pill1?.classList.remove('is-active');
-            pill1?.classList.add('is-completed');
-            if (badge1) badge1.textContent = '✓';
-
-            pill2?.classList.add('is-active');
-            pill2?.classList.remove('is-completed');
-
-            // Habilitar required en paso 2
-            if (inputUsuario) inputUsuario.required = true;
-            if (inputPass) inputPass.required = true;
-            if (inputPassConf) inputPassConf.required = true;
-
+            // Avanzar al paso 2 conservando todos los datos en el DOM
+            irAPaso(2);
             inputUsuario?.focus();
         });
 
         // Paso 2 -> Paso 1 (Volver)
         btnVolver?.addEventListener('click', (e) => {
             e.preventDefault();
-            mostrarErrorOnb('');
+            limpiarErrores();
 
-            // Ocultar paso 2, mostrar paso 1
-            if (paso2) paso2.hidden = true;
-            if (paso1) paso1.hidden = false;
-
-            // Actualizar indicadores
-            pill2?.classList.remove('is-active');
-            pill1?.classList.add('is-active');
-            pill1?.classList.remove('is-completed');
-            if (badge1) badge1.textContent = '1';
-
-            // Deshabilitar required en paso 2 mientras está oculto
-            if (inputUsuario) inputUsuario.required = false;
-            if (inputPass) inputPass.required = false;
-            if (inputPassConf) inputPassConf.required = false;
-
+            // Regresar al paso 1 conservando todos los datos intactos en el DOM
+            irAPaso(1);
             inputNom?.focus();
         });
 
-        // Validación final y prevención de doble submit
+        // Envío asíncrono del wizard con conservación total del estado
         formOnb.addEventListener('submit', (e) => {
-            mostrarErrorOnb('');
-            const usr = (inputUsuario?.value || '').trim();
-            const p1 = inputPass?.value || '';
-            const p2 = inputPassConf?.value || '';
+            e.preventDefault();
+            limpiarErrores();
 
-            if (usr.length < 3) {
-                e.preventDefault();
-                mostrarErrorOnb('El nombre de usuario debe contener al menos 3 caracteres.');
-                inputUsuario?.focus();
-                return;
-            }
-            if (p1.length < 12) {
-                e.preventDefault();
-                mostrarErrorOnb('La contraseña debe tener un mínimo de 12 caracteres.');
-                inputPass?.focus();
-                return;
-            }
-            if (p1 !== p2) {
-                e.preventDefault();
-                mostrarErrorOnb('Las contraseñas no coinciden. Por favor verifícalas.');
-                inputPassConf?.focus();
+            // Re-validación del paso 1
+            const idVal = (inputId?.value || '').trim();
+            const nomVal = (inputNom?.value || '').trim();
+            const ap1Val = (inputAp1?.value || '').trim();
+            if (!idVal || !nomVal || !ap1Val) {
+                irAPaso(1);
+                if (!idVal) mostrarErrorCampo(inputId, errId, 'El número de cédula o identificación es obligatorio.');
+                else if (!nomVal) mostrarErrorCampo(inputNom, errNom, 'El nombre es obligatorio.');
+                else mostrarErrorCampo(inputAp1, errAp1, 'El primer apellido es obligatorio.');
                 return;
             }
 
-            // Prevenir doble click/envío múltiple
+            // Validación del paso 2
+            const usrVal = (inputUsuario?.value || '').trim();
+            const errUsr = validarUsername(usrVal);
+            if (errUsr) {
+                irAPaso(2);
+                mostrarErrorCampo(inputUsuario, errUsuario, errUsr);
+                return;
+            }
+
+            const passVal = inputPass?.value || '';
+            const emailVal = inputEmail?.value || '';
+            const errPassMsg = validarPassword(passVal, usrVal, emailVal);
+            if (errPassMsg) {
+                irAPaso(2);
+                mostrarErrorCampo(inputPass, errPass, errPassMsg);
+                return;
+            }
+
+            const passConfVal = inputPassConf?.value || '';
+            const errConfMsg = validarConfirmacion(passVal, passConfVal);
+            if (errConfMsg) {
+                irAPaso(2);
+                mostrarErrorCampo(inputPassConf, errPassConf, errConfMsg);
+                return;
+            }
+
+            // Estado de carga y bloqueo de reenvíos
             if (btnSubmit) {
                 btnSubmit.disabled = true;
                 btnSubmit.classList.add('is-loading');
             }
+            if (btnVolver) {
+                btnVolver.disabled = true;
+            }
+
+            const formData = new FormData(formOnb);
+
+            fetch('/auth/onboarding_guardar.php', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(async (response) => {
+                let data = null;
+                try {
+                    data = await response.json();
+                } catch {
+                    throw new Error('Respuesta no válida del servidor. Por favor intenta de nuevo.');
+                }
+
+                if (response.ok && data?.ok) {
+                    window.location.href = data.redirect || '/auth/onboarding_guardar.php?exito=1';
+                    return;
+                }
+
+                // Fallo de validación o rechazo de negocio del servidor
+                restaurarBotones();
+                const errorMsg = data?.error || 'Ocurrió un error al procesar tu solicitud.';
+
+                if (data?.paso === 1) {
+                    irAPaso(1);
+                }
+
+                if (data?.field) {
+                    const fieldMap = {
+                        'identificacion': { input: inputId, err: errId },
+                        'nombre': { input: inputNom, err: errNom },
+                        'primer_apellido': { input: inputAp1, err: errAp1 },
+                        'nombre_usuario': { input: inputUsuario, err: errUsuario },
+                        'password': { input: inputPass, err: errPass },
+                        'password_confirmacion': { input: inputPassConf, err: errPassConf },
+                    };
+                    const target = fieldMap[data.field];
+                    if (target) {
+                        mostrarErrorCampo(target.input, target.err, errorMsg);
+                    } else {
+                        mostrarErrorGeneral(errorMsg);
+                    }
+                } else {
+                    mostrarErrorGeneral(errorMsg);
+                }
+            })
+            .catch((err) => {
+                restaurarBotones();
+                mostrarErrorGeneral(err.message || 'Error de comunicación con el servidor. Revisa tu conexión a internet.');
+            });
         });
     }
 
