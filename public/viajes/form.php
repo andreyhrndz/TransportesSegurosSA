@@ -29,7 +29,7 @@ try {
             <section class="modal-card-body">
                 <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
                 <div id="mensaje-viaje" role="alert"></div>
-                <div id="aviso-diagnostico-habilitacion" class="notification is-light py-2 px-3 mb-3" style="display: none;" role="status" aria-live="polite"></div>
+                <div id="aviso-diagnostico-habilitacion" class="notification py-2 px-3 mb-3" style="display: none;" role="status" aria-live="polite"></div>
 
                 <div class="field">
                     <label class="label" for="viaje-vehiculo">Vehículo disponible <span class="required">*</span></label>
@@ -37,8 +37,8 @@ try {
                         <option value="">Selecciona vehículo…</option>
                         <?php foreach ($vehiculos as $row): ?>
                             <?php
-                            $pmaDisplay = format_number_str($row['pma_kg'] ?? $row['capacidad_carga_kg']);
-                            $subtextVeh = 'PMA: ' . $pmaDisplay . ' kg · ' . ($row['clase_legal'] ?? 'LIVIANO') . (!empty($row['es_articulado']) ? ' (Articulado)' : '');
+                            $pmaDisplay = format_cr_measure($row['pma_kg'] ?? $row['capacidad_carga_kg']);
+                            $subtextVeh = 'PMA: ' . $pmaDisplay . ' kg · ' . humanize_status($row['clase_legal'] ?? 'LIVIANO') . (!empty($row['es_articulado']) ? ' (Articulado)' : '');
                             ?>
                             <option value="<?= (int)$row['vehiculo_id'] ?>" data-pma="<?= e($row['pma_kg'] ?? $row['capacidad_carga_kg']) ?>" data-articulado="<?= (int)($row['es_articulado'] ?? 0) ?>" data-clase="<?= e($row['clase_legal'] ?? 'LIVIANO') ?>" data-subtext="<?= e($subtextVeh) ?>">
                                 <?= e($row['placa'] . ' · ' . $row['marca'] . ' ' . $row['modelo']) ?>
@@ -53,9 +53,10 @@ try {
                         <option value="">Selecciona conductor…</option>
                         <?php foreach ($conductores as $row): ?>
                             <?php
-                            $licSub = !empty($row['licencias_verificadas']) ? ('Lic: ' . $row['licencias_verificadas']) : ('Lic. ' . $row['numero_licencia']);
+                            $licRaw = trim((string)($row['licencias_verificadas'] ?? ''));
+                            $licSub = ($licRaw !== '' && strtoupper($licRaw) !== 'PENDIENTE') ? ('Lic: ' . $licRaw) : 'Sin categoría registrada';
                             ?>
-                            <option value="<?= (int)$row['conductor_id'] ?>" data-licencias="<?= e($row['licencias_verificadas'] ?? '') ?>" data-vencimiento="<?= e($row['fecha_vencimiento_licencia'] ?? '') ?>" data-subtext="<?= e($licSub) ?>">
+                            <option value="<?= (int)$row['conductor_id'] ?>" data-licencias="<?= e($licRaw) ?>" data-vencimiento="<?= e(substr((string)($row['fecha_vencimiento_licencia'] ?? ''), 0, 10)) ?>" data-subtext="<?= e($licSub) ?>">
                                 <?= e(trim($row['nombre'] . ' ' . $row['primer_apellido'] . ' ' . ($row['segundo_apellido'] ?? ''))) ?>
                             </option>
                         <?php endforeach; ?>

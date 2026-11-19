@@ -173,13 +173,20 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
 
 function layout_end(): void
 {
+    $flash = null;
+    if (isset($_SESSION['tssa_flash_notice']) && is_array($_SESSION['tssa_flash_notice'])) {
+        $flash = $_SESSION['tssa_flash_notice'];
+        unset($_SESSION['tssa_flash_notice']);
+    }
+    $flashMsg = is_array($flash) ? (string)($flash['message'] ?? '') : '';
+    $flashErr = is_array($flash) && !empty($flash['error']) ? '1' : '0';
 ?>
         </main>
     </div>
 </div>
 <div class="sidebar-backdrop" id="sidebar-backdrop" data-sidebar-close hidden aria-hidden="true"></div>
 <div id="modal-contenido" aria-live="polite"></div>
-<div id="aviso-temporal" class="toast" role="status" aria-live="polite" hidden></div>
+<div id="aviso-temporal" class="toast" role="status" aria-live="polite" hidden<?= $flashMsg !== '' ? ' data-flash-message="' . e($flashMsg) . '" data-flash-error="' . $flashErr . '"' : '' ?>></div>
 </body>
 </html>
 <?php

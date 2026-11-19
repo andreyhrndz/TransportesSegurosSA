@@ -229,6 +229,8 @@ try {
             'modelo' => 'M2 106',
             'anio' => '2025',
             'capacidad_carga_kg' => '9500.00',
+            'pma_kg' => '14000.00',
+            'clase_legal' => 'PESADO_RIGIDO',
             'capacidad_volumen_m3' => '42.000',
             'kilometraje_actual' => '1500.0',
             'estado' => 'DISPONIBLE',
@@ -262,6 +264,7 @@ try {
             'telefono' => '8888-5555',
             'correo' => strtolower($cNom) . ".{$suffix}@example.test",
             'numero_licencia' => $cLic,
+            'codigo_licencia' => 'B3',
             'fecha_vencimiento_licencia' => $futureLicense,
             'estado_operativo' => 'DISPONIBLE',
         ]);
@@ -337,6 +340,8 @@ try {
         'modelo' => 'FMX',
         'anio' => '2025',
         'capacidad_carga_kg' => '10000',
+        'pma_kg' => '14000',
+        'clase_legal' => 'PESADO_RIGIDO',
         'kilometraje_actual' => '100',
         'estado' => 'ASIGNADO',
     ]);
@@ -349,6 +354,7 @@ try {
         'nombre' => 'Mario',
         'primer_apellido' => 'Mora',
         'numero_licencia' => '__LINV_' . $suffix,
+        'codigo_licencia' => 'B2',
         'fecha_vencimiento_licencia' => '2021-01-01',
         'estado_operativo' => 'DISPONIBLE',
     ]);
@@ -373,6 +379,8 @@ try {
         'modelo' => 'Dup',
         'anio' => '2025',
         'capacidad_carga_kg' => '5000',
+        'pma_kg' => '7500',
+        'clase_legal' => 'MEDIANO_RIGIDO',
         'kilometraje_actual' => '10',
         'estado' => 'DISPONIBLE',
     ]);
@@ -387,6 +395,8 @@ try {
         'modelo' => 'M2 106',
         'anio' => '2025',
         'capacidad_carga_kg' => '9500',
+        'pma_kg' => '14000.00',
+        'clase_legal' => 'PESADO_RIGIDO',
         'kilometraje_actual' => '1200.0',
         'estado' => 'DISPONIBLE',
     ]);
@@ -401,6 +411,8 @@ try {
         'modelo' => 'M2 106 Plus',
         'anio' => '2025',
         'capacidad_carga_kg' => '9800.00',
+        'pma_kg' => '14000.00',
+        'clase_legal' => 'PESADO_RIGIDO',
         'capacidad_volumen_m3' => '44.000',
         'kilometraje_actual' => '1650.5',
         'estado' => 'MANTENIMIENTO',

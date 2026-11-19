@@ -139,7 +139,7 @@ $configs = [
         'write' => 'FLOTAS_GESTIONAR',
         'entity' => 'vehiculo',
         'sql' => 'DECLARE @total_registros INT; EXEC dbo.sp_listar_vehiculos @estado=?,@solo_activos=?,@buscar=?,@pagina=?,@por_pagina=?,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;',
-        'headers' => ['Placa', 'Vehículo', 'Capacidad y odómetro', 'Estado operativo', 'Registro'],
+        'headers' => ['Placa', 'Vehículo', 'Capacidad de carga', 'Estado operativo', 'Registro'],
     ],
     'conductores' => [
         'read' => 'FLOTAS_VER',
@@ -204,24 +204,25 @@ if ($isJson) {
     $options = [];
     foreach ($result['rows'] as $row) {
         if ($section === 'vehiculos') {
-            $pmaVal = $row['pma_kg'] !== null ? format_number_str($row['pma_kg']) : format_number_str($row['capacidad_carga_kg']);
+            $pmaVal = format_cr_measure($row['pma_kg'] ?? $row['capacidad_carga_kg']);
             $options[] = [
                 'value' => (string)(int)$row['vehiculo_id'],
                 'text' => (string)$row['placa'] . ' · ' . (string)$row['marca'] . ' ' . (string)$row['modelo'],
-                'subtext' => 'PMA ' . $pmaVal . ' kg · ' . humanize_status($row['estado']) . (!empty($row['es_articulado']) ? ' (Articulado)' : ''),
+                'subtext' => 'PMA ' . $pmaVal . ' kg · ' . humanize_status($row['clase_legal'] ?? 'LIVIANO') . (!empty($row['es_articulado']) ? ' (Articulado)' : ''),
                 'pma' => (string)($row['pma_kg'] ?? ''),
                 'articulado' => (string)(int)($row['es_articulado'] ?? 0),
                 'clase' => (string)($row['clase_legal'] ?? ''),
             ];
         } elseif ($section === 'conductores') {
             $fullName = trim((string)$row['nombre'] . ' ' . (string)$row['primer_apellido'] . ' ' . (string)($row['segundo_apellido'] ?? ''));
-            $lics = !empty($row['licencias_verificadas']) ? (string)$row['licencias_verificadas'] : ('Lic. ' . (string)$row['numero_licencia']);
+            $licRaw = trim((string)($row['licencias_verificadas'] ?? ''));
+            $lics = ($licRaw !== '' && strtoupper($licRaw) !== 'PENDIENTE') ? $licRaw : 'Sin categoría';
             $options[] = [
                 'value' => (string)(int)$row['conductor_id'],
                 'text' => $fullName,
                 'subtext' => $lics . ' · Vence ' . format_cr_date($row['fecha_vencimiento_licencia']),
-                'licencias' => (string)($row['licencias_verificadas'] ?? ''),
-                'vencimiento' => (string)($row['fecha_vencimiento_licencia'] ?? ''),
+                'licencias' => $licRaw,
+                'vencimiento' => substr((string)($row['fecha_vencimiento_licencia'] ?? ''), 0, 10),
             ];
         } elseif ($section === 'rutas') {
             $options[] = [
@@ -245,6 +246,7 @@ $total = $result['total'];
 $pages = max(1, (int)ceil($total / $perPage));
 $page = min($page, $pages);
 $colCount = count($cfg['headers']) + ($canWrite ? 1 : 0);
+$todayUtc = gmdate('Y-m-d');
 ?>
 <div class="table-container">
     <table class="table is-fullwidth is-hoverable">
@@ -268,17 +270,26 @@ $colCount = count($cfg['headers']) + ($canWrite ? 1 : 0);
                     <?php if ($section === 'vehiculos'): ?>
                         <?php $rowId = (int)$row['vehiculo_id']; ?>
                         <?php $isAssigned = (string)$row['estado'] === 'ASIGNADO'; ?>
+                        <?php $isNoConforme = (string)($row['estado_homologacion'] ?? '') === 'NO_CONFORME'; ?>
+                        <?php $missingPma = $row['pma_kg'] === null || (float)$row['pma_kg'] <= 0; ?>
                         <td><code><?= e($row['placa']) ?></code></td>
                         <td>
                             <div class="cell-stack">
                                 <strong><?= e($row['marca'] . ' ' . $row['modelo']) ?></strong>
-                                <span class="is-size-7">Modelo <?= (int)$row['anio'] ?> · <?= e($row['clase_legal'] ?? 'LIVIANO') ?><?= !empty($row['es_articulado']) ? ' · Articulado' : '' ?></span>
+                                <span class="is-size-7">Año <?= (int)$row['anio'] ?> · <?= e(humanize_status($row['clase_legal'] ?? 'LIVIANO')) ?><?= !empty($row['es_articulado']) ? ' · Articulado' : '' ?></span>
                             </div>
                         </td>
                         <td>
                             <div class="cell-stack">
-                                <strong>Útil: <?= e(format_number_str($row['capacidad_carga_kg'])) ?> kg · PMA: <?= e(format_number_str($row['pma_kg'] ?? $row['capacidad_carga_kg'])) ?> kg</strong>
-                                <span class="is-size-7"><?= e(format_number_str($row['kilometraje_actual'])) ?> km · Homol: <?= status_tag($row['estado_homologacion'] ?? 'VERIFICADO') ?></span>
+                                <strong>Útil: <?= e(format_cr_measure($row['capacidad_carga_kg'])) ?> kg · PMA: <?= $missingPma ? 'Pendiente' : e(format_cr_measure($row['pma_kg'])) . ' kg' ?></strong>
+                                <?php if ($row['capacidad_volumen_m3'] !== null && (float)$row['capacidad_volumen_m3'] > 0): ?>
+                                    <span class="is-size-7">Volumen: <?= e(format_cr_measure($row['capacidad_volumen_m3'], 3)) ?> m³</span>
+                                <?php endif; ?>
+                                <?php if ($isNoConforme): ?>
+                                    <div class="mt-1"><span class="status-tag status-tag-danger">Bloqueado (No conforme)</span></div>
+                                <?php elseif ($missingPma): ?>
+                                    <div class="mt-1"><span class="status-tag status-tag-warning">PMA por definir</span></div>
+                                <?php endif; ?>
                             </div>
                         </td>
                         <td><?= status_tag($row['estado']) ?></td>
@@ -286,6 +297,13 @@ $colCount = count($cfg['headers']) + ($canWrite ? 1 : 0);
                     <?php elseif ($section === 'conductores'): ?>
                         <?php $rowId = (int)$row['conductor_id']; ?>
                         <?php $isAssigned = (string)$row['estado_operativo'] === 'ASIGNADO'; ?>
+                        <?php
+                        $licVerifRaw = trim((string)($row['licencias_verificadas'] ?? ''));
+                        $hasValidCats = $licVerifRaw !== '' && strtoupper($licVerifRaw) !== 'PENDIENTE';
+                        $licBadges = $hasValidCats ? array_filter(array_map('trim', explode(',', $licVerifRaw))) : [];
+                        $licDateIso = substr((string)($row['fecha_vencimiento_licencia'] ?? ''), 0, 10);
+                        $isExpiredLic = $licDateIso !== '' && $licDateIso < $todayUtc;
+                        ?>
                         <td><strong><?= e(trim($row['nombre'] . ' ' . $row['primer_apellido'] . ' ' . ($row['segundo_apellido'] ?? ''))) ?></strong></td>
                         <td>
                             <div class="cell-stack">
@@ -297,14 +315,20 @@ $colCount = count($cfg['headers']) + ($canWrite ? 1 : 0);
                             <div class="cell-stack">
                                 <div class="is-flex is-align-items-center is-flex-wrap-wrap mb-1">
                                     <span class="has-text-weight-semibold">N° <?= e($row['numero_licencia']) ?></span>
-                                    <?php
-                                    $licBadges = array_filter(array_map('trim', explode(',', (string)($row['licencias_verificadas'] ?? ''))));
-                                    foreach ($licBadges as $lb):
-                                    ?>
-                                        <span class="tag is-primary is-light is-rounded ml-1"><?= e($lb) ?></span>
-                                    <?php endforeach; ?>
+                                    <?php if ($licBadges): ?>
+                                        <?php foreach ($licBadges as $lb): ?>
+                                            <span class="tag is-primary is-light is-rounded ml-1"><?= e($lb) ?></span>
+                                        <?php endforeach; ?>
+                                    <?php else: ?>
+                                        <span class="status-tag status-tag-warning ml-1">Sin categoría</span>
+                                    <?php endif; ?>
                                 </div>
-                                <span class="is-size-7">Vence: <?= e(format_cr_date($row['fecha_vencimiento_licencia'])) ?></span>
+                                <span class="is-size-7">
+                                    Vence: <?= e(format_cr_date($row['fecha_vencimiento_licencia'])) ?>
+                                    <?php if ($isExpiredLic): ?>
+                                        <span class="status-tag status-tag-danger ml-1">Vencida</span>
+                                    <?php endif; ?>
+                                </span>
                             </div>
                         </td>
                         <td><?= status_tag($row['estado_operativo']) ?></td>
@@ -315,7 +339,7 @@ $colCount = count($cfg['headers']) + ($canWrite ? 1 : 0);
                         <td><strong><?= e($row['nombre']) ?></strong></td>
                         <td><?= e($row['origen_nombre']) ?></td>
                         <td><?= e($row['destino_nombre']) ?></td>
-                        <td><?= e(format_number_str($row['distancia_km'])) ?> km · <?= (int)$row['duracion_estimada_min'] ?> min</td>
+                        <td><?= e(format_cr_measure($row['distancia_km'])) ?> km · <?= (int)$row['duracion_estimada_min'] ?> min</td>
                         <td><?= status_tag($isActive ? 'ACTIVO' : 'INACTIVO') ?></td>
                     <?php else: ?>
                         <?php $rowId = (int)$row['ubicacion_id']; ?>

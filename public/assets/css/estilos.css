@@ -2588,3 +2588,79 @@ span.flatpickr-weekday {
     border: 0 !important;
 }
 
+
+/* ==========================================================================
+   CIERRE YAGNI: AYUDA PMA, VALIDACIÓN INLINE Y COHERENCIA RESPONSIVE
+   ========================================================================== */
+
+.pma-help-callout {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    padding: 0.7rem 0.9rem;
+    background: var(--color-info-bg);
+    border: 1px solid var(--color-info-border);
+    border-left: 3px solid var(--color-primary);
+    border-radius: var(--radius-md);
+    color: var(--color-text-secondary);
+    font-size: 0.85rem;
+    line-height: 1.45;
+}
+
+.pma-help-callout .icon {
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+    color: var(--color-info-fg);
+}
+
+.pma-help-callout strong {
+    color: var(--color-text);
+}
+
+.table code {
+    white-space: nowrap;
+}
+
+.help.is-danger {
+    color: var(--color-danger-fg) !important;
+    font-weight: 500;
+}
+
+.ts-wrapper.has-error .ts-control,
+.input.is-danger {
+    border-color: var(--color-danger) !important;
+    box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.22) !important;
+}
+
+.ts-dropdown {
+    max-width: calc(100vw - 1.5rem) !important;
+}
+
+.flatpickr-calendar {
+    max-width: calc(100vw - 1rem);
+}
+
+#invitaciones-feedback:empty {
+    display: none;
+}
+
+#invitaciones-feedback {
+    margin-bottom: var(--space-3);
+}
+
+@media (max-width: 768px) {
+    .modal-card,
+    .modal-card.modal-card-wide {
+        width: calc(100vw - 1rem);
+        max-height: calc(100vh - 1rem);
+    }
+
+    .modal-card-body {
+        padding: 1rem !important;
+    }
+
+    .modal-card-head,
+    .modal-card-foot {
+        padding: 0.85rem 1rem !important;
+    }
+}

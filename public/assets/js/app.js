@@ -186,24 +186,50 @@
                                 nombre: item.nombre ? String(item.nombre) : '',
                                 identificacion: item.identificacion ? String(item.identificacion) : '',
                                 telefono: item.telefono ? String(item.telefono) : '',
+                                pma: item.pma !== undefined ? String(item.pma) : '',
+                                articulado: item.articulado !== undefined ? String(item.articulado) : '',
+                                clase: item.clase ? String(item.clase) : '',
+                                licencias: item.licencias ? String(item.licencias) : '',
+                                vencimiento: item.vencimiento ? String(item.vencimiento) : '',
                             })));
                         })
                         .catch(() => callback([]));
                 };
             }
 
+            if (select.dataset.licenseSelect === '1') {
+                config.onChange = () => {
+                    handleLicenseCategoryChange(select);
+                };
+            }
+
             try {
                 const instance = new window.TomSelect(select, config);
                 const syncDropdownPosition = () => {
-                    if (instance.isOpen) {
-                        instance.positionDropdown();
+                    if (!instance.isOpen) return;
+                    instance.positionDropdown();
+                    const dd = instance.dropdown;
+                    if (!dd) return;
+                    const rect = dd.getBoundingClientRect();
+                    const margin = 8;
+                    if (rect.right > window.innerWidth - margin) {
+                        const adjustedLeft = Math.max(margin, window.innerWidth - rect.width - margin);
+                        dd.style.left = adjustedLeft + 'px';
+                    }
+                    if (rect.left < margin) {
+                        dd.style.left = margin + 'px';
                     }
                 };
+                instance.on('dropdown_open', () => requestAnimationFrame(syncDropdownPosition));
                 const modalBody = select.closest('.modal-card-body');
                 if (modalBody) {
                     modalBody.addEventListener('scroll', syncDropdownPosition, { passive: true });
-                    instance._modalBodyScrollCleanup = () => modalBody.removeEventListener('scroll', syncDropdownPosition);
                 }
+                window.addEventListener('resize', syncDropdownPosition, { passive: true });
+                instance._modalBodyScrollCleanup = () => {
+                    if (modalBody) modalBody.removeEventListener('scroll', syncDropdownPosition);
+                    window.removeEventListener('resize', syncDropdownPosition);
+                };
             } catch {
                 delete select.dataset.tsInitialized;
             }
@@ -285,7 +311,13 @@
                         cal.appendChild(footer);
                     }
                 },
-                onChange(selectedDates, dateStr) {
+                onChange(selectedDates, dateStr, instance) {
+                    if (input.id === 'cond-vencimiento') {
+                        clearInlineFieldError(input, document.getElementById('cond-vencimiento-error'));
+                    }
+                    if (!isDateTime && selectedDates.length > 0 && instance?.isOpen) {
+                        instance.close();
+                    }
                     const form = input.closest('form');
                     if (!form) return;
                     if (input.name === 'desde') {
@@ -464,12 +496,227 @@
         timer = setTimeout(() => { aviso.hidden = true; }, 4500);
     }
 
+    function hasSubmittingModalForm() {
+        return Boolean(modal?.querySelector('form[data-submitting="1"]'));
+    }
+
+    function closeOpenFloatingControls(root) {
+        if (!root || !root.querySelectorAll) return false;
+        let closed = false;
+        root.querySelectorAll('select[data-combobox]').forEach((select) => {
+            if (select.tomselect?.isOpen) {
+                select.tomselect.close();
+                closed = true;
+            }
+        });
+        root.querySelectorAll('input[data-datepicker]').forEach((input) => {
+            if (input._flatpickr?.isOpen) {
+                input._flatpickr.close();
+                closed = true;
+            }
+        });
+        return closed;
+    }
+
+    function showInlineFieldError(controlEl, errorEl, message) {
+        if (errorEl) {
+            errorEl.textContent = message;
+            errorEl.hidden = false;
+        }
+        if (controlEl) {
+            controlEl.setAttribute('aria-invalid', 'true');
+            if (controlEl.tomselect?.wrapper) {
+                controlEl.tomselect.wrapper.classList.add('has-error');
+            } else if (controlEl._flatpickr?.altInput) {
+                controlEl._flatpickr.altInput.classList.add('is-danger');
+                controlEl._flatpickr.altInput.setAttribute('aria-invalid', 'true');
+            } else {
+                controlEl.classList.add('is-danger');
+            }
+        }
+    }
+
+    function clearInlineFieldError(controlEl, errorEl) {
+        if (errorEl) {
+            errorEl.textContent = '';
+            errorEl.hidden = true;
+        }
+        if (controlEl) {
+            controlEl.removeAttribute('aria-invalid');
+            if (controlEl.tomselect?.wrapper) {
+                controlEl.tomselect.wrapper.classList.remove('has-error');
+            }
+            if (controlEl._flatpickr?.altInput) {
+                controlEl._flatpickr.altInput.classList.remove('is-danger');
+                controlEl._flatpickr.altInput.removeAttribute('aria-invalid');
+            }
+            controlEl.classList.remove('is-danger');
+        }
+    }
+
+    function isValidIsoDateString(raw) {
+        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+        if (!match) return false;
+        const y = Number(match[1]);
+        const m = Number(match[2]);
+        const d = Number(match[3]);
+        const dt = new Date(Date.UTC(y, m - 1, d));
+        return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d;
+    }
+
+    function handleLicenseCategoryChange(select) {
+        if (!select || select.dataset.licenseSelect !== '1') return;
+        const nextVal = String(select.value || '').trim().toUpperCase();
+        const prevVal = String(select.dataset.prevLicenseCode || '').trim().toUpperCase();
+
+        if (nextVal !== '') {
+            clearInlineFieldError(select, document.getElementById('cond-tipo-licencia-error'));
+        }
+
+        // Si se vuelve a elegir la misma categoría sin cambio real, conservar la fecha existente.
+        if (nextVal === prevVal) {
+            return;
+        }
+
+        select.dataset.prevLicenseCode = nextVal;
+
+        // Al cambiar desde una categoría previa a otra distinta, limpiar de inmediato el vencimiento anterior.
+        if (prevVal !== '') {
+            const dateInput = document.getElementById('cond-vencimiento');
+            if (dateInput) {
+                if (dateInput._flatpickr) {
+                    dateInput._flatpickr.clear(false);
+                    if (dateInput._flatpickr.altInput) {
+                        dateInput._flatpickr.altInput.value = '';
+                    }
+                }
+                dateInput.value = '';
+                clearInlineFieldError(dateInput, document.getElementById('cond-vencimiento-error'));
+                const helpEl = document.getElementById('cond-vencimiento-help');
+                if (helpEl) {
+                    helpEl.textContent = nextVal
+                        ? 'Categoría cambiada a ' + nextVal + ': ingresa la fecha de vencimiento correspondiente.'
+                        : 'Ingresa la fecha de vencimiento vigente de la licencia.';
+                }
+            }
+        }
+    }
+
+    function validateConductorForm(form) {
+        const msgBox = form.querySelector('#mensaje-form-maestro');
+        if (msgBox) msgBox.innerHTML = '';
+
+        const textRequired = [
+            { id: 'cond-id', label: 'Ingresa la identificación del conductor.' },
+            { id: 'cond-nombre', label: 'Ingresa el nombre del conductor.' },
+            { id: 'cond-ap1', label: 'Ingresa el primer apellido del conductor.' },
+            { id: 'cond-licencia', label: 'Ingresa el número de licencia del conductor.' },
+        ];
+        for (const item of textRequired) {
+            const el = form.querySelector('#' + item.id);
+            if (el && !el.disabled && el.value.trim() === '') {
+                el.classList.add('is-danger');
+                el.focus();
+                if (msgBox) {
+                    msgBox.innerHTML = '<div class="notification notification-danger" role="alert"><span>' + escapeHtml(item.label) + '</span></div>';
+                }
+                return false;
+            }
+            if (el) el.classList.remove('is-danger');
+        }
+
+        const emailEl = form.querySelector('#cond-correo');
+        if (emailEl && emailEl.value.trim() !== '' && !emailEl.checkValidity()) {
+            emailEl.classList.add('is-danger');
+            emailEl.focus();
+            if (msgBox) {
+                msgBox.innerHTML = '<div class="notification notification-danger" role="alert"><span>Ingresa un correo electrónico válido.</span></div>';
+            }
+            return false;
+        }
+        if (emailEl) emailEl.classList.remove('is-danger');
+
+        const licSelect = form.querySelector('#cond-tipo-licencia');
+        const licErr = form.querySelector('#cond-tipo-licencia-error');
+        const licVal = String(licSelect?.value || '').trim();
+        if (!licVal) {
+            showInlineFieldError(licSelect, licErr, 'Selecciona el tipo de licencia del conductor.');
+            (licSelect?.tomselect?.control_input || licSelect)?.focus();
+            return false;
+        }
+        clearInlineFieldError(licSelect, licErr);
+
+        const dateInput = form.querySelector('#cond-vencimiento');
+        const dateErr = form.querySelector('#cond-vencimiento-error');
+        const rawDate = String(dateInput?.value || '').trim();
+        const todayIso = dateInput?.getAttribute('min') || new Date().toISOString().slice(0, 10);
+
+        if (!rawDate) {
+            showInlineFieldError(dateInput, dateErr, 'Indica la fecha de vencimiento de la licencia.');
+            (dateInput?._flatpickr?.altInput || dateInput)?.focus();
+            return false;
+        }
+        if (!isValidIsoDateString(rawDate)) {
+            showInlineFieldError(dateInput, dateErr, 'Ingresa una fecha de vencimiento de licencia válida.');
+            (dateInput?._flatpickr?.altInput || dateInput)?.focus();
+            return false;
+        }
+        if (rawDate < todayIso) {
+            showInlineFieldError(dateInput, dateErr, 'La licencia del conductor no puede estar vencida.');
+            (dateInput?._flatpickr?.altInput || dateInput)?.focus();
+            return false;
+        }
+        clearInlineFieldError(dateInput, dateErr);
+        return true;
+    }
+
+    function syncVehicleFormFields(changedEl) {
+        const form = changedEl?.closest('form[data-vehiculo-form]');
+        if (!form) return;
+        const pmaInput = form.querySelector('#veh-pma');
+        const claseSelect = form.querySelector('#veh-clase');
+        const artCheck = form.querySelector('#veh-articulado');
+        if (!claseSelect || !artCheck) return;
+
+        const setClase = (val) => {
+            if (claseSelect.value === val) return;
+            if (claseSelect.tomselect) {
+                claseSelect.tomselect.setValue(val, true);
+            } else {
+                claseSelect.value = val;
+            }
+        };
+
+        const inferRigidClass = () => {
+            const pmaVal = parseFloat(String(pmaInput?.value || '').replace(',', '.'));
+            if (!Number.isFinite(pmaVal) || pmaVal <= 4000) return 'LIVIANO';
+            if (pmaVal <= 8000) return 'MEDIANO_RIGIDO';
+            return 'PESADO_RIGIDO';
+        };
+
+        if (changedEl === artCheck) {
+            if (artCheck.checked) {
+                setClase('PESADO_ARTICULADO');
+            } else if (claseSelect.value === 'PESADO_ARTICULADO') {
+                setClase(inferRigidClass());
+            }
+        } else if (changedEl === claseSelect) {
+            artCheck.checked = (claseSelect.value === 'PESADO_ARTICULADO');
+        } else if (changedEl === pmaInput && !artCheck.checked) {
+            const pmaVal = parseFloat(String(pmaInput.value || '').replace(',', '.'));
+            if (Number.isFinite(pmaVal) && pmaVal > 0) {
+                setClase(inferRigidClass());
+            }
+        }
+    }
+
     /* ======================================================================
        DELEGACIÓN GLOBAL DE EVENTOS
        ====================================================================== */
 
     document.addEventListener('click', (event) => {
         if (event.target.closest('[data-close-modal]')) {
+            if (hasSubmittingModalForm()) return;
             cerrarModal();
             return;
         }
@@ -526,16 +773,21 @@
 
     document.addEventListener('keydown', (event) => {
         if (event.key === 'Escape') {
+            if (modal?.innerHTML.trim()) {
+                if (closeOpenFloatingControls(modal)) {
+                    return;
+                }
+                if (!hasSubmittingModalForm()) {
+                    cerrarModal();
+                }
+                return;
+            }
             if (userDropdown && !userDropdown.hidden) {
                 toggleUserMenu(false);
                 userMenuToggle?.focus();
                 return;
             }
-            if (modal?.innerHTML.trim()) {
-                cerrarModal();
-            } else {
-                toggleSidebar(false);
-            }
+            toggleSidebar(false);
             return;
         }
 
@@ -580,11 +832,70 @@
        CICLO DE VIDA HTMX
        ====================================================================== */
 
+    function showInitialFlashNotice() {
+        if (!aviso) return;
+        const flashMsg = aviso.dataset.flashMessage || '';
+        if (flashMsg !== '') {
+            mostrarAviso(flashMsg, aviso.dataset.flashError === '1');
+            delete aviso.dataset.flashMessage;
+            delete aviso.dataset.flashError;
+        }
+    }
+
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => initComponents(document));
+        document.addEventListener('DOMContentLoaded', () => {
+            initComponents(document);
+            showInitialFlashNotice();
+        });
     } else {
         initComponents(document);
+        showInitialFlashNotice();
     }
+
+    // Validación previa al envío HTMX para el formulario simplificado de conductor
+    document.addEventListener('submit', (event) => {
+        const form = event.target;
+        if (!(form instanceof HTMLFormElement)) return;
+        if (form.dataset.conductorForm === '1') {
+            if (!validateConductorForm(form)) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+            }
+        }
+    }, true);
+
+    document.body.addEventListener('htmx:beforeRequest', (event) => {
+        const elt = event.detail?.elt;
+        const form = elt instanceof HTMLFormElement ? elt : elt?.closest?.('form');
+        if (!form || !modal?.contains(form)) return;
+        if (form.dataset.submitting === '1') {
+            event.preventDefault();
+            return;
+        }
+        form.dataset.submitting = '1';
+        const submitBtn = form.querySelector('button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.classList.add('is-loading');
+            submitBtn.disabled = true;
+        }
+    });
+
+    function releaseModalFormSubmitting(elt) {
+        const form = elt instanceof HTMLFormElement ? elt : elt?.closest?.('form');
+        if (!form) return;
+        delete form.dataset.submitting;
+        const submitBtn = form.querySelector('button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.classList.remove('is-loading');
+            if (form.dataset.parentLocked !== '1') {
+                submitBtn.disabled = false;
+            }
+        }
+    }
+
+    document.body.addEventListener('htmx:afterRequest', (event) => {
+        releaseModalFormSubmitting(event.detail?.elt);
+    });
 
     document.body.addEventListener('htmx:beforeCleanupElement', (event) => {
         if (event.detail?.elt) {
@@ -599,7 +910,10 @@
             event.detail.shouldSwap = false;
             return;
         }
-        if ([403, 404, 409, 422].includes(status)) {
+        if ([400, 403, 404, 405, 409, 422, 429, 500, 502, 503].includes(status)) {
+            if (status >= 500 && !String(event.detail.serverResponse || '').includes('notification-')) {
+                event.detail.serverResponse = '<div class="notification notification-danger" role="alert"><span>Ocurrió un error en el servidor al procesar la solicitud. Inténtalo nuevamente.</span></div>';
+            }
             event.detail.shouldSwap = true;
             event.detail.isError = false;
         }
@@ -611,23 +925,57 @@
             abrirModal();
         } else if (target) {
             initComponents(target);
+            if (modal?.contains(target)) {
+                if (target.querySelector('[data-disable-parent-form="true"]')) {
+                    const parentForm = target.closest('form');
+                    if (parentForm) {
+                        parentForm.dataset.parentLocked = '1';
+                        const submitBtn = parentForm.querySelector('button[type="submit"]');
+                        if (submitBtn) {
+                            submitBtn.disabled = true;
+                            submitBtn.classList.remove('is-loading');
+                        }
+                        parentForm.querySelectorAll('input[name="correo"]').forEach((inp) => {
+                            inp.readOnly = true;
+                        });
+                    }
+                }
+                const errNotice = target.querySelector('.notification-danger, .notification-warning');
+                if (errNotice) {
+                    errNotice.setAttribute('tabindex', '-1');
+                    errNotice.focus({ preventScroll: true });
+                    errNotice.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }
         }
-    });
-
-    document.body.addEventListener('clienteCreado', () => {
-        cerrarModal();
-        mostrarAviso('Cliente registrado correctamente.');
     });
 
     document.body.addEventListener('tssaNotice', (event) => {
-        cerrarModal();
-        if (event.detail?.message) {
-            mostrarAviso(String(event.detail.message), Boolean(event.detail.error));
+        const detail = event.detail || {};
+        const isError = Boolean(detail.error);
+        const shouldCloseModal = !isError && detail.closeModal !== false;
+        if (shouldCloseModal) {
+            cerrarModal();
+        }
+        if (detail.message) {
+            mostrarAviso(String(detail.message), isError);
         }
     });
 
-    document.body.addEventListener('htmx:sendError', () => mostrarAviso('No se pudo contactar al servidor.', true));
-    document.body.addEventListener('htmx:timeout', () => mostrarAviso('La solicitud tardó demasiado.', true));
+    function showModalTransportError(elt, message) {
+        releaseModalFormSubmitting(elt);
+        mostrarAviso(message, true);
+        if (modal?.innerHTML.trim()) {
+            const form = elt instanceof HTMLFormElement ? elt : elt?.closest?.('form');
+            const alertTarget = form?.querySelector('[role="alert"]') || modal.querySelector('[role="alert"]');
+            if (alertTarget) {
+                alertTarget.innerHTML = '<div class="notification notification-danger" role="alert"><span>' + escapeHtml(message) + '</span></div>';
+            }
+        }
+    }
+
+    document.body.addEventListener('htmx:sendError', (event) => showModalTransportError(event.detail?.elt, 'No se pudo contactar al servidor. Verifica tu conexión e inténtalo nuevamente.'));
+    document.body.addEventListener('htmx:timeout', (event) => showModalTransportError(event.detail?.elt, 'La solicitud tardó demasiado. Inténtalo nuevamente.'));
 
     /* Pestañas de administración de usuarios e invitaciones */
     document.addEventListener('click', (event) => {
@@ -1163,6 +1511,16 @@
             aviso.hidden = true;
         }
 
+        if (target.id === 'cond-tipo-licencia' || target.dataset?.licenseSelect === '1') {
+            handleLicenseCategoryChange(target);
+            return;
+        }
+
+        if (['veh-articulado', 'veh-clase', 'veh-pma'].includes(target.id)) {
+            syncVehicleFormFields(target);
+            return;
+        }
+
         if (['viaje-vehiculo', 'viaje-conductor', 'viaje-fecha'].includes(target.id)) {
             actualizarDiagnosticoHabilitacionViaje();
         }
@@ -1171,27 +1529,41 @@
     function actualizarDiagnosticoHabilitacionViaje() {
         const selVeh = document.getElementById('viaje-vehiculo');
         const selCond = document.getElementById('viaje-conductor');
+        const inputFecha = document.getElementById('viaje-fecha');
         const aviso = document.getElementById('aviso-diagnostico-habilitacion');
         if (!selVeh || !selCond || !aviso) return;
 
-        const optVeh = selVeh.options ? selVeh.options[selVeh.selectedIndex] : null;
-        const optCond = selCond.options ? selCond.options[selCond.selectedIndex] : null;
-
-        if (!optVeh || !optVeh.value || !optCond || !optCond.value) {
+        const vehVal = selVeh.value || '';
+        const condVal = selCond.value || '';
+        if (!vehVal || !condVal) {
             aviso.style.display = 'none';
             aviso.textContent = '';
             return;
         }
 
-        const pma = parseFloat(optVeh.dataset.pma || '0');
-        const esArticulado = optVeh.dataset.articulado === '1';
-        const licenciasRaw = optCond.dataset.licencias || '';
+        const optVeh = selVeh.options ? selVeh.options[selVeh.selectedIndex] : null;
+        const optCond = selCond.options ? selCond.options[selCond.selectedIndex] : null;
+        const tsVeh = selVeh.tomselect?.options?.[vehVal] || null;
+        const tsCond = selCond.tomselect?.options?.[condVal] || null;
+
+        const pma = parseFloat(optVeh?.dataset?.pma || tsVeh?.pma || '0');
+        const esArticulado = (optVeh?.dataset?.articulado || tsVeh?.articulado || '0') === '1';
+        const licenciasRaw = optCond?.dataset?.licencias || tsCond?.licencias || '';
+        const vencimientoRaw = String(optCond?.dataset?.vencimiento || tsCond?.vencimiento || '').slice(0, 10);
         const lics = licenciasRaw.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean);
 
         if (lics.length === 0 || lics.includes('PENDIENTE')) {
             aviso.style.display = 'block';
-            aviso.className = 'notification is-warning is-light py-2 px-3 mb-3';
-            aviso.textContent = 'Advertencia: El conductor seleccionado no cuenta con licencias oficiales verificadas en el sistema.';
+            aviso.className = 'notification notification-warning py-2 px-3 mb-3';
+            aviso.textContent = 'Advertencia: el conductor seleccionado no cuenta con una categoría de licencia habilitada.';
+            return;
+        }
+
+        const fechaViajeIso = String(inputFecha?.value || '').slice(0, 10);
+        if (vencimientoRaw && fechaViajeIso && vencimientoRaw < fechaViajeIso) {
+            aviso.style.display = 'block';
+            aviso.className = 'notification notification-danger py-2 px-3 mb-3';
+            aviso.textContent = 'Licencia vencida para la salida programada: la vigencia del conductor vence antes de la fecha del viaje.';
             return;
         }
 
@@ -1199,27 +1571,27 @@
         let requerida = '';
 
         if (esArticulado) {
-            requerida = 'B-4 o E-2 (vehículo articulado)';
+            requerida = 'B4 o E2 (vehículo articulado)';
             habilitado = lics.includes('B4') || lics.includes('E2');
         } else if (pma > 8000) {
-            requerida = 'B-3, B-4, E-1 o E-2 (pesado rígido > 8.000 kg)';
+            requerida = 'B3, B4, E1 o E2 (pesado rígido > 8.000 kg)';
             habilitado = lics.includes('B3') || lics.includes('B4') || lics.includes('E1') || lics.includes('E2');
         } else if (pma > 4000) {
-            requerida = 'B-2, B-3, B-4, E-1 o E-2 (carga liviana/mediana hasta 8.000 kg)';
+            requerida = 'B2, B3, B4, E1 o E2 (carga hasta 8.000 kg)';
             habilitado = lics.includes('B2') || lics.includes('B3') || lics.includes('B4') || lics.includes('E1') || lics.includes('E2');
         } else {
-            requerida = 'B-1, B-2, B-3, B-4, E-1 o E-2 (carga liviana hasta 4.000 kg)';
+            requerida = 'B1, B2, B3, B4, E1 o E2 (livianos hasta 4.000 kg)';
             habilitado = lics.includes('B1') || lics.includes('B2') || lics.includes('B3') || lics.includes('B4') || lics.includes('E1') || lics.includes('E2');
         }
 
         if (!habilitado) {
             aviso.style.display = 'block';
-            aviso.className = 'notification is-danger is-light py-2 px-3 mb-3';
-            aviso.textContent = `Incompatibilidad legal (Ley 9078): La unidad (PMA ${pma.toLocaleString()} kg${esArticulado ? ', articulada' : ''}) requiere licencia ${requerida}. El conductor posee: ${lics.join(', ')}.`;
+            aviso.className = 'notification notification-danger py-2 px-3 mb-3';
+            aviso.textContent = `Incompatibilidad de licencia: la unidad (PMA ${pma.toLocaleString('es-CR')} kg${esArticulado ? ', articulada' : ''}) requiere ${requerida}. El conductor posee: ${lics.join(', ')}.`;
         } else {
             aviso.style.display = 'block';
-            aviso.className = 'notification is-success is-light py-2 px-3 mb-3';
-            aviso.textContent = `Habilitación conforme (Ley 9078): Conductor habilitado con categoría ${lics.join(', ')} para unidad de PMA ${pma.toLocaleString()} kg.`;
+            aviso.className = 'notification notification-success py-2 px-3 mb-3';
+            aviso.textContent = `Habilitación compatible: conductor con categoría ${lics.join(', ')} para unidad de PMA ${pma.toLocaleString('es-CR')} kg.`;
         }
     }
 

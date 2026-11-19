@@ -46,6 +46,4 @@ try {
     ]);
 }
 
-header('HX-Trigger-After-Settle: clienteCreado');
-header('Content-Type: text/html; charset=UTF-8');
-echo ui_notice('Cliente registrado correctamente.', 'success');
+operation_modal_success('Cliente registrado correctamente.', 'clienteCreado', '/clientes.php');

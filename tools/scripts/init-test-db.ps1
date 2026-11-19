@@ -169,7 +169,8 @@ $migrationFiles = @(
     '06_user_account_contracts.sql',
     '07_invitations_and_recovery_contracts.sql',
     '08_invitation_permissions_contracts.sql',
-    '09_driver_licenses_and_vehicle_pma_contracts.sql'
+    '09_driver_licenses_and_vehicle_pma_contracts.sql',
+    '10_yagni_fleet_licenses_and_invitations_contracts.sql'
 )
 
 foreach ($migFile in $migrationFiles) {

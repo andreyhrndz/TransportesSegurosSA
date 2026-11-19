@@ -5,7 +5,7 @@ require_once __DIR__ . '/../../app/bootstrap.php';
 require_once __DIR__ . '/../../app/operational_writes.php';
 require_once __DIR__ . '/../../app/mail/mail_service.php';
 
-// Exige permiso, método POST y CSRF válido.
+// ASVS 3.5.1, 8.2.1: exige permiso, método POST y CSRF válido.
 require_operation_post('USUARIOS_GESTIONAR_CUENTAS');
 
 $currentUser = require_login();
@@ -29,7 +29,6 @@ if (!is_array($permisosPost)) {
 
 $canManagePermissions = has_permission('USUARIOS_GESTIONAR_PERMISOS');
 
-// Si no tiene permiso para gestionar permisos pero envió una lista de permisos, denegar
 if (!empty($permisosPost) && !$canManagePermissions) {
     http_response_code(403);
     echo ui_notice('No tienes autorización para asignar permisos individuales en la invitación.', 'danger');
@@ -71,7 +70,7 @@ $db = db();
 $invitacionId = 0;
 
 try {
-    // Generar token seguro de uso único con CSPRNG (32 bytes = 64 caracteres hex)
+    // ASVS 11.5.1: token criptográfico de un solo uso (32 bytes = 64 hex); en BD sólo se almacena el hash SHA-256.
     $token = bin2hex(random_bytes(32));
     $tokenHash = hash('sha256', $token);
 
@@ -124,25 +123,24 @@ try {
         $stmtStatus->execute([$invitacionId, $deliveryStatus]);
         $stmtStatus->closeCursor();
     }
-
 } catch (PDOException $exception) {
     if ($db->inTransaction()) {
         $db->rollBack();
     }
     $driverCode = (int)($exception->errorInfo[1] ?? 0);
-    $sqlMessage = (string)($exception->errorInfo[2] ?? $exception->getMessage());
-    error_log('[invitar.php] Error de base de datos [' . $driverCode . ']: ' . $sqlMessage);
+    error_log('[invitar.php] Error de base de datos [' . $driverCode . ']');
 
-    http_response_code(422);
-    if ($driverCode === 50430 || str_contains($sqlMessage, '50430')) {
+    $status = in_array($driverCode, [50430, 50431], true) ? 409 : ($driverCode === 50445 ? 403 : 422);
+    http_response_code($status);
+    if ($driverCode === 50430) {
         echo ui_notice('Ya existe una cuenta activa con esta dirección de correo electrónico.', 'danger');
-    } elseif ($driverCode === 50431 || str_contains($sqlMessage, '50431')) {
+    } elseif ($driverCode === 50431) {
         echo ui_notice('Ya existe una invitación pendiente para este correo. Puedes reenviarla o revocarla desde la lista de invitaciones.', 'warning');
-    } elseif ($driverCode === 50439 || str_contains($sqlMessage, '50439')) {
+    } elseif ($driverCode === 50439) {
         echo ui_notice('Se ha alcanzado el límite de 5 invitaciones para este correo en un período de 24 horas.', 'warning');
-    } elseif ($driverCode === 50440 || str_contains($sqlMessage, '50440')) {
+    } elseif ($driverCode === 50440) {
         echo ui_notice('Debes esperar al menos 60 segundos antes de reenviar una invitación a este correo.', 'warning');
-    } elseif ($driverCode === 50445 || str_contains($sqlMessage, '50445')) {
+    } elseif ($driverCode === 50445) {
         echo ui_notice('No puedes otorgar un permiso que tu propia cuenta no posee.', 'danger');
     } else {
         echo ui_notice('No se pudo procesar la invitación debido a una regla del sistema. Por favor revise los datos ingresados.', 'danger');
@@ -152,43 +150,82 @@ try {
     if ($db->inTransaction()) {
         $db->rollBack();
     }
-    error_log('[invitar.php] Excepción inesperada: ' . $e->getMessage());
+    error_log('[invitar.php] Excepción inesperada en despacho de invitación.');
     http_response_code(500);
     echo ui_notice('Ocurrió un error inesperado al procesar la invitación. Por favor intente nuevamente más tarde.', 'danger');
     exit;
 }
 
-// Éxito: notificar al cliente HTMX para refrescar tablas
-header('HX-Trigger: {"usuarioActualizado": true, "invitacionActualizada": true}');
 $totalPermsConfig = count($permisosSanitizados);
+
+// Caso 1: Brevo aceptó el envío (HTTP 2xx) -> cerrar modal automáticamente con toast y refrescar listados.
+if ($transportInfo['is_brevo'] && $sent) {
+    operation_modal_success(
+        'Invitación enviada (aceptada por el proveedor de correo).',
+        'invitacionActualizada',
+        '/usuarios.php',
+        ['usuarioActualizado' => true]
+    );
+}
+
+// Caso 2: Modo simulación / Fake -> cerrar modal automáticamente con mensaje transparente de modo prueba.
+if (!$transportInfo['is_brevo']) {
+    if (is_htmx_request()) {
+        $triggerPayload = json_encode([
+            'usuarioActualizado' => true,
+            'invitacionActualizada' => true,
+            'tssaNotice' => [
+                'message' => 'Invitación registrada en modo prueba (sin envío real de correo).',
+                'error' => false,
+                'closeModal' => true,
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        header('HX-Trigger-After-Settle: ' . $triggerPayload);
+        header('Content-Type: text/html; charset=UTF-8');
+        exit(ui_notice(
+            "Invitación registrada en modo prueba con {$totalPermsConfig} permiso(s) planificado(s). El enlace quedó vigente por 24 horas.",
+            'info'
+        ));
+    }
+
+    $_SESSION['tssa_flash_notice'] = [
+        'message' => 'Invitación registrada en modo prueba (sin envío real de correo).',
+        'error' => false,
+    ];
+    header('Location: /usuarios.php', true, 303);
+    exit;
+}
+
+// Caso 3: Invitación guardada con estado_envio = 'FALLIDO', pero falló el despacho en Brevo.
+// Mantener modal abierto sin falso éxito verde, refrescar tabla en segundo plano y ofrecer reenvío explícito sin duplicar el alta.
+header('HX-Trigger: {"usuarioActualizado": true, "invitacionActualizada": true}');
+header('Content-Type: text/html; charset=UTF-8');
+$catMensaje = match ($mailCategory) {
+    'config_invalid' => 'Configuración de remitente o credenciales inválida.',
+    'curl_missing' => 'La extensión cURL no está disponible en el servidor.',
+    'dns' => 'Error de resolución DNS al conectar con Brevo.',
+    'tls' => 'Error de validación de certificados de seguridad TLS.',
+    'timeout' => 'Tiempo de espera agotado al comunicar con Brevo.',
+    'provider_reject' => 'El proveedor Brevo rechazó el despacho (verifique el remitente autorizado).',
+    default => 'Fallo de comunicación con el servicio de correo.',
+};
+$resendVals = json_encode([
+    'csrf_token' => csrf_token(),
+    'invitacion_id' => $invitacionId,
+    'origen' => 'modal',
+], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
 ?>
-<?php if ($transportInfo['is_brevo'] && $sent): ?>
-    <div class="notification notification-success mb-4" role="status">
-        <?= svg_icon('activate') ?>
-        <span><strong>¡Invitación emitida y aceptada por Brevo!</strong> Se solicitó el despacho a <strong><?= e($email) ?></strong> con <strong><?= $totalPermsConfig ?></strong> permiso(s) planificado(s).</span>
+<div class="notification notification-warning mb-3" role="alert" data-disable-parent-form="true">
+    <?= svg_icon('alert-triangle') ?>
+    <div>
+        <p><strong>Invitación registrada (estado de entrega: Fallido)</strong> con <strong><?= $totalPermsConfig ?></strong> permiso(s) planificado(s), pero no pudo completarse el despacho del correo vía Brevo (<?= e($catMensaje) ?>).</p>
+        <p class="is-size-7 mt-1">La invitación ya quedó guardada para <strong><?= e($email) ?></strong>. Para evitar duplicados, utiliza la acción de reenvío o gestiónala desde la pestaña Invitaciones.</p>
+        <div class="buttons mt-3">
+            <button type="button" class="button is-small is-primary" hx-post="/usuarios/reenviar_invitacion.php" hx-target="#mensaje-form-usuario" hx-swap="innerHTML" hx-vals="<?= e($resendVals) ?>" hx-disabled-elt="this">
+                <?= svg_icon('refresh') ?>
+                <span>Reenviar invitación</span>
+            </button>
+            <button type="button" class="button is-small button-secondary" data-close-modal>Cerrar</button>
+        </div>
     </div>
-<?php elseif ($transportInfo['is_brevo'] && !$sent): ?>
-    <?php
-    $catMensaje = match ($mailCategory) {
-        'config_invalid' => 'Configuración de remitente o credenciales inválida.',
-        'curl_missing' => 'La extensión cURL no está disponible en el servidor.',
-        'dns' => 'Error de resolución DNS al conectar con Brevo.',
-        'tls' => 'Error de validación de certificados de seguridad TLS.',
-        'timeout' => 'Tiempo de espera agotado al comunicar con Brevo.',
-        'provider_reject' => 'El proveedor Brevo rechazó el despacho (verifique si el remitente está autorizado).',
-        default => 'Fallo de comunicación con el servicio de correo.',
-    };
-    ?>
-    <div class="notification notification-warning mb-4" role="status">
-        <?= svg_icon('alert-triangle') ?>
-        <span><strong>Invitación registrada en el sistema con <?= $totalPermsConfig ?> permiso(s) planificado(s)</strong>, pero no pudo completarse el despacho del correo vía Brevo (<?= e($catMensaje) ?>).</span>
-    </div>
-<?php else: ?>
-    <div class="notification notification-info mb-4" role="status">
-        <?= svg_icon('info') ?>
-        <span><strong>Invitación registrada con éxito (Modo Simulación / Fake) con <?= $totalPermsConfig ?> permiso(s) planificado(s).</strong> El token quedó válido por 24 horas y los permisos se asignarán automáticamente tras el onboarding.</span>
-    </div>
-<?php endif; ?>
-<div class="has-text-right">
-    <button type="button" class="button is-light" data-close-modal>Entendido</button>
 </div>

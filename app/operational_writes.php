@@ -94,12 +94,12 @@ function operation_sql_error(PDOException $exception, array $messages = []): nev
     };
 
     $forbiddenCodes = [50103, 50201, 50202, 50216, 50217, 50407, 50410, 50412, 50501];
-    $notFoundCodes = [50101, 50415, 50503];
+    $notFoundCodes = [50101, 50415, 50436, 50437, 50503];
     $conflictCodes = [
         2601, 2627, 547,
         50220, 50221,
         50311, 50324, 50405, 50409,
-        50416, 50417, 50418, 50419, 50420,
+        50416, 50417, 50418, 50419, 50420, 50441, 50442,
         50504, 50505, 50506,
     ];
 
@@ -117,6 +117,10 @@ function operation_sql_error(PDOException $exception, array $messages = []): nev
 
 function operation_success(string $message, string $event, string $redirect): never
 {
+    $_SESSION['tssa_flash_notice'] = [
+        'message' => $message,
+        'error' => false,
+    ];
     header('HX-Trigger-After-Settle: ' . $event);
     if (is_htmx_request()) {
         header('HX-Redirect: ' . $redirect);
@@ -127,21 +131,30 @@ function operation_success(string $message, string $event, string $redirect): ne
     exit(ui_notice($message, 'success'));
 }
 
-function operation_modal_success(string $message, string $event, string $fallbackRedirect): never
+/**
+ * @param array<string, mixed> $extraEvents
+ */
+function operation_modal_success(string $message, string $event, string $fallbackRedirect, array $extraEvents = []): never
 {
     if (is_htmx_request()) {
-        $triggerPayload = json_encode([
+        $payload = array_merge($extraEvents, [
             $event => true,
             'tssaNotice' => [
                 'message' => $message,
                 'error' => false,
+                'closeModal' => true,
             ],
-        ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        ]);
+        $triggerPayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         header('HX-Trigger-After-Settle: ' . $triggerPayload);
         header('Content-Type: text/html; charset=UTF-8');
         exit(ui_notice($message, 'success'));
     }
 
+    $_SESSION['tssa_flash_notice'] = [
+        'message' => $message,
+        'error' => false,
+    ];
     header('Location: ' . $fallbackRedirect, true, 303);
     exit;
 }

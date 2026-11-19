@@ -189,6 +189,26 @@ function format_number_str(mixed $value): string
 }
 
 /**
+ * Formatea una medida numérica al estilo es-CR sin ceros decimales innecesarios ni valores como ".0".
+ */
+function format_cr_measure(mixed $value, int $maxDecimals = 2): string
+{
+    $normalized = format_number_str($value);
+    if (!is_numeric($normalized)) {
+        return $normalized;
+    }
+
+    $num = (float)$normalized;
+    $formatted = number_format($num, $maxDecimals, ',', '.');
+    if ($maxDecimals > 0) {
+        $formatted = rtrim($formatted, '0');
+        $formatted = rtrim($formatted, ',');
+    }
+
+    return $formatted === '-0' ? '0' : $formatted;
+}
+
+/**
  * Traduce códigos técnicos y enumeraciones con guiones bajos a etiquetas legibles en español.
  */
 function humanize_status(mixed $value): string
@@ -216,6 +236,13 @@ function humanize_status(mixed $value): string
         'DISPONIBLE' => 'Disponible',
         'MANTENIMIENTO' => 'En mantenimiento',
         'FUERA_SERVICIO' => 'Fuera de servicio',
+        'LIVIANO' => 'Liviano',
+        'MEDIANO_RIGIDO' => 'Mediano rígido',
+        'PESADO_RIGIDO' => 'Pesado rígido',
+        'PESADO_ARTICULADO' => 'Pesado articulado',
+        'VERIFICADO' => 'Verificado',
+        'PENDIENTE_VERIFICACION' => 'Pendiente de verificación',
+        'NO_CONFORME' => 'No conforme',
         'ACTIVO' => 'Activo',
         'INACTIVO' => 'Inactivo',
         'FISICA' => 'Persona física',
@@ -228,7 +255,8 @@ function humanize_status(mixed $value): string
         'COMPLETADA' => 'Completada',
         'REVOCADA' => 'Revocada',
         'EXPIRADA' => 'Expirada',
-        'SIMULADO' => 'Simulado (Fake)',
+        'SIMULADO' => 'Simulado (prueba)',
+        'ENVIADO' => 'Enviado',
         'FALLIDO' => 'Fallido',
         'OMITIDA' => 'Omitida',
         'ENVIADA' => 'Enviada',
@@ -244,6 +272,12 @@ function humanize_status(mixed $value): string
         'INSERCION' => 'Creación',
         'ACTUALIZACION' => 'Actualización',
         'ELIMINACION' => 'Eliminación',
+        'ACTUALIZAR_PRINCIPAL' => 'Actualización de licencia',
+        'CANCEL_EXPIRED' => 'Descarte de expirada',
+        'REVOKE' => 'Revocación',
+        'RESEND' => 'Reenvío',
+        'INVITE' => 'Invitación',
+        'ONBOARDING' => 'Activación',
         'CAMBIO_ESTADO' => 'Cambio de estado',
         'ASIGNACION' => 'Asignación',
         'DESASIGNACION' => 'Desasignación',
@@ -292,6 +326,8 @@ function humanize_status(mixed $value): string
         'USUARIOS_PERMISOS' => 'Permisos de usuario',
         'VEHICULOS' => 'Vehículos',
         'CONDUCTORES' => 'Conductores',
+        'CONDUCTORES_LICENCIAS' => 'Licencias de conductores',
+        'INVITACIONES_USUARIO' => 'Invitaciones',
         'RUTAS' => 'Rutas',
         'UBICACIONES' => 'Ubicaciones',
         'TIPOS_MERCANCIA' => 'Tipos de mercancía',
@@ -311,9 +347,9 @@ function status_tag(mixed $value): string
 {
     $status = utf8_strtoupper(trim((string)$value));
     $tone = match ($status) {
-        'ENTREGADA', 'FINALIZADO', 'RESUELTA', 'ENVIADA', 'DISPONIBLE', 'ACTIVO', 'COMPLETADA' => 'success',
-        'CANCELADA', 'FALLIDA', 'ENTREGA_FALLIDA', 'ERROR', 'FUERA_SERVICIO', 'INACTIVO', 'CRITICA', 'REVOCADA', 'FALLIDO' => 'danger',
-        'EN_TRANSITO', 'EN_CURSO', 'ASIGNADA', 'ASIGNADO', 'EN_ATENCION', 'MANTENIMIENTO', 'URGENTE', 'ALTA', 'PENDIENTE_ASIGNACION', 'ABIERTA', 'PENDIENTE' => 'warning',
+        'ENTREGADA', 'FINALIZADO', 'RESUELTA', 'ENVIADA', 'ENVIADO', 'DISPONIBLE', 'ACTIVO', 'COMPLETADA', 'VERIFICADO' => 'success',
+        'CANCELADA', 'FALLIDA', 'ENTREGA_FALLIDA', 'ERROR', 'FUERA_SERVICIO', 'INACTIVO', 'CRITICA', 'REVOCADA', 'FALLIDO', 'NO_CONFORME' => 'danger',
+        'EN_TRANSITO', 'EN_CURSO', 'ASIGNADA', 'ASIGNADO', 'EN_ATENCION', 'MANTENIMIENTO', 'URGENTE', 'ALTA', 'PENDIENTE_ASIGNACION', 'ABIERTA', 'PENDIENTE', 'PENDIENTE_VERIFICACION' => 'warning',
         'EXPIRADA' => 'neutral',
         default => 'info',
     };
@@ -337,4 +373,3 @@ function user_initials(string $username): string
     $chars = preg_split('//u', $clean, -1, PREG_SPLIT_NO_EMPTY) ?: [];
     return utf8_strtoupper(($chars[0] ?? '') . ($chars[1] ?? ''));
 }
-

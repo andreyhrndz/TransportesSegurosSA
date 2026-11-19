@@ -65,6 +65,7 @@ layout_start('usuarios', 'Usuarios y permisos', 'Administra cuentas de acceso y 
             </div>
         <?php endif; ?>
     </section>
+    <div id="invitaciones-feedback" role="alert" aria-live="assertive"></div>
     <section class="panel-box table-panel">
         <div id="invitaciones-resultado" hx-get="/usuarios/invitaciones_lista.php" hx-trigger="load, invitacionActualizada from:body, usuarioActualizado from:body" hx-swap="innerHTML"></div>
     </section>
