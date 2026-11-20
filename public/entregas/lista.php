@@ -2,6 +2,7 @@
 declare(strict_types=1);
 require_once __DIR__ . '/../../app/bootstrap.php';
 require_once __DIR__ . '/../../app/read_queries.php';
+require_once __DIR__ . '/../../app/document_storage.php';
 header('Cache-Control: no-store');
 
 $section = (string)($_GET['seccion'] ?? '');
@@ -80,8 +81,9 @@ $page = min($page, $pages);
                 <?php else: ?>
                     <th>Tipo de documento</th>
                     <th>Número de referencia</th>
-                    <th>Fecha del documento</th>
-                    <th>Enlace</th>
+                    <th>Fecha</th>
+                    <th>Soporte</th>
+                    <th class="has-text-right">Archivo / Enlace</th>
                 <?php endif; ?>
             </tr>
         </thead>
@@ -129,13 +131,45 @@ $page = min($page, $pages);
                         <td><?= e($row['asunto']) ?></td>
                         <td><?= format_utc_datetime($row['fecha_intento']) ?></td>
                     <?php else: ?>
-                        <?php $url = read_safe_reference_url($row['archivo_url']); ?>
+                        <?php
+                        $origen = strtoupper((string)($row['origen_archivo'] ?? 'EXTERNA'));
+                        $esInterno = $origen === 'INTERNA';
+                        $url = !$esInterno ? read_safe_reference_url($row['archivo_url'] ?? null) : null;
+                        $mimeShort = match (strtolower((string)($row['mime_type'] ?? ''))) {
+                            'application/pdf' => 'PDF',
+                            'image/jpeg' => 'JPG',
+                            'image/png' => 'PNG',
+                            default => 'Archivo',
+                        };
+                        $sizeTxt = isset($row['tamano_bytes']) && (int)$row['tamano_bytes'] > 0
+                            ? document_format_bytes((int)$row['tamano_bytes'])
+                            : '';
+                        ?>
                         <td><strong><?= e($row['tipo_documento']) ?></strong></td>
                         <td><code><?= e($row['numero_referencia'] ?: '—') ?></code></td>
-                        <td><?= e(format_cr_date($row['fecha_documento'])) ?></td>
+                        <td class="is-nowrap"><?= e(format_cr_date($row['fecha_documento'])) ?></td>
                         <td>
-                            <?php if ($url): ?>
-                                <a class="table-link" target="_blank" rel="noopener noreferrer" href="<?= e($url) ?>">Abrir referencia <?= svg_icon('arrow-up-right') ?></a>
+                            <?php if ($esInterno): ?>
+                                <?php $nombreVisible = (string)($row['nombre_original'] ?? 'Documento'); ?>
+                                <div class="cell-stack">
+                                    <div><span class="status-tag status-tag-success">Archivo adjunto</span></div>
+                                    <span class="doc-support-meta">
+                                        <span class="doc-support-filename" title="<?= e($nombreVisible) ?>"><?= e($nombreVisible) ?></span>
+                                        <span class="is-nowrap">· <?= e($mimeShort) ?><?= $sizeTxt !== '' ? ' · ' . e($sizeTxt) : '' ?></span>
+                                    </span>
+                                </div>
+                            <?php else: ?>
+                                <span class="status-tag status-tag-info">Enlace externo</span>
+                            <?php endif; ?>
+                        </td>
+                        <td class="has-text-right is-nowrap">
+                            <?php if ($esInterno): ?>
+                                <a class="button is-small button-secondary" href="/entregas/documento_descargar.php?id=<?= (int)$row['documento_id'] ?>">
+                                    <?= svg_icon('download') ?>
+                                    <span>Descargar</span>
+                                </a>
+                            <?php elseif ($url): ?>
+                                <a class="table-link is-nowrap" target="_blank" rel="noopener noreferrer" href="<?= e($url) ?>">Abrir referencia <?= svg_icon('arrow-up-right') ?></a>
                             <?php else: ?>
                                 <span class="has-text-grey">Sin archivo</span>
                             <?php endif; ?>

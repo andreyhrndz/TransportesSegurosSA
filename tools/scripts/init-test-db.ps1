@@ -156,8 +156,8 @@ if ($totalTables -lt 24) {
     Write-Host "  [OK] Las 24 tablas base ya estan presentes en '$TargetDatabase'." -ForegroundColor Green
 }
 
-# 6. Aplicar migraciones incrementales 01 a 13
-Write-Host "`n[4/5] Aplicando migraciones incrementales 01 a 13 con codificacion UTF-8..." -ForegroundColor Yellow
+# 6. Aplicar migraciones incrementales 01 a 14
+Write-Host "`n[4/5] Aplicando migraciones incrementales 01 a 14 con codificacion UTF-8..." -ForegroundColor Yellow
 
 $migrationFiles = @(
     '01_read_access_contracts.sql',
@@ -173,7 +173,8 @@ $migrationFiles = @(
     '10_yagni_fleet_licenses_and_invitations_contracts.sql',
     '11_invitations_search_correct_email_contracts.sql',
     '12_hybrid_request_locations_contracts.sql',
-    '13_trip_stops_audit_and_reports_contracts.sql'
+    '13_trip_stops_audit_and_reports_contracts.sql',
+    '14_document_attachments_contracts.sql'
 )
 
 foreach ($migFile in $migrationFiles) {

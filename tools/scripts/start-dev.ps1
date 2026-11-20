@@ -167,14 +167,15 @@ Write-Host "  URL Local:           http://$listenTarget" -ForegroundColor Green
 Write-Host "  Directorio Publico:  $publicDir" -ForegroundColor Gray
 Write-Host "  Base de Datos:       $targetDb" -ForegroundColor Green
 Write-Host "  PHP Runtime:         $resolvedPhp" -ForegroundColor Gray
+Write-Host "  Limite Adjuntos:     10 MiB (upload_max_filesize=10M, post_max_size=12M)" -ForegroundColor Gray
 Write-Host ''
 Write-Host 'Presione [Ctrl + C] para detener el servidor de manera segura.' -ForegroundColor Yellow
 Write-Host '====================================================================' -ForegroundColor Cyan
 Write-Host ''
 
-# 6. Iniciar servidor web de PHP
+# 6. Iniciar servidor web de PHP (override portable por proceso sin tocar php.ini global)
 try {
-    & $resolvedPhp -S $listenTarget -t $publicDir
+    & $resolvedPhp -d upload_max_filesize=10M -d post_max_size=12M -S $listenTarget -t $publicDir
 } catch {
     Write-Host ''
     Write-Host '[INFO] Servidor web finalizado.' -ForegroundColor Gray

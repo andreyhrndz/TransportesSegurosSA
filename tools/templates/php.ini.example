@@ -33,11 +33,13 @@ ignore_repeated_errors = Off
 ignore_repeated_source = Off
 report_memleaks = On
 
-; Cargas de archivos
+; Cargas de archivos (adjuntos documentales privados: PDF/JPG/PNG hasta 10 MiB)
 file_uploads = On
 upload_max_filesize = 10M
 max_file_uploads = 20
 post_max_size = 12M
+; Opcional: directorio temporal privado con permisos de escritura para PHP
+; upload_tmp_dir = "C:\Windows\Temp"
 
 ; Rutas y extensiones
 ; En Windows NTS, extension_dir debe apuntar a la subcarpeta "ext"

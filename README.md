@@ -39,7 +39,7 @@ La plataforma cubre el ciclo de vida completo de la operación de transporte de 
 - **Entregas, Incidencias y Gestión Documental:**
   - Confirmación de entregas en destino o reporte de intentos fallidos con receptor efectivo.
   - Registro y resolución de incidencias operativas en ruta.
-  - Carga y vinculación de respaldos documentales protegidos.
+  - **Carga segura de documentos PDF, JPG/JPEG y PNG (hasta 10 MB) + compatibilidad con URL externa:** almacenamiento privado fuera de `public/` (`TSSA_DOCUMENT_STORAGE_DIR` o respaldo portable `storage/private/documents/`), nombres opacos con SHA-256, validación real por `finfo`/firma binaria y descarga autenticada (`DOCUMENTOS_VER`) con cabeceras seguras (`attachment`, `nosniff`, `no-store`). Ver guía de operación, respaldo conjunto SQL+disco y restauración en `docs/ops/document-attachments-storage-backup-restore.md`.
 
 - **Reportes, Bitácora Independiente y Data Warehouse:**
   - Módulo independiente **Historial de actividad** (`/auditoria.php`) bajo Administración (visible solo con `AUDITORIA_VER`), con filtros SQL por usuario (preservando inactivos y sistema), módulo, acción y rango de fechas, descripción en lenguaje humano y detalle técnico desplegable con redacción de secretos.
@@ -80,7 +80,7 @@ Ejecute el asistente automatizado de configuración:
 > ```
 
 ### Paso 3: Inicializar la Base de Datos de Pruebas (`TransportesSegurosSA_Test`)
-Para aprovisionar la base de datos de pruebas local con las tablas, procedimientos almacenados y contratos `01` a `13`:
+Para aprovisionar la base de datos de pruebas local con las tablas, procedimientos almacenados y contratos `01` a `14`:
 ```powershell
 .\tools\scripts\init-test-db.ps1
 ```
@@ -155,8 +155,11 @@ TransportesSegurosSA/
 | Base de Datos | Propósito | Reglas Operativas |
 |---|---|---|
 | **`TransportesSegurosSA_Test`** | **Desarrollo y Pruebas** | Entorno predeterminado en `.env`. Destino seguro para ejecutar suites de pruebas automatizadas, pruebas de integración y creación de registros efímeros. |
-| **`TransportesSegurosSA`** | **Base Original de Exposición** | Base de datos principal. Compatible con las migraciones `01` a `13` tras respaldo verificado y ensayo en staging (ver `docs/ops/deploy-migrations-pr4-exposicion.md`). **PROHIBIDO ejecutar pruebas automatizadas con escrituras o modificaciones directas sobre esta base.** |
+| **`TransportesSegurosSA`** | **Base Original de Exposición** | Base de datos principal (actualmente en Migración `13`; requiere aplicar la Migración `14` tras respaldo FULL verificado antes de habilitar la carga de adjuntos, ver `docs/ops/document-attachments-storage-backup-restore.md`). **PROHIBIDO ejecutar pruebas automatizadas con escrituras o modificaciones directas sobre esta base.** |
 | **`TransportesSegurosSA_DW`** | **Data Warehouse** | Base dimensional en estrella (6 tablas + ETL) consultada en modo solo lectura (`ApplicationIntent=ReadOnly`) desde el reporte histórico. |
+
+> [!IMPORTANT]
+> **Respaldo de documentos adjuntos:** Los respaldos `FULL`/`DIFF` de SQL Server **no respaldan los archivos binarios guardados en disco** (`TSSA_DOCUMENT_STORAGE_DIR` / `storage/private/documents/`). Para respaldar, verificar integridad SHA-256 y restaurar el almacén privado junto con SQL Server, utilice el procedimiento y el script manual `tools/scripts/backup-document-storage.ps1` documentados en `docs/ops/document-attachments-storage-backup-restore.md`.
 
 ---
 
@@ -164,7 +167,7 @@ TransportesSegurosSA/
 
 El proyecto cuenta con una cobertura integral de pruebas reproducibles ejecutables **exclusivamente sobre `TransportesSegurosSA_Test`**:
 - **Suites Automatizadas PHP (26 suites `tests/*_test.php`) + JS:** Pruebas unitarias, funcionales, de concurrencia HTTP, ubicaciones híbridas y seguridad ASVS bajo PHP 8.4.
-- **Suites Contractuales T-SQL (Migraciones 01 a 12):** Pruebas sobre SQL Server validando reglas de negocio, rollback transaccional, licencias/PMA, paginación SQL real, corrección atómica de correo en invitaciones y ubicaciones híbridas en solicitudes (`es_reutilizable` + validación Haversine 25 m).
-- **Verificación E2E y Visual Playwright (Chromium real, 3 suites):** Cobertura de flujos YAGNI, scroll modal global, mapa Leaflet compartido (catálogo + Nueva solicitud híbrida) + fallback offline + enlaces Google Maps, e inspección visual en resoluciones desktop (`1366×768`, `1440×900`, `1600×900`, `1920×1080`, `1280×720`), tablet (`768×1024`) y móvil (`375×667`).
-- **OpenSpec:** 21 especificaciones activas validadas con `openspec validate --all`.
-- **Plan de QA manual para exposición:** ver `docs/qa/plan-qa-exposicion.md` y el helper sintético `tests/qa_seed_test_fixtures.php`.
+- **Suites Contractuales T-SQL (Migraciones 01 a 14):** Pruebas sobre SQL Server validando reglas de negocio, rollback transaccional, licencias/PMA, paginación SQL real, corrección atómica de correo en invitaciones, ubicaciones híbridas en solicitudes (`es_reutilizable` + validación Haversine 25 m) y adjuntos documentales privados con retrocompatibilidad URL (`18_contract_tests_document_attachments.sql`).
+- **Verificación E2E y Visual Playwright (Chromium real, 4 suites):** Cobertura de flujos YAGNI, scroll modal global, mapa Leaflet compartido (catálogo + Nueva solicitud híbrida) + fallback offline + enlaces Google Maps, carga segura de documentos PDF/JPG/PNG + descarga SHA-256 e inspección visual en resoluciones desktop (`1366×768`, `1440×900`, `1600×900`, `1920×1080`, `1280×720`), tablet (`768×1024`) y móvil (`375×667`).
+- **OpenSpec:** 23 especificaciones y changes activos validados con `openspec validate --all`.
+- **Plan de QA manual e informes:** ver `docs/qa/plan-qa-exposicion.md`, `docs/qa/document-attachments-final.md` y el helper sintético `tests/qa_seed_test_fixtures.php`.

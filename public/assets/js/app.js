@@ -1494,6 +1494,255 @@
         });
     }
 
+    /* ======================================================================
+       CARGA SEGURA DE DOCUMENTOS (ARCHIVO LOCAL PDF/JPG/PNG O URL EXTERNA)
+       ====================================================================== */
+
+    function initDocumentUploadModal(root = document) {
+        if (!root || !root.querySelectorAll) return;
+        const forms = root.querySelectorAll('[data-doc-upload-form]');
+        forms.forEach((form) => {
+            if (form.dataset.docUploadInit === '1') return;
+            form.dataset.docUploadInit = '1';
+
+            const maxBytes = parseInt(form.dataset.maxBytes || '10485760', 10) || 10485760;
+            const maxLabel = form.dataset.maxLabel || '10 MB';
+            const modeRadios = Array.from(form.querySelectorAll('input[name="modo_respaldo"]'));
+            const modeLabels = Array.from(form.querySelectorAll('[data-doc-mode-label]'));
+            const panelArchivo = form.querySelector('[data-doc-panel="archivo"]');
+            const panelUrl = form.querySelector('[data-doc-panel="url"]');
+            const fileInput = form.querySelector('#documento-archivo');
+            const urlInput = form.querySelector('#documento-url');
+            const dropzone = form.querySelector('[data-doc-dropzone]');
+            const browseBtn = form.querySelector('[data-doc-browse]');
+            const statusEl = form.querySelector('[data-doc-status]');
+            const previewEl = form.querySelector('[data-doc-preview]');
+            const previewNameEl = form.querySelector('[data-doc-preview-name]');
+            const previewMetaEl = form.querySelector('[data-doc-preview-meta]');
+            const clearBtn = form.querySelector('[data-doc-clear]');
+            const msgBox = form.querySelector('#mensaje-documento');
+
+            if (!panelArchivo || !panelUrl || !fileInput || !urlInput) return;
+
+            const allowedExts = ['pdf', 'jpg', 'jpeg', 'png'];
+            const allowedMimes = ['application/pdf', 'image/jpeg', 'image/png', ''];
+
+            const formatSize = (bytes) => {
+                if (bytes < 1024) return `${bytes} B`;
+                if (bytes < 1048576) return `${(bytes / 1024).toFixed(1).replace('.', ',')} KB`;
+                return `${(bytes / 1048576).toFixed(2).replace('.', ',')} MB`;
+            };
+
+            const setStatus = (text, tone = 'neutral') => {
+                if (!statusEl) return;
+                statusEl.textContent = text;
+                statusEl.dataset.tone = tone;
+                dropzone?.classList.toggle('is-invalid', tone === 'error');
+                dropzone?.classList.toggle('is-selected', tone === 'success');
+            };
+
+            const clearFileSelection = (keepMessage = false) => {
+                try {
+                    fileInput.value = '';
+                } catch {
+                    // Ignorar si el navegador restringe limpieza
+                }
+                if (previewEl) previewEl.hidden = true;
+                if (!keepMessage) {
+                    setStatus('Sin archivo seleccionado', 'neutral');
+                }
+            };
+
+            const inspectAndShowFile = (file) => {
+                if (!file) {
+                    clearFileSelection(false);
+                    return false;
+                }
+                const name = String(file.name || '');
+                const parts = name.toLowerCase().split('.');
+                const ext = parts.length > 1 ? parts[parts.length - 1] : '';
+                const mime = String(file.type || '').toLowerCase();
+
+                if (!allowedExts.includes(ext) || (mime !== '' && !allowedMimes.includes(mime))) {
+                    clearFileSelection(true);
+                    setStatus('Archivo inválido: solo se admiten archivos PDF, JPG/JPEG o PNG.', 'error');
+                    return false;
+                }
+                if (file.size <= 0) {
+                    clearFileSelection(true);
+                    setStatus('Archivo inválido: el archivo seleccionado está vacío.', 'error');
+                    return false;
+                }
+                if (file.size > maxBytes) {
+                    clearFileSelection(true);
+                    setStatus(`Archivo inválido: supera el límite máximo permitido (${maxLabel}).`, 'error');
+                    return false;
+                }
+
+                const kindLabel = ext === 'pdf' ? 'Documento PDF' : (ext === 'png' ? 'Imagen PNG' : 'Imagen JPG');
+                if (previewNameEl) previewNameEl.textContent = name;
+                if (previewMetaEl) previewMetaEl.textContent = `${kindLabel} · ${formatSize(file.size)}`;
+                if (previewEl) previewEl.hidden = false;
+                if (msgBox) msgBox.innerHTML = '';
+                setStatus('Archivo seleccionado y listo para subir.', 'success');
+                return true;
+            };
+
+            const syncMode = () => {
+                const active = modeRadios.find((r) => r.checked)?.value || 'archivo';
+                const isFile = active === 'archivo';
+
+                modeLabels.forEach((lbl) => {
+                    lbl.classList.toggle('is-active', lbl.dataset.docModeLabel === active);
+                });
+
+                panelArchivo.hidden = !isFile;
+                panelUrl.hidden = isFile;
+
+                fileInput.disabled = !isFile;
+                fileInput.required = isFile;
+                urlInput.disabled = isFile;
+                urlInput.required = !isFile;
+            };
+
+            const onRadioChange = () => {
+                syncMode();
+                if (msgBox) msgBox.innerHTML = '';
+            };
+
+            const onBrowseClick = (ev) => {
+                ev.preventDefault();
+                if (!fileInput.disabled) fileInput.click();
+            };
+
+            const onDropzoneKeydown = (ev) => {
+                if (ev.target === dropzone && (ev.key === 'Enter' || ev.key === ' ')) {
+                    ev.preventDefault();
+                    if (!fileInput.disabled) fileInput.click();
+                }
+            };
+
+            const onFileChange = () => {
+                if (fileInput.files && fileInput.files.length > 1) {
+                    clearFileSelection(true);
+                    setStatus('Archivo inválido: adjunta un único archivo por documento.', 'error');
+                    return;
+                }
+                inspectAndShowFile(fileInput.files?.[0] || null);
+            };
+
+            let dragDepth = 0;
+            const onDragEnter = (ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                dragDepth++;
+                dropzone?.classList.add('is-dragover');
+            };
+            const onDragOver = (ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                if (ev.dataTransfer) ev.dataTransfer.dropEffect = 'copy';
+                dropzone?.classList.add('is-dragover');
+            };
+            const onDragLeave = (ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                dragDepth = Math.max(0, dragDepth - 1);
+                if (dragDepth === 0) dropzone?.classList.remove('is-dragover');
+            };
+            const onDrop = (ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                dragDepth = 0;
+                dropzone?.classList.remove('is-dragover');
+
+                const files = ev.dataTransfer?.files;
+                if (!files || files.length === 0) return;
+                if (files.length > 1) {
+                    clearFileSelection(true);
+                    setStatus('Archivo inválido: suelta un único archivo por documento.', 'error');
+                    return;
+                }
+                const droppedFile = files[0];
+                if (!inspectAndShowFile(droppedFile)) {
+                    return;
+                }
+                try {
+                    const dt = new DataTransfer();
+                    dt.items.add(droppedFile);
+                    fileInput.files = dt.files;
+                } catch {
+                    setStatus('Tu navegador no permite asignar archivos por arrastre; usa «Seleccionar archivo».', 'error');
+                }
+            };
+
+            const onClearClick = (ev) => {
+                ev.preventDefault();
+                if (msgBox) msgBox.innerHTML = '';
+                clearFileSelection(false);
+                browseBtn?.focus();
+            };
+
+            const onBeforeRequest = () => {
+                const active = modeRadios.find((r) => r.checked)?.value || 'archivo';
+                if (active === 'archivo') {
+                    setStatus('Subiendo archivo de forma segura…', 'loading');
+                }
+            };
+            const onAfterRequest = (ev) => {
+                const active = modeRadios.find((r) => r.checked)?.value || 'archivo';
+                if (active !== 'archivo') return;
+                const status = ev.detail?.xhr?.status || 0;
+                if (status >= 400) {
+                    if (fileInput.files && fileInput.files[0]) {
+                        setStatus('No se completó el registro. Revisa el mensaje superior y vuelve a intentarlo.', 'error');
+                    } else {
+                        setStatus('Sin archivo seleccionado', 'neutral');
+                    }
+                }
+            };
+
+            modeRadios.forEach((r) => r.addEventListener('change', onRadioChange));
+            browseBtn?.addEventListener('click', onBrowseClick);
+            dropzone?.addEventListener('keydown', onDropzoneKeydown);
+            dropzone?.addEventListener('dragenter', onDragEnter);
+            dropzone?.addEventListener('dragover', onDragOver);
+            dropzone?.addEventListener('dragleave', onDragLeave);
+            dropzone?.addEventListener('drop', onDrop);
+            fileInput.addEventListener('change', onFileChange);
+            clearBtn?.addEventListener('click', onClearClick);
+            form.addEventListener('htmx:beforeRequest', onBeforeRequest);
+            form.addEventListener('htmx:afterRequest', onAfterRequest);
+
+            form._tssaDocUploadCleanup = () => {
+                modeRadios.forEach((r) => r.removeEventListener('change', onRadioChange));
+                browseBtn?.removeEventListener('click', onBrowseClick);
+                dropzone?.removeEventListener('keydown', onDropzoneKeydown);
+                dropzone?.removeEventListener('dragenter', onDragEnter);
+                dropzone?.removeEventListener('dragover', onDragOver);
+                dropzone?.removeEventListener('dragleave', onDragLeave);
+                dropzone?.removeEventListener('drop', onDrop);
+                fileInput.removeEventListener('change', onFileChange);
+                clearBtn?.removeEventListener('click', onClearClick);
+                form.removeEventListener('htmx:beforeRequest', onBeforeRequest);
+                form.removeEventListener('htmx:afterRequest', onAfterRequest);
+                delete form._tssaDocUploadCleanup;
+            };
+
+            syncMode();
+        });
+    }
+
+    function destroyDocumentUploadModal(root = document) {
+        if (!root || !root.querySelectorAll) return;
+        root.querySelectorAll('[data-doc-upload-form]').forEach((form) => {
+            if (typeof form._tssaDocUploadCleanup === 'function') {
+                form._tssaDocUploadCleanup();
+            }
+            delete form.dataset.docUploadInit;
+        });
+    }
+
     function initComponents(root = document) {
         initComboboxes(root);
         initDatepickers(root);
@@ -1501,9 +1750,11 @@
         initLocationMaps(root);
         initHybridRequestLocations(root);
         initAssignStopsModal(root);
+        initDocumentUploadModal(root);
     }
 
     function destroyComponents(root = document) {
+        destroyDocumentUploadModal(root);
         destroyAssignStopsModal(root);
         destroyComboboxes(root);
         destroyDatepickers(root);

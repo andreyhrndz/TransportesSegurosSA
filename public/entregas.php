@@ -16,8 +16,11 @@ if (!isset($sections[$section])) {
 }
 require_permission($sections[$section][1]);
 
+$selectedSolicitudId = 0;
 $solicitudesDocumentos = [];
 if ($section === 'documentos') {
+    $rawSolId = filter_var($_GET['solicitud_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+    $selectedSolicitudId = $rawSolId !== false ? (int)$rawSolId : 0;
     try {
         $solicitudesDocumentos = operation_list(
             'DECLARE @total_registros INT; EXEC dbo.sp_listar_solicitudes @buscar=NULL,@estado=NULL,@cliente_id=NULL,@desde=NULL,@hasta=NULL,@pagina=1,@por_pagina=100,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;'
@@ -31,7 +34,7 @@ $descriptions = [
     'entregas' => 'Consulta comprobantes de recepción, destinatarios efectivos y resultados de entrega.',
     'incidencias' => 'Seguimiento y resolución de eventos operativos reportados durante el transporte.',
     'notificaciones' => 'Bitácora de avisos y comunicaciones registradas por orden de servicio.',
-    'documentos' => 'Consulta y vinculación de respaldos documentales por solicitud de transporte.',
+    'documentos' => 'Consulta, carga segura de archivos PDF/JPG/PNG y vinculación de respaldos documentales por solicitud.',
 ];
 
 require_once __DIR__ . '/../app/layout.php';
@@ -56,7 +59,8 @@ layout_start('entregas', $sections[$section][0], $descriptions[$section]);
                 <select id="documentos-solicitud" name="solicitud_id" data-combobox data-allow-clear="true" <?= has_permission('SOLICITUDES_VER') ? 'data-remote-url="/solicitudes/lista.php"' : '' ?> data-placeholder="Buscar solicitud por código o cliente…" aria-label="Solicitud">
                     <option value="">Selecciona una solicitud para ver sus documentos…</option>
                     <?php foreach ($solicitudesDocumentos as $sol): ?>
-                        <option value="<?= (int)$sol['solicitud_id'] ?>" data-subtext="<?= e(($sol['origen_nombre'] ?? '') . ' → ' . ($sol['destino_nombre'] ?? '') . ' · ' . humanize_status($sol['estado'])) ?>">
+                        <?php $sid = (int)$sol['solicitud_id']; ?>
+                        <option value="<?= $sid ?>" data-subtext="<?= e(($sol['origen_nombre'] ?? '') . ' → ' . ($sol['destino_nombre'] ?? '') . ' · ' . humanize_status($sol['estado'])) ?>" <?= $sid === $selectedSolicitudId ? 'selected' : '' ?>>
                             <?= e($sol['codigo_solicitud'] . ' · ' . ($sol['cliente_nombre'] ?? '')) ?>
                         </option>
                     <?php endforeach; ?>
@@ -94,7 +98,7 @@ layout_start('entregas', $sections[$section][0], $descriptions[$section]);
             <span>Nueva incidencia</span>
         </button>
     <?php elseif ($section === 'documentos' && has_permission('DOCUMENTOS_REGISTRAR')): ?>
-        <button class="button is-primary" type="button" hx-get="/entregas/documento_form.php" hx-target="#modal-contenido">
+        <button class="button is-primary" type="button" hx-get="/entregas/documento_form.php" hx-include="#documentos-solicitud" hx-target="#modal-contenido">
             <?= svg_icon('plus') ?>
             <span>Nuevo documento</span>
         </button>
@@ -102,6 +106,12 @@ layout_start('entregas', $sections[$section][0], $descriptions[$section]);
 </section>
 
 <section class="panel-box table-panel">
-    <div id="entregas-resultado" hx-get="/entregas/lista.php?seccion=<?= e($section) ?>" hx-trigger="load"></div>
+    <?php
+    $initialListUrl = '/entregas/lista.php?seccion=' . rawurlencode($section);
+    if ($section === 'documentos' && $selectedSolicitudId > 0) {
+        $initialListUrl .= '&solicitud_id=' . $selectedSolicitudId;
+    }
+    ?>
+    <div id="entregas-resultado" hx-get="<?= e($initialListUrl) ?>" hx-trigger="load"></div>
 </section>
 <?php layout_end(); ?>
