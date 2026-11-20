@@ -10,25 +10,47 @@ header('Cache-Control: no-store');
 
 $canManageAccounts = has_permission('USUARIOS_GESTIONAR_CUENTAS');
 
+$buscar = read_optional_text($_GET['buscar'] ?? $_POST['buscar'] ?? '', 120);
+$estadoParam = strtoupper(trim((string)($_GET['estado'] ?? $_POST['estado'] ?? '')));
+$estadoFiltro = in_array($estadoParam, ['PENDIENTE', 'EXPIRADA', 'REVOCADA', 'COMPLETADA', 'CANCELADA'], true)
+    ? $estadoParam
+    : null;
+$page = read_page_number($_GET['pagina'] ?? $_POST['pagina'] ?? null);
+$perPage = 20;
+
+$sqlList = 'DECLARE @total_registros INT; EXEC dbo.sp_listar_invitaciones_paginadas @buscar=?,@estado=?,@pagina=?,@por_pagina=?,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;';
+
 try {
-    $stmt = db()->prepare('EXEC dbo.sp_listar_invitaciones @estado=NULL;');
-    $stmt->execute();
-    $invitaciones = $stmt->fetchAll();
-    $stmt->closeCursor();
+    $result = read_procedure_list($sqlList, [$buscar, $estadoFiltro, $page, $perPage]);
+    $total = $result['total'];
+    $pages = max(1, (int)ceil($total / $perPage));
+    if ($total > 0 && $page > $pages) {
+        $page = $pages;
+        $result = read_procedure_list($sqlList, [$buscar, $estadoFiltro, $page, $perPage]);
+        $total = $result['total'];
+        $pages = max(1, (int)ceil($total / $perPage));
+    }
+    $invitaciones = $result['rows'];
 } catch (PDOException) {
+    if (is_htmx_request()) {
+        header('HX-Retarget: #invitaciones-feedback');
+        header('HX-Reswap: innerHTML');
+    }
     http_response_code(500);
-    echo ui_notice('No se pudo cargar la lista de invitaciones.', 'danger');
+    echo ui_notice('No se pudo cargar la lista de invitaciones. Inténtalo nuevamente.', 'danger');
     exit;
 }
 
+$hasActiveFilters = ($buscar !== null || $estadoFiltro !== null);
 $nowUtc = new DateTimeImmutable('now', new DateTimeZone('UTC'));
 ?>
+<input type="hidden" id="invitaciones-pagina-actual" name="pagina" value="<?= $page ?>">
 <div class="table-container">
     <table class="table is-fullwidth is-hoverable" aria-label="Invitaciones de usuario">
         <thead>
             <tr>
                 <th>Correo electrónico</th>
-                <th>Estado y entrega</th>
+                <th>Estado</th>
                 <th>Permisos planificados</th>
                 <th>Vigencia</th>
                 <th class="has-text-right">Acciones</th>
@@ -37,7 +59,13 @@ $nowUtc = new DateTimeImmutable('now', new DateTimeZone('UTC'));
         <tbody>
             <?php if (empty($invitaciones)): ?>
                 <tr>
-                    <td colspan="5"><?= empty_state('Sin invitaciones', 'No se han emitido invitaciones en el sistema.') ?></td>
+                    <td colspan="5">
+                        <?php if ($hasActiveFilters): ?>
+                            <?= empty_state('Sin resultados', 'No se encontraron invitaciones que coincidan con la búsqueda o el estado seleccionado.') ?>
+                        <?php else: ?>
+                            <?= empty_state('Sin invitaciones', 'No se han emitido invitaciones en el sistema.') ?>
+                        <?php endif; ?>
+                    </td>
                 </tr>
             <?php endif; ?>
             <?php foreach ($invitaciones as $inv): ?>
@@ -54,15 +82,20 @@ $nowUtc = new DateTimeImmutable('now', new DateTimeZone('UTC'));
                         $isExpiredByTime = false;
                     }
                 }
-                // Estado efectivo: una invitación vencida nunca se muestra como PENDIENTE utilizable.
+                // Estado efectivo UTC: nunca mostrar una invitación vencida como pendiente utilizable.
                 $estado = ($estadoRaw === 'PENDIENTE' && $isExpiredByTime) ? 'EXPIRADA' : $estadoRaw;
-                $estadoEnvio = (string)($inv['estado_envio'] ?? 'PENDIENTE');
+                $estadoEnvio = strtoupper(trim((string)($inv['estado_envio'] ?? 'PENDIENTE')));
                 $isPendiente = ($estado === 'PENDIENTE');
                 $isExpirada = ($estado === 'EXPIRADA');
                 $isCompletada = ($estado === 'COMPLETADA');
                 $enviosContador = (int)($inv['envios_contador'] ?? 1);
                 $totalPerms = (int)($inv['total_permisos'] ?? 0);
                 $permisosCodigos = (string)($inv['permisos_codigos'] ?? '');
+                $deliverySummary = invitation_delivery_text($estadoEnvio);
+                if ($enviosContador > 1) {
+                    $deliverySummary .= ' · ' . $enviosContador . ' envíos';
+                }
+                $deliveryClass = $estadoEnvio === 'FALLIDO' ? 'has-text-danger' : '';
                 ?>
                 <tr data-invitacion-id="<?= $invId ?>" data-invitacion-estado="<?= e($estado) ?>">
                     <td>
@@ -74,15 +107,12 @@ $nowUtc = new DateTimeImmutable('now', new DateTimeZone('UTC'));
                     <td>
                         <div class="cell-stack">
                             <div><?= status_tag($estado) ?></div>
-                            <div><?= status_tag($estadoEnvio) ?></div>
-                            <?php if ($enviosContador > 1): ?>
-                                <span title="Número total de envíos emitidos"><?= $enviosContador ?> envíos</span>
-                            <?php endif; ?>
+                            <span class="invitation-delivery-meta <?= $deliveryClass ?>"><?= e($deliverySummary) ?></span>
                         </div>
                     </td>
                     <td>
                         <?php if ($totalPerms > 0): ?>
-                            <span class="status-tag status-tag-info" title="<?= e($permisosCodigos) ?>">
+                            <span class="perm-count-meta" title="<?= e($permisosCodigos) ?>">
                                 <?= $totalPerms ?> <?= $totalPerms === 1 ? 'permiso' : 'permisos' ?>
                             </span>
                         <?php else: ?>
@@ -104,15 +134,11 @@ $nowUtc = new DateTimeImmutable('now', new DateTimeZone('UTC'));
                         <?php if ($canManageAccounts): ?>
                             <div class="row-actions is-justify-content-flex-end">
                                 <?php if ($isPendiente): ?>
-                                    <form hx-post="/usuarios/reenviar_invitacion.php" hx-target="#invitaciones-resultado" hx-disabled-elt="find button[type=submit]" hx-confirm="¿Reenviar invitación a <?= e($inv['correo_destino']) ?>? Esto invalidará el enlace anterior y generará uno nuevo con 24 horas de vigencia." class="is-inline">
-                                        <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-                                        <input type="hidden" name="invitacion_id" value="<?= $invId ?>">
-                                        <button class="button is-small button-secondary" type="submit" title="Genera un nuevo enlace válido por 24 horas">
-                                            <?= svg_icon('refresh') ?>
-                                            <span>Reenviar</span>
-                                        </button>
-                                    </form>
-                                    <form hx-post="/usuarios/revocar_invitacion.php" hx-target="#invitaciones-resultado" hx-disabled-elt="find button[type=submit]" hx-confirm="¿Revocar la invitación vigente a <?= e($inv['correo_destino']) ?>? El enlace dejará de ser válido inmediatamente." class="is-inline">
+                                    <button class="button is-small button-secondary" type="button" hx-get="/usuarios/reenviar_form.php?id=<?= $invId ?>" hx-target="#modal-contenido" title="Confirmar o corregir correo y emitir un nuevo enlace válido por 24 horas">
+                                        <?= svg_icon('refresh') ?>
+                                        <span>Reenviar</span>
+                                    </button>
+                                    <form hx-post="/usuarios/revocar_invitacion.php" hx-target="#invitaciones-resultado" hx-include="#invitaciones-filtros, #invitaciones-pagina-actual" hx-disabled-elt="find button[type=submit]" hx-confirm="¿Revocar la invitación vigente a <?= e($inv['correo_destino']) ?>? El enlace dejará de ser válido inmediatamente." class="is-inline">
                                         <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
                                         <input type="hidden" name="invitacion_id" value="<?= $invId ?>">
                                         <button class="button is-small button-secondary is-danger" type="submit" title="Invalida el enlace de activación inmediatamente">
@@ -120,32 +146,11 @@ $nowUtc = new DateTimeImmutable('now', new DateTimeZone('UTC'));
                                             <span>Revocar</span>
                                         </button>
                                     </form>
-                                <?php elseif ($isExpirada): ?>
-                                    <form hx-post="/usuarios/reenviar_invitacion.php" hx-target="#invitaciones-resultado" hx-disabled-elt="find button[type=submit]" hx-confirm="¿Emitir una nueva invitación para <?= e($inv['correo_destino']) ?> con nuevo enlace y 24 horas de vigencia?" class="is-inline">
-                                        <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-                                        <input type="hidden" name="invitacion_id" value="<?= $invId ?>">
-                                        <button class="button is-small button-secondary" type="submit" title="Genera un nuevo enlace válido por 24 horas conservando permisos planificados">
-                                            <?= svg_icon('refresh') ?>
-                                            <span>Reenviar</span>
-                                        </button>
-                                    </form>
-                                    <form hx-post="/usuarios/revocar_invitacion.php" hx-target="#invitaciones-resultado" hx-disabled-elt="find button[type=submit]" hx-confirm="¿Descartar y cancelar la invitación expirada para <?= e($inv['correo_destino']) ?>? El registro permanecerá en el historial como cancelado." class="is-inline">
-                                        <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-                                        <input type="hidden" name="invitacion_id" value="<?= $invId ?>">
-                                        <button class="button is-small button-secondary is-danger" type="submit" title="Descarta la invitación expirada conservando su historial como cancelada">
-                                            <?= svg_icon('close') ?>
-                                            <span>Cancelar</span>
-                                        </button>
-                                    </form>
                                 <?php elseif (!$isCompletada): ?>
-                                    <form hx-post="/usuarios/reenviar_invitacion.php" hx-target="#invitaciones-resultado" hx-disabled-elt="find button[type=submit]" hx-confirm="¿Emitir una nueva invitación para <?= e($inv['correo_destino']) ?> con nuevo enlace y 24 horas de vigencia?" class="is-inline">
-                                        <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
-                                        <input type="hidden" name="invitacion_id" value="<?= $invId ?>">
-                                        <button class="button is-small button-secondary" type="submit" title="Genera un nuevo enlace válido por 24 horas">
-                                            <?= svg_icon('refresh') ?>
-                                            <span>Reenviar</span>
-                                        </button>
-                                    </form>
+                                    <button class="button is-small button-secondary" type="button" hx-get="/usuarios/reenviar_form.php?id=<?= $invId ?>" hx-target="#modal-contenido" title="Confirmar o corregir correo y emitir un nuevo enlace válido por 24 horas">
+                                        <?= svg_icon('refresh') ?>
+                                        <span>Reenviar</span>
+                                    </button>
                                 <?php else: ?>
                                     <span class="has-text-grey is-size-7" title="La cuenta ya fue activada; administra su estado desde la pestaña Cuentas de usuario">—</span>
                                 <?php endif; ?>
@@ -158,4 +163,12 @@ $nowUtc = new DateTimeImmutable('now', new DateTimeZone('UTC'));
             <?php endforeach; ?>
         </tbody>
     </table>
+</div>
+<div class="pagination-bar">
+    <span><?= $total ?> <?= $total === 1 ? 'invitación' : 'invitaciones' ?></span>
+    <div class="buttons" hx-target="#invitaciones-resultado" hx-include="#invitaciones-filtros">
+        <button class="button is-small button-secondary" type="button" <?= $page <= 1 ? 'disabled' : '' ?> hx-get="/usuarios/invitaciones_lista.php?pagina=<?= $page - 1 ?>">Anterior</button>
+        <span class="pagination-info">Página <?= $page ?> de <?= $pages ?></span>
+        <button class="button is-small button-secondary" type="button" <?= $page >= $pages ? 'disabled' : '' ?> hx-get="/usuarios/invitaciones_lista.php?pagina=<?= $page + 1 ?>">Siguiente</button>
+    </div>
 </div>

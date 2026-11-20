@@ -89,11 +89,11 @@ function operation_sql_error(PDOException $exception, array $messages = []): nev
     $message = $messages[$number] ?? match ($number) {
         2601, 2627 => 'Ya existe un registro con esos datos.',
         50101 => 'El registro solicitado no existe.',
-        50103, 50201, 50202, 50216, 50217, 50407, 50410, 50412, 50501 => 'No tienes permiso para realizar esta acción.',
+        50103, 50201, 50202, 50203, 50216, 50217, 50233, 50407, 50410, 50412, 50501 => 'No tienes permiso para realizar esta acción.',
         default => 'No se pudo completar la operación. Verifica el estado actual e inténtalo nuevamente.',
     };
 
-    $forbiddenCodes = [50103, 50201, 50202, 50216, 50217, 50407, 50410, 50412, 50501];
+    $forbiddenCodes = [50103, 50201, 50202, 50203, 50216, 50217, 50233, 50407, 50410, 50412, 50501];
     $notFoundCodes = [50101, 50415, 50436, 50437, 50503];
     $conflictCodes = [
         2601, 2627, 547,
@@ -145,7 +145,8 @@ function operation_modal_success(string $message, string $event, string $fallbac
                 'closeModal' => true,
             ],
         ]);
-        $triggerPayload = json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        // RFC 9110 / XHR: los headers HTTP se leen como ISO-8859-1; escapar Unicode (\uXXXX) evita mojibake en toasts HTMX.
+        $triggerPayload = json_encode($payload, JSON_THROW_ON_ERROR);
         header('HX-Trigger-After-Settle: ' . $triggerPayload);
         header('Content-Type: text/html; charset=UTF-8');
         exit(ui_notice($message, 'success'));

@@ -33,6 +33,7 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
     <link rel="stylesheet" href="/assets/vendor/tom-select/tom-select.css">
     <link rel="stylesheet" href="/assets/vendor/flatpickr/flatpickr.min.css">
+    <link rel="stylesheet" href="/assets/vendor/leaflet/leaflet.css">
     <link rel="stylesheet" href="/assets/css/estilos.css">
     <script>
     (function() {
@@ -52,6 +53,7 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
     <script src="/assets/vendor/flatpickr/flatpickr.min.js" defer></script>
     <script src="/assets/vendor/flatpickr/es.js" defer></script>
     <script src="/assets/vendor/chartjs/chart.umd.min.js" defer></script>
+    <script src="/assets/vendor/leaflet/leaflet.js" defer></script>
     <script src="/assets/js/app.js" defer></script>
 </head>
 <body>

@@ -17,8 +17,7 @@ require_once __DIR__ . '/../app/bootstrap.php';
 
 function yg_fail(string $message): never
 {
-    fwrite(STDERR, "FALLO YAGNI SUITE: {$message}\n");
-    exit(1);
+    throw new RuntimeException("FALLO YAGNI SUITE: {$message}");
 }
 
 function yg_assert(bool $condition, string $message): void
@@ -42,7 +41,7 @@ function yg_free_port(): int
 /** @return array{0:int,1:string,2:array<int,string>} */
 function yg_http(string $url, string $cookie, bool $htmx = true, ?array $postFields = null): array
 {
-    $headers = "Cookie: {$cookie}\r\nAccept: text/html\r\n" . ($htmx ? "HX-Request: true\r\n" : '');
+    $headers = "Cookie: {$cookie}\r\nAccept: text/html\r\nConnection: close\r\n" . ($htmx ? "HX-Request: true\r\n" : '');
     $options = [
         'header' => $headers,
         'ignore_errors' => true,
@@ -84,7 +83,7 @@ function yg_start_server(string $docRoot, array $extraEnv = []): array
     ], $extraEnv);
     $proc = proc_open(
         [PHP_BINARY, '-S', "127.0.0.1:{$port}", '-t', $docRoot],
-        [0 => ['pipe', 'r'], 1 => ['file', $log, 'a'], 2 => ['file', $log, 'a']],
+        [0 => ['file', 'NUL', 'r'], 1 => ['file', $log, 'a'], 2 => ['file', $log, 'a']],
         $pipes,
         dirname(__DIR__),
         $env
@@ -600,7 +599,7 @@ try {
     $pdo->prepare("UPDATE dbo.invitaciones_usuario SET estado = 'EXPIRADA', fecha_expiracion = DATEADD(HOUR, -3, SYSUTCDATETIME()) WHERE invitacion_id = ?")->execute([$invExpId]);
 
     [$st, $invListHtml] = yg_http($base . '/usuarios/invitaciones_lista.php', $adminCookie);
-    yg_assert($st === 200 && str_contains($invListHtml, 'Venció:') && str_contains($invListHtml, 'Cancelar'), 'Listado debe mostrar fecha real de expiración y acción Cancelar para invitaciones expiradas.');
+    yg_assert($st === 200 && str_contains($invListHtml, 'Venció:') && str_contains($invListHtml, 'Reenviar') && !str_contains($invListHtml, '>Cancelar<'), 'Listado debe mostrar fecha real de expiración y solo acción Reenviar (sin botón Cancelar) para invitaciones expiradas.');
     yg_assert(!str_contains($invListHtml, (string)$invExpRow['token_hash']), 'El listado jamás debe exponer hashes ni tokens.');
 
     [$st, $cancelExpBody] = yg_http($base . '/usuarios/revocar_invitacion.php', $adminCookie, true, [
@@ -714,6 +713,9 @@ PHP);
     echo "[OK] Sección 4: Seguridad CSRF y autorización granular (403) en todos los endpoints intervenidos.\n";
 
     echo "=== SUITE YAGNI HTTP Y SEGURIDAD COMPLETADA AL 100% EN TransportesSegurosSA_Test ===\n";
+} catch (Throwable $e) {
+    fwrite(STDERR, $e->getMessage() . "\n");
+    $ygExitCode = 1;
 } finally {
     yg_stop_server($srvFake);
     yg_stop_server($srvBrevo);
@@ -759,3 +761,4 @@ PHP);
         $pdo->prepare('DELETE FROM dbo.usuarios WHERE usuario_id = ?')->execute([$uid]);
     }
 }
+exit($ygExitCode ?? 0);

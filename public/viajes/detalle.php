@@ -97,19 +97,28 @@ layout_start('viajes', 'Viaje ' . (string)$viaje['codigo_viaje'], 'Detalle de un
                     <th>Tipo</th>
                     <th>Estado</th>
                     <th>Llegada</th>
+                    <th class="has-text-right">Mapa</th>
                 </tr>
             </thead>
             <tbody>
                 <?php if (!$paradas): ?>
-                    <tr><td colspan="5"><?= empty_state('Sin paradas registradas', 'Agrega paradas al viaje antes de asignar solicitudes.') ?></td></tr>
+                    <tr><td colspan="6"><?= empty_state('Sin paradas registradas', 'Agrega paradas al viaje antes de asignar solicitudes.') ?></td></tr>
                 <?php endif; ?>
                 <?php foreach ($paradas as $row): ?>
                     <tr>
                         <td><strong>#<?= (int)$row['orden'] ?></strong></td>
-                        <td><?= e($row['ubicacion_nombre']) ?></td>
+                        <td>
+                            <div class="cell-stack">
+                                <strong><?= e($row['ubicacion_nombre']) ?></strong>
+                                <?php if (!empty($row['direccion'])): ?>
+                                    <span><?= e($row['direccion']) ?></span>
+                                <?php endif; ?>
+                            </div>
+                        </td>
                         <td><?= e(humanize_status($row['tipo_parada'])) ?></td>
                         <td><?= status_tag($row['estado']) ?></td>
                         <td><?= format_utc_datetime($row['llegada_real'] ?: $row['llegada_programada']) ?></td>
+                        <td class="has-text-right"><?= google_maps_link($row['latitud'] ?? null, $row['longitud'] ?? null, 'Abrir en Google Maps', true) ?></td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>

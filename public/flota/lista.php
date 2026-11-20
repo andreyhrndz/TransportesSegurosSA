@@ -160,7 +160,7 @@ $configs = [
         'write' => 'UBICACIONES_GESTIONAR',
         'entity' => 'ubicacion',
         'sql' => 'DECLARE @total_registros INT; EXEC dbo.sp_listar_ubicaciones @buscar=?,@solo_activos=?,@pagina=?,@por_pagina=?,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;',
-        'headers' => ['Ubicación', 'Dirección', 'Coordenadas', 'Registro'],
+        'headers' => ['Ubicación', 'Dirección', 'Mapa', 'Registro'],
     ],
 ];
 
@@ -170,8 +170,19 @@ if (!isset($configs[$section])) {
 }
 
 $cfg = $configs[$section];
-require_permission($cfg['read']);
-$canWrite = has_permission($cfg['write']);
+$isStopLocationsContext = ($isJson && $section === 'ubicaciones' && strtolower(trim((string)($_GET['contexto'] ?? ''))) === 'parada');
+if ($isStopLocationsContext) {
+    if (!has_permission('VIAJES_PARADAS') && !has_permission('UBICACIONES_VER')) {
+        http_response_code(403);
+        header('Content-Type: application/json; charset=UTF-8');
+        echo '[]';
+        exit;
+    }
+    $canWrite = false;
+} else {
+    require_permission($cfg['read']);
+    $canWrite = has_permission($cfg['write']);
+}
 
 $search = read_optional_text($_GET['buscar'] ?? null, $section === 'vehiculos' ? 80 : 120);
 $page = read_page_number($_GET['pagina'] ?? null);
@@ -184,12 +195,18 @@ $rawState = strtoupper(trim((string)($_GET['estado'] ?? '')));
 $state = in_array($rawState, $allowedStates, true) ? $rawState : null;
 
 try {
-    $params = match ($section) {
-        'vehiculos', 'conductores' => [$state, $soloActivos, $search, $page, $perPage],
-        'rutas' => [$soloActivos, $search, $page, $perPage],
-        'ubicaciones' => [$search, $soloActivos, $page, $perPage],
-    };
-    $result = read_procedure_list($cfg['sql'], $params);
+    if ($isStopLocationsContext) {
+        $sqlToRun = 'DECLARE @total_registros INT; EXEC dbo.sp_listar_ubicaciones_parada @buscar=?,@pagina=?,@por_pagina=?,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;';
+        $params = [$search, $page, $perPage];
+    } else {
+        $sqlToRun = $cfg['sql'];
+        $params = match ($section) {
+            'vehiculos', 'conductores' => [$state, $soloActivos, $search, $page, $perPage],
+            'rutas' => [$soloActivos, $search, $page, $perPage],
+            'ubicaciones' => [$search, $soloActivos, $page, $perPage],
+        };
+    }
+    $result = read_procedure_list($sqlToRun, $params);
 } catch (PDOException) {
     if ($isJson) {
         header('Content-Type: application/json; charset=UTF-8');
@@ -231,10 +248,16 @@ if ($isJson) {
                 'subtext' => (string)$row['origen_nombre'] . ' → ' . (string)$row['destino_nombre'],
             ];
         } else {
+            $sub = (string)($row['direccion'] ?? '');
+            if ($isStopLocationsContext && isset($row['es_reutilizable']) && (int)$row['es_reutilizable'] === 0) {
+                $solCode = trim((string)($row['solicitud_codigo'] ?? ''));
+                $prefix = $solCode !== '' ? "Solicitud {$solCode} · Punto puntual" : 'Punto puntual';
+                $sub = $sub !== '' ? "{$prefix} · {$sub}" : $prefix;
+            }
             $options[] = [
                 'value' => (string)(int)$row['ubicacion_id'],
                 'text' => (string)$row['nombre'],
-                'subtext' => (string)($row['direccion'] ?? ''),
+                'subtext' => $sub,
             ];
         }
     }
@@ -346,13 +369,7 @@ $todayUtc = gmdate('Y-m-d');
                         <?php $isAssigned = false; ?>
                         <td><strong><?= e($row['nombre']) ?></strong></td>
                         <td><?= e($row['direccion']) ?></td>
-                        <td>
-                            <?php if ($row['latitud'] !== null && $row['longitud'] !== null): ?>
-                                <code><?= e($row['latitud'] . ', ' . $row['longitud']) ?></code>
-                            <?php else: ?>
-                                <span class="has-text-grey">Sin coordenadas</span>
-                            <?php endif; ?>
-                        </td>
+                        <td><?= google_maps_link($row['latitud'] ?? null, $row['longitud'] ?? null, 'Abrir en Google Maps', true) ?></td>
                         <td><?= status_tag($isActive ? 'ACTIVO' : 'INACTIVO') ?></td>
                     <?php endif; ?>
 

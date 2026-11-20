@@ -205,30 +205,92 @@
 
             try {
                 const instance = new window.TomSelect(select, config);
+                const modalBody = select.closest('.modal-card-body');
+                const isInModal = Boolean(select.closest('.modal'));
+
                 const syncDropdownPosition = () => {
                     if (!instance.isOpen) return;
-                    instance.positionDropdown();
                     const dd = instance.dropdown;
-                    if (!dd) return;
-                    const rect = dd.getBoundingClientRect();
-                    const margin = 8;
-                    if (rect.right > window.innerWidth - margin) {
-                        const adjustedLeft = Math.max(margin, window.innerWidth - rect.width - margin);
-                        dd.style.left = adjustedLeft + 'px';
+                    const ctrl = instance.control;
+                    if (!dd || !ctrl) return;
+
+                    const ctrlRect = ctrl.getBoundingClientRect();
+                    if (modalBody) {
+                        const bodyRect = modalBody.getBoundingClientRect();
+                        if (ctrlRect.bottom < bodyRect.top + 4 || ctrlRect.top > bodyRect.bottom - 4) {
+                            instance.close();
+                            return;
+                        }
                     }
-                    if (rect.left < margin) {
-                        dd.style.left = margin + 'px';
+
+                    const margin = 10;
+                    const content = instance.dropdown_content || dd.querySelector('.ts-dropdown-content');
+                    const ddWidth = Math.min(Math.max(ctrlRect.width, 190), window.innerWidth - margin * 2);
+                    const clampedLeft = Math.min(Math.max(margin, ctrlRect.left), window.innerWidth - ddWidth - margin);
+
+                    const spaceBelow = Math.max(0, window.innerHeight - ctrlRect.bottom - margin);
+                    const spaceAbove = Math.max(0, ctrlRect.top - margin);
+                    const placeAbove = spaceBelow < 230 && spaceAbove > spaceBelow;
+                    const availableVertical = placeAbove ? spaceAbove : spaceBelow;
+                    const maxContentHeight = Math.max(96, Math.min(250, availableVertical - 14));
+
+                    if (content) {
+                        content.style.maxHeight = maxContentHeight + 'px';
+                    }
+
+                    dd.style.width = ddWidth + 'px';
+                    dd.classList.toggle('is-modal-dropdown', isInModal);
+                    dd.classList.toggle('is-flipped-up', placeAbove);
+
+                    if (isInModal) {
+                        dd.style.position = 'fixed';
+                        dd.style.left = clampedLeft + 'px';
+                        const ddHeight = Math.min(dd.offsetHeight || (maxContentHeight + 12), availableVertical);
+                        const topPx = placeAbove
+                            ? Math.max(margin, ctrlRect.top - ddHeight - 4)
+                            : Math.min(window.innerHeight - ddHeight - margin, ctrlRect.bottom + 4);
+                        dd.style.top = Math.max(margin, topPx) + 'px';
+                    } else {
+                        instance.positionDropdown();
+                        dd.style.left = (clampedLeft + window.scrollX) + 'px';
+                        if (placeAbove) {
+                            const ddHeight = Math.min(dd.offsetHeight || (maxContentHeight + 12), availableVertical);
+                            dd.style.top = Math.max(window.scrollY + margin, ctrlRect.top + window.scrollY - ddHeight - 4) + 'px';
+                        } else {
+                            dd.style.top = (ctrlRect.bottom + window.scrollY + 4) + 'px';
+                        }
                     }
                 };
-                instance.on('dropdown_open', () => requestAnimationFrame(syncDropdownPosition));
-                const modalBody = select.closest('.modal-card-body');
+
+                const onDropdownWheel = (wheelEvent) => {
+                    const content = instance.dropdown_content || instance.dropdown?.querySelector('.ts-dropdown-content');
+                    wheelEvent.preventDefault();
+                    wheelEvent.stopPropagation();
+                    if (!content) return;
+                    const canScroll = content.scrollHeight > content.clientHeight + 1;
+                    if (!canScroll) return;
+                    const delta = wheelEvent.deltaMode === 1
+                        ? wheelEvent.deltaY * 32
+                        : (wheelEvent.deltaMode === 2 ? wheelEvent.deltaY * content.clientHeight : wheelEvent.deltaY);
+                    content.scrollTop = Math.max(0, Math.min(content.scrollHeight - content.clientHeight, content.scrollTop + delta));
+                };
+
+                instance.dropdown?.addEventListener('wheel', onDropdownWheel, { passive: false });
+                instance.on('dropdown_open', () => {
+                    requestAnimationFrame(syncDropdownPosition);
+                    setTimeout(syncDropdownPosition, 30);
+                });
+                instance.on('type', () => requestAnimationFrame(syncDropdownPosition));
                 if (modalBody) {
                     modalBody.addEventListener('scroll', syncDropdownPosition, { passive: true });
                 }
                 window.addEventListener('resize', syncDropdownPosition, { passive: true });
+                window.addEventListener('scroll', syncDropdownPosition, { passive: true });
                 instance._modalBodyScrollCleanup = () => {
+                    instance.dropdown?.removeEventListener('wheel', onDropdownWheel);
                     if (modalBody) modalBody.removeEventListener('scroll', syncDropdownPosition);
                     window.removeEventListener('resize', syncDropdownPosition);
+                    window.removeEventListener('scroll', syncDropdownPosition);
                 };
             } catch {
                 delete select.dataset.tsInitialized;
@@ -447,42 +509,811 @@
         });
     }
 
+    /* ======================================================================
+       MAPA INTERACTIVO DE UBICACIONES (LEAFLET + OPENSTREETMAP + FALLBACK)
+       Factory único compartido por Flota > Ubicaciones y Nueva solicitud.
+       ====================================================================== */
+
+    const MAP_PIN_SVG = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></svg>';
+    const DEFAULT_MAP_CENTER = [9.9281, -84.0907];
+    const DEFAULT_MAP_ZOOM = 8;
+
+    function parseValidCoordPair(latRaw, lonRaw) {
+        const latStr = String(latRaw ?? '').trim().replace(',', '.');
+        const lonStr = String(lonRaw ?? '').trim().replace(',', '.');
+        if (latStr === '' || lonStr === '') return null;
+        const lat = Number(latStr);
+        const lon = Number(lonStr);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+        if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+        return { lat, lon };
+    }
+
+    function createInteractiveLocationMap({
+        canvas,
+        shell,
+        latInput,
+        lonInput,
+        resetBtn,
+        clearBtn,
+        initialPair = null,
+        onCoordsChange = () => {},
+        onFallback = () => {},
+    }) {
+        if (!canvas || !latInput || !lonInput) return null;
+
+        if (typeof window.L !== 'object' || typeof window.L.map !== 'function') {
+            onFallback(true);
+            return null;
+        }
+
+        let map = null;
+        let marker = null;
+        let resizeObserver = null;
+        let tilesLoaded = 0;
+        let tileErrors = 0;
+        let fallbackTriggered = false;
+
+        try {
+            map = window.L.map(canvas, {
+                center: initialPair ? [initialPair.lat, initialPair.lon] : DEFAULT_MAP_CENTER,
+                zoom: initialPair ? 15 : DEFAULT_MAP_ZOOM,
+                scrollWheelZoom: false,
+                attributionControl: true,
+            });
+
+            // Habilitar wheel-zoom solo tras interacción explícita con el mapa (evita zoom involuntario al hacer scroll en el modal)
+            const enableWheelZoom = () => {
+                canvas.dataset.wheelZoomActive = '1';
+                map?.scrollWheelZoom?.enable();
+            };
+            const disableWheelZoom = () => {
+                delete canvas.dataset.wheelZoomActive;
+                map?.scrollWheelZoom?.disable();
+            };
+            canvas.addEventListener('click', enableWheelZoom);
+            canvas.addEventListener('mouseleave', disableWheelZoom);
+            canvas.addEventListener('blur', disableWheelZoom);
+
+            const tiles = window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a> contributors',
+            });
+            tiles.on('tileload', () => {
+                tilesLoaded += 1;
+            });
+            tiles.on('tileerror', () => {
+                tileErrors += 1;
+                if (!fallbackTriggered && tileErrors >= 3 && tilesLoaded === 0) {
+                    fallbackTriggered = true;
+                    onFallback(false);
+                }
+            });
+            tiles.addTo(map);
+
+            const pinIcon = window.L.divIcon({
+                className: 'tssa-map-marker',
+                html: '<span class="tssa-map-marker-pin" aria-hidden="true"></span>',
+                iconSize: [28, 28],
+                iconAnchor: [14, 28],
+            });
+
+            const setPoint = (lat, lon, syncInputs = true, panToPoint = false) => {
+                const latFixed = Number(lat.toFixed(6));
+                const lonFixed = Number(lon.toFixed(6));
+                if (!marker) {
+                    marker = window.L.marker([latFixed, lonFixed], {
+                        draggable: true,
+                        icon: pinIcon,
+                        title: 'Arrastra para ajustar la ubicación',
+                    }).addTo(map);
+                    marker.on('dragend', () => {
+                        const pos = marker.getLatLng();
+                        latInput.value = pos.lat.toFixed(6);
+                        lonInput.value = pos.lng.toFixed(6);
+                        onCoordsChange(pos.lat, pos.lng);
+                    });
+                } else {
+                    marker.setLatLng([latFixed, lonFixed]);
+                }
+                if (syncInputs) {
+                    latInput.value = latFixed.toFixed(6);
+                    lonInput.value = lonFixed.toFixed(6);
+                }
+                if (panToPoint) {
+                    map.setView([latFixed, lonFixed], Math.max(map.getZoom(), 14));
+                }
+                onCoordsChange(latFixed, lonFixed);
+            };
+
+            const clearPoint = (syncInputs = true) => {
+                if (marker) {
+                    map.removeLayer(marker);
+                    marker = null;
+                }
+                if (syncInputs) {
+                    latInput.value = '';
+                    lonInput.value = '';
+                }
+                onCoordsChange(null, null);
+            };
+
+            if (initialPair) {
+                setPoint(initialPair.lat, initialPair.lon, false, false);
+            }
+
+            map.on('click', (e) => {
+                enableWheelZoom();
+                setPoint(e.latlng.lat, e.latlng.lng, true, false);
+            });
+
+            const onManualCoordChange = () => {
+                const latStr = latInput.value.trim();
+                const lonStr = lonInput.value.trim();
+                if (latStr === '' && lonStr === '') {
+                    clearPoint(false);
+                    return;
+                }
+                const parsed = parseValidCoordPair(latStr, lonStr);
+                if (parsed) {
+                    setPoint(parsed.lat, parsed.lon, false, true);
+                }
+            };
+
+            const onResetClick = () => {
+                if (marker) {
+                    const pos = marker.getLatLng();
+                    map.setView([pos.lat, pos.lng], 15);
+                } else {
+                    map.setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM);
+                }
+                map.invalidateSize(false);
+            };
+
+            const onClearClick = () => clearPoint(true);
+
+            latInput.addEventListener('change', onManualCoordChange);
+            lonInput.addEventListener('change', onManualCoordChange);
+            latInput.addEventListener('input', onManualCoordChange);
+            lonInput.addEventListener('input', onManualCoordChange);
+            resetBtn?.addEventListener('click', onResetClick);
+            clearBtn?.addEventListener('click', onClearClick);
+
+            const invalidate = () => {
+                try {
+                    map?.invalidateSize(false);
+                } catch {
+                    // Ignorar si ya fue desmontado
+                }
+            };
+            requestAnimationFrame(invalidate);
+            const t1 = setTimeout(invalidate, 140);
+            const t2 = setTimeout(invalidate, 350);
+            window.addEventListener('resize', invalidate, { passive: true });
+
+            if (typeof window.ResizeObserver === 'function') {
+                resizeObserver = new window.ResizeObserver(invalidate);
+                resizeObserver.observe(canvas);
+            }
+
+            const destroy = () => {
+                clearTimeout(t1);
+                clearTimeout(t2);
+                window.removeEventListener('resize', invalidate);
+                canvas.removeEventListener('click', enableWheelZoom);
+                canvas.removeEventListener('mouseleave', disableWheelZoom);
+                canvas.removeEventListener('blur', disableWheelZoom);
+                delete canvas.dataset.wheelZoomActive;
+                latInput.removeEventListener('change', onManualCoordChange);
+                lonInput.removeEventListener('change', onManualCoordChange);
+                latInput.removeEventListener('input', onManualCoordChange);
+                lonInput.removeEventListener('input', onManualCoordChange);
+                resetBtn?.removeEventListener('click', onResetClick);
+                clearBtn?.removeEventListener('click', onClearClick);
+                resizeObserver?.disconnect();
+                try {
+                    map?.remove();
+                } catch {
+                    // Ignorar error al destruir mapa
+                }
+            };
+
+            if (shell) {
+                shell._tssaMapInstance = map;
+            }
+
+            return {
+                map,
+                setPoint,
+                clearPoint,
+                resetView: onResetClick,
+                invalidate,
+                destroy,
+            };
+        } catch {
+            onFallback(true);
+            return null;
+        }
+    }
+
+    function initLocationMaps(root = document) {
+        if (!root || !root.querySelectorAll) return;
+        const shells = root.querySelectorAll('[data-location-map-shell]');
+        shells.forEach((shell) => {
+            if (shell.dataset.mapInitialized === '1') return;
+            shell.dataset.mapInitialized = '1';
+
+            const canvas = shell.querySelector('[data-location-map]');
+            const form = shell.closest('form') || root;
+            const latInput = form.querySelector('#ubi-latitud');
+            const lonInput = form.querySelector('#ubi-longitud');
+            const statusEl = form.querySelector('#ubi-mapa-estado');
+            const fallbackEl = form.querySelector('#ubi-mapa-fallback');
+            const detailsEl = form.querySelector('#ubi-coords-avanzadas');
+            const resetBtn = form.querySelector('[data-map-reset]');
+            const clearBtn = form.querySelector('[data-map-clear]');
+            if (!canvas || !latInput || !lonInput) return;
+
+            const activateFallback = (hideCanvas = false) => {
+                if (fallbackEl) fallbackEl.hidden = false;
+                if (detailsEl) detailsEl.open = true;
+                if (hideCanvas) shell.hidden = true;
+            };
+
+            const updateStatus = (lat, lon) => {
+                if (!statusEl) return;
+                if (lat === null || lon === null) {
+                    statusEl.innerHTML = MAP_PIN_SVG + '<span>Sin punto seleccionado (opcional). Haz clic en el mapa para marcar la ubicación.</span>';
+                    if (clearBtn) clearBtn.hidden = true;
+                } else {
+                    const fmt = lat.toFixed(6) + ', ' + lon.toFixed(6);
+                    statusEl.innerHTML = MAP_PIN_SVG + '<span>Punto seleccionado: <code>' + escapeHtml(fmt) + '</code> (haz clic o arrastra el marcador para ajustar).</span>';
+                    if (clearBtn) clearBtn.hidden = false;
+                }
+            };
+
+            const initialPair = parseValidCoordPair(shell.dataset.initialLat || latInput.value, shell.dataset.initialLon || lonInput.value);
+            const controller = createInteractiveLocationMap({
+                canvas,
+                shell,
+                latInput,
+                lonInput,
+                resetBtn,
+                clearBtn,
+                initialPair,
+                onCoordsChange: updateStatus,
+                onFallback: activateFallback,
+            });
+
+            shell._tssaMapCleanup = () => {
+                controller?.destroy();
+                delete shell._tssaMapInstance;
+                delete shell._tssaMapCleanup;
+            };
+        });
+    }
+
+    function destroyLocationMaps(root = document) {
+        if (!root || !root.querySelectorAll) return;
+        root.querySelectorAll('[data-location-map-shell]').forEach((shell) => {
+            if (typeof shell._tssaMapCleanup === 'function') {
+                shell._tssaMapCleanup();
+            }
+            delete shell.dataset.mapInitialized;
+        });
+    }
+
+    /* ======================================================================
+       UBICACIONES HÍBRIDAS EN NUEVA SOLICITUD (COMBOBOX + MAPA COMPARTIDO)
+       ====================================================================== */
+
+    function initHybridRequestLocations(root = document) {
+        if (!root || !root.querySelectorAll) return;
+        const sections = root.querySelectorAll('[data-hybrid-request-locations="1"]');
+        sections.forEach((section) => {
+            if (section.dataset.hybridInitialized === '1') return;
+            section.dataset.hybridInitialized = '1';
+
+            const canSaveFrequent = section.dataset.canSaveFrequent === '1';
+            const panel = section.querySelector('#solicitud-mapa-panel');
+            const shell = section.querySelector('#solicitud-mapa-shell');
+            const canvas = section.querySelector('#solicitud-mapa-canvas');
+            const titleEl = section.querySelector('#solicitud-mapa-titulo');
+            const statusEl = section.querySelector('#solicitud-mapa-estado');
+            const errorEl = section.querySelector('#solicitud-mapa-error');
+            const fallbackEl = section.querySelector('#solicitud-mapa-fallback');
+            const detailsEl = section.querySelector('#solicitud-mapa-coords-avanzadas');
+            const refInput = section.querySelector('#solicitud-mapa-referencia');
+            const nameInput = section.querySelector('#solicitud-mapa-nombre');
+            const nameReqEl = section.querySelector('#solicitud-mapa-nombre-req');
+            const freqCheck = section.querySelector('#solicitud-mapa-frecuente');
+            const latInput = section.querySelector('#solicitud-mapa-lat');
+            const lonInput = section.querySelector('#solicitud-mapa-lon');
+            const resetBtn = section.querySelector('[data-req-map-reset]');
+            const clearBtn = section.querySelector('[data-req-map-clear]');
+            const confirmBtn = section.querySelector('#btn-confirmar-punto-mapa');
+            const confirmTextEl = section.querySelector('#btn-confirmar-punto-mapa-texto');
+
+            if (!panel || !shell || !canvas || !refInput || !latInput || !lonInput) return;
+
+            const slotState = {
+                origen: { mode: 'guardada', lat: '', lon: '', direccion: '', nombre: '', guardarFrecuente: false },
+                destino: { mode: 'guardada', lat: '', lon: '', direccion: '', nombre: '', guardarFrecuente: false },
+            };
+            let activeSlot = null;
+            let lastTriggerBtn = null;
+            let mapController = null;
+            let mapAttempted = false;
+
+            const showDrawerError = (message) => {
+                if (!errorEl) return;
+                if (!message) {
+                    errorEl.hidden = true;
+                    errorEl.textContent = '';
+                    return;
+                }
+                errorEl.textContent = message;
+                errorEl.hidden = false;
+                errorEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            };
+
+            const updateDrawerStatus = (lat, lon) => {
+                if (!statusEl) return;
+                if (lat === null || lon === null) {
+                    statusEl.innerHTML = MAP_PIN_SVG + '<span>Haz clic en el mapa para marcar el punto exacto. Puedes arrastrar el marcador para ajustarlo.</span>';
+                    if (clearBtn) clearBtn.hidden = true;
+                } else {
+                    statusEl.innerHTML = MAP_PIN_SVG + '<span>Punto marcado en el mapa. Arrastra el marcador si necesitas ajustar su posición.</span>';
+                    if (clearBtn) clearBtn.hidden = false;
+                }
+            };
+
+            const activateFallback = (hideCanvas = false) => {
+                if (fallbackEl) fallbackEl.hidden = false;
+                if (detailsEl) detailsEl.open = true;
+                if (hideCanvas) shell.hidden = true;
+            };
+
+            const ensureMapReady = () => {
+                if (mapController) {
+                    requestAnimationFrame(() => mapController.invalidate());
+                    setTimeout(() => mapController?.invalidate(), 180);
+                    return mapController;
+                }
+                if (mapAttempted) return null;
+                mapAttempted = true;
+                mapController = createInteractiveLocationMap({
+                    canvas,
+                    shell,
+                    latInput,
+                    lonInput,
+                    resetBtn,
+                    clearBtn,
+                    initialPair: null,
+                    onCoordsChange: updateDrawerStatus,
+                    onFallback: activateFallback,
+                });
+                return mapController;
+            };
+
+            const syncFrequentUi = () => {
+                const isFreq = Boolean(canSaveFrequent && freqCheck?.checked);
+                if (nameReqEl) nameReqEl.hidden = !isFreq;
+            };
+
+            const renderSlot = (slotKey) => {
+                const card = section.querySelector('[data-location-slot="' + slotKey + '"]');
+                if (!card) return;
+                const state = slotState[slotKey];
+                const isMap = state.mode === 'mapa';
+                const badge = card.querySelector('[data-slot-mode-badge]');
+                const savedBox = card.querySelector('[data-slot-saved-box]');
+                const summaryBox = card.querySelector('[data-slot-map-summary]');
+                const selectEl = savedBox?.querySelector('select');
+                const openHeaderBtn = card.querySelector('.hybrid-slot-header [data-open-slot-map]');
+
+                const inpModo = card.querySelector('[data-slot-input="modo"]');
+                const inpNombre = card.querySelector('[data-slot-input="nombre"]');
+                const inpDir = card.querySelector('[data-slot-input="direccion"]');
+                const inpLat = card.querySelector('[data-slot-input="latitud"]');
+                const inpLon = card.querySelector('[data-slot-input="longitud"]');
+                const inpFreq = card.querySelector('[data-slot-input="guardar_frecuente"]');
+
+                if (badge) {
+                    badge.textContent = isMap ? 'Punto en mapa' : 'Guardada';
+                    badge.classList.toggle('is-map-mode', isMap);
+                }
+                card.classList.toggle('is-map-selected', isMap);
+                if (openHeaderBtn) openHeaderBtn.hidden = isMap;
+
+                if (isMap) {
+                    if (savedBox) savedBox.hidden = true;
+                    if (selectEl) {
+                        selectEl.required = false;
+                        selectEl.disabled = true;
+                        if (selectEl.tomselect) {
+                            selectEl.tomselect.clear(true);
+                            selectEl.tomselect.disable();
+                        } else {
+                            selectEl.value = '';
+                        }
+                    }
+                    if (inpModo) inpModo.value = 'mapa';
+                    if (inpNombre) { inpNombre.value = state.nombre; inpNombre.disabled = false; }
+                    if (inpDir) { inpDir.value = state.direccion; inpDir.disabled = false; }
+                    if (inpLat) { inpLat.value = state.lat; inpLat.disabled = false; }
+                    if (inpLon) { inpLon.value = state.lon; inpLon.disabled = false; }
+                    if (inpFreq) { inpFreq.value = (canSaveFrequent && state.guardarFrecuente) ? '1' : '0'; inpFreq.disabled = false; }
+
+                    if (summaryBox) {
+                        const prefix = card.dataset.summaryPrefix || (slotKey === 'origen' ? 'Punto de recogida' : 'Punto de entrega');
+                        const displayName = state.nombre || (state.direccion.length > 72 ? state.direccion.slice(0, 72) + '…' : state.direccion);
+                        const titleTarget = summaryBox.querySelector('[data-slot-summary-title]');
+                        const refTarget = summaryBox.querySelector('[data-slot-summary-ref]');
+                        const metaTarget = summaryBox.querySelector('[data-slot-summary-meta]');
+                        if (titleTarget) titleTarget.textContent = prefix + ': ' + displayName;
+                        if (refTarget) refTarget.textContent = state.direccion;
+                        if (metaTarget) {
+                            metaTarget.textContent = (canSaveFrequent && state.guardarFrecuente)
+                                ? 'Se guardará también en ubicaciones frecuentes'
+                                : 'Solo para esta solicitud (no se agrega al catálogo)';
+                        }
+                        summaryBox.hidden = false;
+                    }
+                } else {
+                    if (summaryBox) summaryBox.hidden = true;
+                    if (savedBox) savedBox.hidden = false;
+                    if (selectEl) {
+                        selectEl.disabled = false;
+                        selectEl.required = true;
+                        if (selectEl.tomselect) {
+                            selectEl.tomselect.enable();
+                        }
+                    }
+                    if (inpModo) inpModo.value = 'guardada';
+                    [inpNombre, inpDir, inpLat, inpLon, inpFreq].forEach((el) => {
+                        if (!el) return;
+                        el.value = el === inpFreq ? '0' : '';
+                        el.disabled = true;
+                    });
+                }
+            };
+
+            const closeDrawer = (restoreFocus = true) => {
+                if (panel.hidden) return false;
+                panel.hidden = true;
+                showDrawerError('');
+                section.querySelectorAll('.hybrid-location-card.is-editing-map').forEach((c) => c.classList.remove('is-editing-map'));
+                const slotClosed = activeSlot;
+                activeSlot = null;
+                if (restoreFocus) {
+                    const card = slotClosed ? section.querySelector('[data-location-slot="' + slotClosed + '"]') : null;
+                    const focusTarget = (slotClosed && slotState[slotClosed].mode === 'mapa')
+                        ? card?.querySelector('[data-slot-map-summary] [data-open-slot-map]')
+                        : (lastTriggerBtn && lastTriggerBtn.offsetParent !== null ? lastTriggerBtn : card?.querySelector('[data-open-slot-map]'));
+                    focusTarget?.focus({ preventScroll: true });
+                }
+                return true;
+            };
+
+            const openDrawerForSlot = (slotKey, triggerBtn = null) => {
+                if (slotKey !== 'origen' && slotKey !== 'destino') return;
+                closeOpenFloatingControls(modal || section);
+                activeSlot = slotKey;
+                lastTriggerBtn = triggerBtn;
+                const state = slotState[slotKey];
+
+                section.querySelectorAll('.hybrid-location-card').forEach((c) => {
+                    c.classList.toggle('is-editing-map', c.dataset.locationSlot === slotKey);
+                });
+
+                const isOrigin = slotKey === 'origen';
+                if (titleEl) {
+                    titleEl.textContent = isOrigin ? 'Marcar ubicación de origen en el mapa' : 'Marcar ubicación de destino en el mapa';
+                }
+                if (confirmTextEl) {
+                    confirmTextEl.textContent = isOrigin ? 'Usar este punto como origen' : 'Usar este punto como destino';
+                }
+
+                showDrawerError('');
+                refInput.value = state.direccion || '';
+                if (nameInput) nameInput.value = state.nombre || '';
+                if (freqCheck) {
+                    freqCheck.checked = Boolean(canSaveFrequent && state.guardarFrecuente);
+                }
+                syncFrequentUi();
+                latInput.value = state.lat || '';
+                lonInput.value = state.lon || '';
+
+                panel.hidden = false;
+                const ctrl = ensureMapReady();
+                const parsed = parseValidCoordPair(state.lat, state.lon);
+                if (ctrl) {
+                    if (parsed) {
+                        ctrl.setPoint(parsed.lat, parsed.lon, false, true);
+                    } else {
+                        ctrl.clearPoint(false);
+                        ctrl.resetView();
+                    }
+                    requestAnimationFrame(() => ctrl.invalidate());
+                    setTimeout(() => ctrl.invalidate(), 160);
+                } else {
+                    updateDrawerStatus(parsed ? parsed.lat : null, parsed ? parsed.lon : null);
+                }
+
+                requestAnimationFrame(() => {
+                    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    if (fallbackEl && !fallbackEl.hidden) {
+                        refInput.focus({ preventScroll: true });
+                    } else {
+                        canvas.focus({ preventScroll: true });
+                    }
+                });
+            };
+
+            const onConfirmClick = () => {
+                if (!activeSlot) return;
+                showDrawerError('');
+
+                const parsed = parseValidCoordPair(latInput.value, lonInput.value);
+                if (!parsed) {
+                    showDrawerError('Haz clic en el mapa para marcar un punto (o ingresa latitud y longitud válidas en opciones avanzadas).');
+                    return;
+                }
+
+                const refVal = refInput.value.trim();
+                if (refVal === '') {
+                    showDrawerError('Ingresa una referencia humana breve para identificar el sitio exacto.');
+                    refInput.focus({ preventScroll: true });
+                    return;
+                }
+                if (refVal.length > 250) {
+                    showDrawerError('La referencia humana no puede superar 250 caracteres.');
+                    refInput.focus({ preventScroll: true });
+                    return;
+                }
+
+                const wantsFreq = Boolean(canSaveFrequent && freqCheck?.checked);
+                const nameVal = (nameInput?.value || '').trim();
+                if (wantsFreq && nameVal.length < 3) {
+                    showDrawerError('Indica un nombre o alias de al menos 3 caracteres para guardar en ubicaciones frecuentes.');
+                    nameInput?.focus({ preventScroll: true });
+                    return;
+                }
+                if (nameVal.length > 150) {
+                    showDrawerError('El nombre o alias no puede superar 150 caracteres.');
+                    nameInput?.focus({ preventScroll: true });
+                    return;
+                }
+
+                slotState[activeSlot] = {
+                    mode: 'mapa',
+                    lat: parsed.lat.toFixed(6),
+                    lon: parsed.lon.toFixed(6),
+                    direccion: refVal,
+                    nombre: nameVal,
+                    guardarFrecuente: wantsFreq,
+                };
+                renderSlot(activeSlot);
+                closeDrawer(true);
+            };
+
+            const onSectionClick = (event) => {
+                const openBtn = event.target.closest('[data-open-slot-map]');
+                if (openBtn && section.contains(openBtn)) {
+                    event.preventDefault();
+                    openDrawerForSlot(openBtn.dataset.openSlotMap, openBtn);
+                    return;
+                }
+
+                const clearSlotBtn = event.target.closest('[data-clear-slot-map]');
+                if (clearSlotBtn && section.contains(clearSlotBtn)) {
+                    event.preventDefault();
+                    const slotKey = clearSlotBtn.dataset.clearSlotMap;
+                    if (slotKey === 'origen' || slotKey === 'destino') {
+                        slotState[slotKey] = { mode: 'guardada', lat: '', lon: '', direccion: '', nombre: '', guardarFrecuente: false };
+                        renderSlot(slotKey);
+                        if (activeSlot === slotKey) {
+                            closeDrawer(false);
+                        }
+                        const card = section.querySelector('[data-location-slot="' + slotKey + '"]');
+                        const sel = card?.querySelector('select');
+                        (sel?.tomselect?.control_input || sel)?.focus({ preventScroll: true });
+                    }
+                    return;
+                }
+
+                const closeBtn = event.target.closest('[data-close-slot-map]');
+                if (closeBtn && section.contains(closeBtn)) {
+                    event.preventDefault();
+                    closeDrawer(true);
+                    return;
+                }
+
+                const fallbackBtn = event.target.closest('[data-fallback-use-saved]');
+                if (fallbackBtn && section.contains(fallbackBtn)) {
+                    event.preventDefault();
+                    const targetSlot = activeSlot;
+                    if (targetSlot) {
+                        slotState[targetSlot] = { mode: 'guardada', lat: '', lon: '', direccion: '', nombre: '', guardarFrecuente: false };
+                        renderSlot(targetSlot);
+                    }
+                    closeDrawer(false);
+                    if (targetSlot) {
+                        const card = section.querySelector('[data-location-slot="' + targetSlot + '"]');
+                        const sel = card?.querySelector('select');
+                        (sel?.tomselect?.control_input || sel)?.focus({ preventScroll: true });
+                    }
+                }
+            };
+
+            const clearDrawerErrorOnInput = () => showDrawerError('');
+            refInput.addEventListener('input', clearDrawerErrorOnInput);
+            nameInput?.addEventListener('input', clearDrawerErrorOnInput);
+            section.addEventListener('click', onSectionClick);
+            freqCheck?.addEventListener('change', syncFrequentUi);
+            confirmBtn?.addEventListener('click', onConfirmClick);
+
+            panel._tssaCloseDrawer = () => closeDrawer(true);
+
+            section._tssaHybridCleanup = () => {
+                refInput.removeEventListener('input', clearDrawerErrorOnInput);
+                nameInput?.removeEventListener('input', clearDrawerErrorOnInput);
+                section.removeEventListener('click', onSectionClick);
+                freqCheck?.removeEventListener('change', syncFrequentUi);
+                confirmBtn?.removeEventListener('click', onConfirmClick);
+                mapController?.destroy();
+                mapController = null;
+                delete panel._tssaCloseDrawer;
+                delete section._tssaHybridCleanup;
+            };
+        });
+    }
+
+    function destroyHybridRequestLocations(root = document) {
+        if (!root || !root.querySelectorAll) return;
+        root.querySelectorAll('[data-hybrid-request-locations="1"]').forEach((section) => {
+            if (typeof section._tssaHybridCleanup === 'function') {
+                section._tssaHybridCleanup();
+            }
+            delete section.dataset.hybridInitialized;
+        });
+    }
+
     function initComponents(root = document) {
         initComboboxes(root);
         initDatepickers(root);
         initCharts(root);
+        initLocationMaps(root);
+        initHybridRequestLocations(root);
     }
 
     function destroyComponents(root = document) {
         destroyComboboxes(root);
         destroyDatepickers(root);
         destroyCharts(root);
+        destroyLocationMaps(root);
+        destroyHybridRequestLocations(root);
     }
 
     /* ======================================================================
-       MODALES Y TOASTS
+       MODALES, BLOQUEO GLOBAL DE SCROLL Y TOASTS
        ====================================================================== */
 
+    let modalScrollLocked = false;
+    let lockedScrollY = 0;
+
+    function lockPageScroll() {
+        if (modalScrollLocked) return;
+        lockedScrollY = window.scrollY || window.pageYOffset || 0;
+        const scrollbarWidth = Math.max(0, window.innerWidth - document.documentElement.clientWidth);
+        document.documentElement.style.setProperty('--modal-scrollbar-comp', scrollbarWidth + 'px');
+        document.documentElement.classList.add('is-modal-open');
+        document.body.classList.add('is-modal-open');
+        modalScrollLocked = true;
+    }
+
+    function unlockPageScroll() {
+        if (!modalScrollLocked) return;
+        document.documentElement.classList.remove('is-modal-open');
+        document.body.classList.remove('is-modal-open');
+        document.documentElement.style.removeProperty('--modal-scrollbar-comp');
+        modalScrollLocked = false;
+        if ((window.scrollY || window.pageYOffset || 0) !== lockedScrollY) {
+            window.scrollTo({ top: lockedScrollY, behavior: 'instant' });
+        }
+    }
+
+    function findScrollableAncestorInsideModal(target) {
+        if (!(target instanceof Element)) return null;
+        let el = target;
+        while (el && el !== document.body && el !== document.documentElement) {
+            const style = window.getComputedStyle(el);
+            const overflowY = style.overflowY;
+            const isScrollableStyle = overflowY === 'auto' || overflowY === 'scroll';
+            if (isScrollableStyle && el.scrollHeight > el.clientHeight + 1) {
+                if (modal?.contains(el) || el.classList.contains('ts-dropdown-content') || el.closest('.ts-dropdown')) {
+                    return el;
+                }
+            }
+            if (el === modal) break;
+            el = el.parentElement;
+        }
+        return null;
+    }
+
+    // Bloqueo global de scroll de fondo por rueda cuando existe un modal abierto
+    window.addEventListener('wheel', (event) => {
+        if (!modalScrollLocked) return;
+        const target = event.target;
+        const mapCanvas = target instanceof Element ? target.closest('.location-map-canvas') : null;
+        if (mapCanvas && mapCanvas.dataset.wheelZoomActive === '1') {
+            // Permitir zoom interactivo de Leaflet solo cuando el usuario activó el mapa, sin mover el fondo
+            return;
+        }
+        const scrollable = findScrollableAncestorInsideModal(target);
+        if (!scrollable) {
+            event.preventDefault();
+            return;
+        }
+        const atTop = scrollable.scrollTop <= 0 && event.deltaY < 0;
+        const atBottom = scrollable.scrollTop + scrollable.clientHeight >= scrollable.scrollHeight - 1 && event.deltaY > 0;
+        if (atTop || atBottom) {
+            event.preventDefault();
+        }
+    }, { passive: false });
+
+    // Bloqueo de arrastre táctil sobre el backdrop/encabezado/pie del modal
+    window.addEventListener('touchmove', (event) => {
+        if (!modalScrollLocked) return;
+        const target = event.target;
+        if (!(target instanceof Element)) {
+            event.preventDefault();
+            return;
+        }
+        if (target.closest('.location-map-canvas, .ts-dropdown-content, .flatpickr-calendar')) {
+            return;
+        }
+        const scrollable = findScrollableAncestorInsideModal(target);
+        if (!scrollable) {
+            event.preventDefault();
+        }
+    }, { passive: false });
+
+    window.addEventListener('pagehide', unlockPageScroll);
+
     function cerrarModal() {
-        if (!modal || modal.innerHTML.trim() === '') return;
+        if (!modal || modal.innerHTML.trim() === '') {
+            unlockPageScroll();
+            return;
+        }
         destroyComponents(modal);
         modal.innerHTML = '';
         if (appShell) appShell.removeAttribute('aria-hidden');
-        previousFocus?.focus();
+        unlockPageScroll();
+        previousFocus?.focus({ preventScroll: true });
         previousFocus = null;
     }
 
     function abrirModal() {
         if (!modal) return;
-        previousFocus = document.activeElement;
+        const hasDialog = Boolean(modal.querySelector('.modal.is-active, .modal-card'));
+        if (!hasDialog) {
+            unlockPageScroll();
+            return;
+        }
+        if (!modalScrollLocked) {
+            previousFocus = document.activeElement;
+        }
+        lockPageScroll();
         if (appShell) appShell.setAttribute('aria-hidden', 'true');
         initComponents(modal);
         requestAnimationFrame(() => {
             const autofocusEl = modal.querySelector('[autofocus]');
             if (autofocusEl && typeof autofocusEl.focus === 'function') {
-                autofocusEl.focus();
+                autofocusEl.focus({ preventScroll: true });
             } else {
-                firstFocusable(modal)?.focus();
+                firstFocusable(modal)?.focus({ preventScroll: true });
             }
         });
     }
@@ -515,6 +1346,14 @@
                 closed = true;
             }
         });
+        if (!closed) {
+            const mapPanel = root.querySelector('#solicitud-mapa-panel:not([hidden])');
+            if (mapPanel && typeof mapPanel._tssaCloseDrawer === 'function') {
+                if (mapPanel._tssaCloseDrawer()) {
+                    closed = true;
+                }
+            }
+        }
         return closed;
     }
 
@@ -791,6 +1630,15 @@
             return;
         }
 
+        if (modalScrollLocked && ['PageDown', 'PageUp', 'Space', ' '].includes(event.key)) {
+            const active = document.activeElement;
+            const isEditable = active && (['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A'].includes(active.tagName) || active.isContentEditable);
+            if (!isEditable && !(active instanceof Element && active.closest('.modal-card-body, .ts-dropdown-content, .location-map-canvas'))) {
+                event.preventDefault();
+                return;
+            }
+        }
+
         if (event.key === 'Tab' && modal && modal.innerHTML.trim() !== '') {
             const focusables = getFocusableElements(modal);
             if (focusables.length === 0) {
@@ -860,6 +1708,19 @@
             if (!validateConductorForm(form)) {
                 event.preventDefault();
                 event.stopImmediatePropagation();
+            }
+        }
+        if (form.dataset.solicitudForm === '1') {
+            const openMapPanel = form.querySelector('#solicitud-mapa-panel:not([hidden])');
+            if (openMapPanel) {
+                event.preventDefault();
+                event.stopImmediatePropagation();
+                const errMap = openMapPanel.querySelector('#solicitud-mapa-error');
+                if (errMap) {
+                    errMap.textContent = 'Confirma el punto seleccionado en el mapa o cierra el selector antes de crear la solicitud.';
+                    errMap.hidden = false;
+                    errMap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
             }
         }
     }, true);
@@ -935,7 +1796,7 @@
                             submitBtn.disabled = true;
                             submitBtn.classList.remove('is-loading');
                         }
-                        parentForm.querySelectorAll('input[name="correo"]').forEach((inp) => {
+                        parentForm.querySelectorAll('input[name="correo"], input[name="nuevo_correo"]').forEach((inp) => {
                             inp.readOnly = true;
                         });
                     }

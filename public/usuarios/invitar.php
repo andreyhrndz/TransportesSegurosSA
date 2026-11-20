@@ -179,7 +179,7 @@ if (!$transportInfo['is_brevo']) {
                 'error' => false,
                 'closeModal' => true,
             ],
-        ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        ], JSON_THROW_ON_ERROR);
         header('HX-Trigger-After-Settle: ' . $triggerPayload);
         header('Content-Type: text/html; charset=UTF-8');
         exit(ui_notice(

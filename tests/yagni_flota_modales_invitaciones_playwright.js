@@ -424,17 +424,16 @@ async function runSuite() {
         await pendRow.locator('button:has-text("Revocar")').click();
         await page.waitForSelector(`#invitaciones-resultado tr[data-invitacion-estado="REVOCADA"]:has-text("${invEmail1}")`, { timeout: 6000 });
 
-        // Sembrar invitación expirada y descartarla/cancelarla en navegador
+        // Sembrar invitación expirada y confirmar regla YAGNI: solo Reenviar (sin botón Cancelar)
         runPhp(`require 'app/bootstrap.php'; $p = db(); require_test_database($p); $p->exec("EXEC sys.sp_set_session_context @key=N'usuario_id', @value=${ephemeralUser.user_id}"); $h = hash('sha256', 'exp_pw_${suffix}'); $st = $p->prepare("INSERT INTO dbo.invitaciones_usuario (correo_destino, token_hash, estado, fecha_expiracion, creado_por_usuario_id, estado_envio) VALUES (?, ?, 'EXPIRADA', DATEADD(HOUR, -4, SYSUTCDATETIME()), ?, 'SIMULADO')"); $st->execute(['${invEmailExp}', $h, ${ephemeralUser.user_id}]);`);
 
         await page.reload({ waitUntil: 'networkidle' });
         await page.click('#tab-invitaciones');
         const expRow = page.locator(`#invitaciones-resultado tr[data-invitacion-estado="EXPIRADA"]:has-text("${invEmailExp}")`).first();
         await expRow.waitFor({ state: 'visible', timeout: 6000 });
-        assert(await expRow.locator('button:has-text("Cancelar")').isVisible(), 'Invitación expirada debe mostrar Cancelar.');
+        assert((await expRow.locator('button:has-text("Cancelar")').count()) === 0, 'Invitación expirada NO debe mostrar botón Cancelar.');
+        assert((await expRow.locator('button:has-text("Revocar")').count()) === 0, 'Invitación expirada NO debe mostrar botón Revocar.');
         assert(await expRow.locator('button:has-text("Reenviar")').isVisible(), 'Invitación expirada debe mostrar Reenviar.');
-        await expRow.locator('button:has-text("Cancelar")').click();
-        await page.waitForSelector(`#invitaciones-resultado tr[data-invitacion-estado="CANCELADA"]:has-text("${invEmailExp}")`, { timeout: 6000 });
         console.log('   [OK] Escenario E (Invitaciones) superado.');
 
         await context.close();

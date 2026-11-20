@@ -347,7 +347,10 @@ try {
         str_contains($listHtml, $nombreUnicode) && str_contains($listHtml, $direccionUnicode),
         'El fragmento HTML debe mostrar exactamente los caracteres "á é í ó ú Á É Í Ó Ú ñ Ñ ü ¿ ¡" sin doble escape.'
     );
-    utf8_assert(!str_contains($listHtml, '&amp;'), 'No debe existir doble escape HTML (&amp;) al presentar el texto Unicode.');
+    utf8_assert(
+        !str_contains(strip_tags($listHtml), '&amp;') && !str_contains($listHtml, '&amp;amp;'),
+        'No debe existir doble escape HTML (&amp;) al presentar el texto Unicode.'
+    );
 
     // Recuperar en modal de edición
     [$editStatus, $editHtml] = utf8_http_request(

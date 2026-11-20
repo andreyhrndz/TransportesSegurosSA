@@ -76,7 +76,7 @@ if (is_htmx_request()) {
             'error' => false,
             'closeModal' => false,
         ],
-    ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+    ], JSON_THROW_ON_ERROR);
     header('HX-Trigger-After-Settle: ' . $trigger);
     echo '<div id="invitaciones-feedback" hx-swap-oob="innerHTML"></div>';
 }

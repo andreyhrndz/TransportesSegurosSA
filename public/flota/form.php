@@ -412,31 +412,77 @@ $vehIsNoConforme = ($entity === 'vehiculo' && $isEdit && (string)($record['estad
                     <?php endif; ?>
 
                 <?php elseif ($entity === 'ubicacion'): ?>
+                    <?php
+                    $latVal = isset($record['latitud']) && $record['latitud'] !== null ? trim((string)$record['latitud']) : '';
+                    $lonVal = isset($record['longitud']) && $record['longitud'] !== null ? trim((string)$record['longitud']) : '';
+                    $hasSavedCoords = ($latVal !== '' && $lonVal !== '');
+                    ?>
                     <div class="field">
                         <label class="label" for="ubi-nombre">Nombre de la ubicación <span class="required">*</span></label>
                         <input class="input" id="ubi-nombre" name="nombre" maxlength="150" value="<?= e($record['nombre'] ?? '') ?>" required autofocus>
                     </div>
 
                     <div class="field">
-                        <label class="label" for="ubi-direccion">Dirección exacta <span class="required">*</span></label>
-                        <textarea class="textarea" id="ubi-direccion" name="direccion" rows="2" maxlength="250" required><?= e($record['direccion'] ?? '') ?></textarea>
+                        <label class="label" for="ubi-direccion">Dirección y referencias <span class="required">*</span></label>
+                        <textarea class="textarea" id="ubi-direccion" name="direccion" rows="2" maxlength="250" placeholder="Ej. 200 m norte de la entrada principal, bodega #4, Alajuela" required><?= e($record['direccion'] ?? '') ?></textarea>
+                        <p class="help">Escribe siempre la dirección o señas exactas; el punto en el mapa registra únicamente coordenadas.</p>
                     </div>
 
-                    <div class="columns">
-                        <div class="column">
-                            <div class="field">
-                                <label class="label" for="ubi-latitud">Latitud (-90 a 90)</label>
-                                <input class="input" id="ubi-latitud" name="latitud" inputmode="decimal" maxlength="12" placeholder="Ej. 9.934739" value="<?= e($record['latitud'] ?? '') ?>">
+                    <div class="field">
+                        <div class="location-map-header">
+                            <label class="label mb-0" for="ubi-mapa">Selecciona el punto exacto en el mapa (opcional)</label>
+                            <div class="location-map-actions">
+                                <button class="button is-small button-secondary" type="button" data-map-reset title="Centrar vista en Costa Rica">
+                                    <?= svg_icon('map-pin') ?>
+                                    <span>Reencuadrar</span>
+                                </button>
+                                <button class="button is-small button-secondary" type="button" data-map-clear <?= $hasSavedCoords ? '' : 'hidden' ?>>
+                                    <?= svg_icon('close') ?>
+                                    <span>Quitar punto</span>
+                                </button>
                             </div>
                         </div>
-                        <div class="column">
-                            <div class="field">
-                                <label class="label" for="ubi-longitud">Longitud (-180 a 180)</label>
-                                <input class="input" id="ubi-longitud" name="longitud" inputmode="decimal" maxlength="13" placeholder="Ej. -84.087502" value="<?= e($record['longitud'] ?? '') ?>">
-                            </div>
+
+                        <div class="location-map-shell" data-location-map-shell data-initial-lat="<?= e($latVal) ?>" data-initial-lon="<?= e($lonVal) ?>">
+                            <div class="location-map-canvas" id="ubi-mapa" data-location-map tabindex="0" role="application" aria-label="Mapa interactivo de ubicación. Haz clic para colocar o arrastra el marcador."></div>
+                        </div>
+
+                        <div class="location-map-status mt-2" id="ubi-mapa-estado" role="status" aria-live="polite">
+                            <?php if ($hasSavedCoords): ?>
+                                <?= svg_icon('map-pin') ?>
+                                <span>Punto seleccionado: <code><?= e($latVal . ', ' . $lonVal) ?></code> (haz clic o arrastra el marcador para ajustar).</span>
+                            <?php else: ?>
+                                <?= svg_icon('map-pin') ?>
+                                <span>Sin punto seleccionado (opcional). Haz clic en el mapa para marcar la ubicación.</span>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="notification notification-warning mt-2" id="ubi-mapa-fallback" role="status" hidden>
+                            <?= svg_icon('alert-triangle') ?>
+                            <span>No se pudo cargar el mapa interactivo en este momento. Puedes ingresar las coordenadas manualmente abajo o guardar solo la dirección.</span>
                         </div>
                     </div>
-                    <p class="help">Las coordenadas son opcionales, pero si se registran deben completarse ambas.</p>
+
+                    <details class="advanced-coords-panel mt-3" id="ubi-coords-avanzadas">
+                        <summary>Opciones avanzadas: ingresar coordenadas manualmente</summary>
+                        <div class="advanced-coords-body">
+                            <div class="columns mb-0">
+                                <div class="column">
+                                    <div class="field">
+                                        <label class="label" for="ubi-latitud">Latitud (-90 a 90)</label>
+                                        <input class="input" id="ubi-latitud" name="latitud" inputmode="decimal" maxlength="12" placeholder="Ej. 9.934739" value="<?= e($latVal) ?>">
+                                    </div>
+                                </div>
+                                <div class="column">
+                                    <div class="field">
+                                        <label class="label" for="ubi-longitud">Longitud (-180 a 180)</label>
+                                        <input class="input" id="ubi-longitud" name="longitud" inputmode="decimal" maxlength="13" placeholder="Ej. -84.087502" value="<?= e($lonVal) ?>">
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="help mt-1">Las coordenadas son opcionales, pero si se registran deben completarse ambas (hasta 6 decimales). Al editarlas se sincronizan con el marcador.</p>
+                        </div>
+                    </details>
 
                 <?php else: ?>
                     <div class="field">

@@ -37,7 +37,7 @@ if (!$valid) {
 
 if ($action === 'parada') {
     try {
-        $ubicaciones = operation_list('DECLARE @total_registros INT; EXEC dbo.sp_listar_ubicaciones @buscar=NULL,@solo_activos=1,@pagina=1,@por_pagina=100,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;');
+        $ubicaciones = operation_list('DECLARE @total_registros INT; EXEC dbo.sp_listar_ubicaciones_parada @buscar=NULL,@pagina=1,@por_pagina=100,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;');
     } catch (PDOException) {
         read_error_response();
     }
@@ -92,12 +92,21 @@ $submitLabels = [
                 <?php if ($action === 'parada'): ?>
                     <div class="field">
                         <label class="label" for="parada-ubicacion">Ubicación <span class="required">*</span></label>
-                        <select id="parada-ubicacion" name="ubicacion_id" data-combobox data-remote-url="/flota/lista.php?seccion=ubicaciones" data-placeholder="Buscar ubicación…" required>
+                        <select id="parada-ubicacion" name="ubicacion_id" data-combobox data-remote-url="/flota/lista.php?seccion=ubicaciones&contexto=parada" data-placeholder="Buscar ubicación frecuente o de solicitud abierta…" required>
                             <option value="">Selecciona ubicación…</option>
                             <?php foreach ($ubicaciones as $row): ?>
-                                <option value="<?= (int)$row['ubicacion_id'] ?>" data-subtext="<?= e($row['direccion'] ?? '') ?>"><?= e($row['nombre']) ?></option>
+                                <?php
+                                $sub = (string)($row['direccion'] ?? '');
+                                if (isset($row['es_reutilizable']) && (int)$row['es_reutilizable'] === 0) {
+                                    $solCode = trim((string)($row['solicitud_codigo'] ?? ''));
+                                    $prefix = $solCode !== '' ? "Solicitud {$solCode} · Punto puntual" : 'Punto puntual';
+                                    $sub = $sub !== '' ? "{$prefix} · {$sub}" : $prefix;
+                                }
+                                ?>
+                                <option value="<?= (int)$row['ubicacion_id'] ?>" data-subtext="<?= e($sub) ?>"><?= e($row['nombre']) ?></option>
                             <?php endforeach; ?>
                         </select>
+                        <p class="help">Incluye ubicaciones frecuentes y puntos marcados en mapa de solicitudes pendientes por asignar.</p>
                     </div>
                     <div class="columns">
                         <div class="column">

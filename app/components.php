@@ -333,6 +333,7 @@ function humanize_status(mixed $value): string
         'TIPOS_MERCANCIA' => 'Tipos de mercancía',
         'TIPOS_INCIDENCIA' => 'Tipos de incidencia',
         'TIPOS_DOCUMENTO' => 'Tipos de documento',
+        'RESEND_CORRECT_EMAIL' => 'Reenvío con corrección de correo',
     ];
 
     if (isset($dictionary[$upper])) {
@@ -372,4 +373,59 @@ function user_initials(string $username): string
     }
     $chars = preg_split('//u', $clean, -1, PREG_SPLIT_NO_EMPTY) ?: [];
     return utf8_strtoupper(($chars[0] ?? '') . ($chars[1] ?? ''));
+}
+
+/**
+ * Texto secundario compacto para el estado de entrega de correo en invitaciones
+ * (evita apilar dos insignias/píldoras en la misma fila).
+ */
+function invitation_delivery_text(mixed $status): string
+{
+    $upper = utf8_strtoupper(trim((string)$status));
+    return match ($upper) {
+        'ENVIADO' => 'Aceptado por proveedor',
+        'FALLIDO' => 'Envío fallido',
+        'SIMULADO' => 'Modo prueba',
+        default => 'Envío pendiente',
+    };
+}
+
+/**
+ * Construye una URL pública validada hacia Google Maps sin API key a partir de
+ * coordenadas decimales ya persistidas. Retorna null si faltan o son inválidas.
+ */
+function google_maps_url(mixed $latRaw, mixed $lonRaw): ?string
+{
+    $latStr = trim((string)($latRaw ?? ''));
+    $lonStr = trim((string)($lonRaw ?? ''));
+    if ($latStr === '' || $lonStr === '' || !is_numeric($latStr) || !is_numeric($lonStr)) {
+        return null;
+    }
+
+    $lat = (float)$latStr;
+    $lon = (float)$lonStr;
+    if (!is_finite($lat) || !is_finite($lon) || $lat < -90.0 || $lat > 90.0 || $lon < -180.0 || $lon > 180.0) {
+        return null;
+    }
+
+    $query = number_format($lat, 6, '.', '') . ',' . number_format($lon, 6, '.', '');
+    return 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($query);
+}
+
+/**
+ * Renderiza el enlace externo accesible "Abrir en Google Maps" cuando existen
+ * coordenadas válidas, o un texto discreto cuando la ubicación no tiene punto.
+ */
+function google_maps_link(mixed $latRaw, mixed $lonRaw, string $label = 'Abrir en Google Maps', bool $compact = false): string
+{
+    $url = google_maps_url($latRaw, $lonRaw);
+    if ($url === null) {
+        return '<span class="has-text-grey is-size-7">Sin punto registrado</span>';
+    }
+
+    $sizeClass = $compact ? ' is-small' : ' is-small';
+    return '<a class="button' . $sizeClass . ' button-secondary maps-external-link" href="' . e($url) . '" target="_blank" rel="noopener noreferrer" title="Abrir ubicación marcada en Google Maps (nueva pestaña)">'
+        . svg_icon('map-pin')
+        . '<span>' . e($label) . '</span>'
+        . '</a>';
 }

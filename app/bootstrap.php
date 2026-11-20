@@ -104,7 +104,7 @@ function send_security_headers(): void
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('X-Frame-Options: DENY');
     header('Permissions-Policy: camera=(), geolocation=(), microphone=()');
-    header("Content-Security-Policy: default-src 'self'; style-src 'self' https://cdn.jsdelivr.net; script-src 'self'; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+    header("Content-Security-Policy: default-src 'self'; style-src 'self' https://cdn.jsdelivr.net; script-src 'self'; img-src 'self' data: https://tile.openstreetmap.org https://a.tile.openstreetmap.org https://b.tile.openstreetmap.org https://c.tile.openstreetmap.org; font-src 'self' https://cdn.jsdelivr.net; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
     if (is_https()) {
         header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
     }
