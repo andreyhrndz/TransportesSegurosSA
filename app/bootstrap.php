@@ -76,6 +76,17 @@ function configured_database_name(): string
     return $database;
 }
 
+function configured_dw_database_name(): string
+{
+    // ASVS 1.2.4: el Data Warehouse histórico es fijo y jamás seleccionable desde parámetros HTTP.
+    $database = trim((string)(getenv('TSSA_DW_DATABASE') ?: 'TransportesSegurosSA_DW'));
+    if ($database !== 'TransportesSegurosSA_DW') {
+        throw new LogicException('Configuración de Data Warehouse no permitida.');
+    }
+
+    return $database;
+}
+
 function require_test_database(PDO $connection): void
 {
     // ASVS 16.5.3: las pruebas de escritura deben fallar cerradas si no están
@@ -104,7 +115,7 @@ function send_security_headers(): void
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('X-Frame-Options: DENY');
     header('Permissions-Policy: camera=(), geolocation=(), microphone=()');
-    header("Content-Security-Policy: default-src 'self'; style-src 'self' https://cdn.jsdelivr.net; script-src 'self'; img-src 'self' data:; font-src 'self' https://cdn.jsdelivr.net; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+    header("Content-Security-Policy: default-src 'self'; style-src 'self' https://cdn.jsdelivr.net; script-src 'self'; img-src 'self' data: https://tile.openstreetmap.org https://a.tile.openstreetmap.org https://b.tile.openstreetmap.org https://c.tile.openstreetmap.org; font-src 'self' https://cdn.jsdelivr.net; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
     if (is_https()) {
         header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
     }
@@ -173,6 +184,49 @@ function db(): PDO
         }
         http_response_code(503);
         exit('El servicio no está disponible temporalmente. Inténtalo más tarde.');
+    }
+}
+
+/**
+ * Conexión de solo lectura dedicada al Data Warehouse histórico (TransportesSegurosSA_DW).
+ * Nunca termina abruptamente la petición HTTP para permitir degradación controlada
+ * en la pestaña histórica sin afectar los reportes operacionales.
+ */
+function db_dw(): PDO
+{
+    static $dwPdo = null;
+    if ($dwPdo instanceof PDO) {
+        return $dwPdo;
+    }
+
+    $server = trim((string)(getenv('TSSA_DB_SERVER') ?: 'localhost'));
+    $database = configured_dw_database_name();
+    $user = trim((string)(getenv('TSSA_DB_USER') ?: ''));
+    $pass = (string)(getenv('TSSA_DB_PASSWORD') ?: '');
+    $port = trim((string)(getenv('TSSA_DB_PORT') ?: ''));
+
+    $options = [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_EMULATE_PREPARES => false,
+    ];
+    if (defined('PDO::SQLSRV_ATTR_ENCODING') && defined('PDO::SQLSRV_ENCODING_UTF8')) {
+        $options[PDO::SQLSRV_ATTR_ENCODING] = PDO::SQLSRV_ENCODING_UTF8;
+    }
+
+    $serverTarget = ($port !== '' && !str_contains($server, ',')) ? "{$server},{$port}" : $server;
+    $dsn = "sqlsrv:Server={$serverTarget};Database={$database};ApplicationIntent=ReadOnly;Encrypt=yes;TrustServerCertificate=yes";
+
+    try {
+        if ($user !== '') {
+            $dwPdo = new PDO($dsn, $user, $pass, $options);
+        } else {
+            $dwPdo = new PDO($dsn, null, null, $options);
+        }
+        return $dwPdo;
+    } catch (Throwable $ex) {
+        error_log("TSSA DW: conexión de solo lectura no disponible ({$serverTarget}/{$database}): " . $ex->getMessage());
+        throw new RuntimeException('El Data Warehouse histórico no se encuentra accesible en este momento.', 0, $ex);
     }
 }
 

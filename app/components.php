@@ -44,6 +44,12 @@ function svg_icon(string $name, string $label = '', string $extraClass = ''): st
         'envelope' => '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
         'refresh' => '<path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/>',
         'layers' => '<path d="m12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m22 17.65-9.17 4.16a2 2 0 0 1-1.66 0L2 17.65"/><path d="m22 12.65-9.17 4.16a2 2 0 0 1-1.66 0L2 12.65"/>',
+        'arrow-up' => '<path d="m18 15-6-6-6 6"/>',
+        'arrow-down' => '<path d="m6 9 6 6 6-6"/>',
+        'arrows-vertical' => '<path d="m7 15 5 5 5-5"/><path d="m7 9 5-5 5 5"/>',
+        'download' => '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/>',
+        'printer' => '<path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 9V3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v6"/><rect x="6" y="14" width="12" height="8" rx="1"/>',
+        'database' => '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14c0 1.66 4.03 3 9 3s9-1.34 9-3V5"/><path d="M3 12c0 1.66 4.03 3 9 3s9-1.34 9-3"/>',
     ];
     $path = $paths[$name] ?? $paths['empty'];
     $aria = $label === '' ? 'aria-hidden="true"' : 'role="img" aria-label="' . e($label) . '"';
@@ -189,6 +195,26 @@ function format_number_str(mixed $value): string
 }
 
 /**
+ * Formatea una medida numérica al estilo es-CR sin ceros decimales innecesarios ni valores como ".0".
+ */
+function format_cr_measure(mixed $value, int $maxDecimals = 2): string
+{
+    $normalized = format_number_str($value);
+    if (!is_numeric($normalized)) {
+        return $normalized;
+    }
+
+    $num = (float)$normalized;
+    $formatted = number_format($num, $maxDecimals, ',', '.');
+    if ($maxDecimals > 0) {
+        $formatted = rtrim($formatted, '0');
+        $formatted = rtrim($formatted, ',');
+    }
+
+    return $formatted === '-0' ? '0' : $formatted;
+}
+
+/**
  * Traduce códigos técnicos y enumeraciones con guiones bajos a etiquetas legibles en español.
  */
 function humanize_status(mixed $value): string
@@ -216,6 +242,13 @@ function humanize_status(mixed $value): string
         'DISPONIBLE' => 'Disponible',
         'MANTENIMIENTO' => 'En mantenimiento',
         'FUERA_SERVICIO' => 'Fuera de servicio',
+        'LIVIANO' => 'Liviano',
+        'MEDIANO_RIGIDO' => 'Mediano rígido',
+        'PESADO_RIGIDO' => 'Pesado rígido',
+        'PESADO_ARTICULADO' => 'Pesado articulado',
+        'VERIFICADO' => 'Verificado',
+        'PENDIENTE_VERIFICACION' => 'Pendiente de verificación',
+        'NO_CONFORME' => 'No conforme',
         'ACTIVO' => 'Activo',
         'INACTIVO' => 'Inactivo',
         'FISICA' => 'Persona física',
@@ -228,7 +261,8 @@ function humanize_status(mixed $value): string
         'COMPLETADA' => 'Completada',
         'REVOCADA' => 'Revocada',
         'EXPIRADA' => 'Expirada',
-        'SIMULADO' => 'Simulado (Fake)',
+        'SIMULADO' => 'Simulado (prueba)',
+        'ENVIADO' => 'Enviado',
         'FALLIDO' => 'Fallido',
         'OMITIDA' => 'Omitida',
         'ENVIADA' => 'Enviada',
@@ -244,6 +278,12 @@ function humanize_status(mixed $value): string
         'INSERCION' => 'Creación',
         'ACTUALIZACION' => 'Actualización',
         'ELIMINACION' => 'Eliminación',
+        'ACTUALIZAR_PRINCIPAL' => 'Actualización de licencia',
+        'CANCEL_EXPIRED' => 'Descarte de expirada',
+        'REVOKE' => 'Revocación',
+        'RESEND' => 'Reenvío',
+        'INVITE' => 'Invitación',
+        'ONBOARDING' => 'Activación',
         'CAMBIO_ESTADO' => 'Cambio de estado',
         'ASIGNACION' => 'Asignación',
         'DESASIGNACION' => 'Desasignación',
@@ -292,11 +332,24 @@ function humanize_status(mixed $value): string
         'USUARIOS_PERMISOS' => 'Permisos de usuario',
         'VEHICULOS' => 'Vehículos',
         'CONDUCTORES' => 'Conductores',
+        'CONDUCTORES_LICENCIAS' => 'Licencias de conductores',
+        'INVITACIONES_USUARIO' => 'Invitaciones',
         'RUTAS' => 'Rutas',
         'UBICACIONES' => 'Ubicaciones',
         'TIPOS_MERCANCIA' => 'Tipos de mercancía',
         'TIPOS_INCIDENCIA' => 'Tipos de incidencia',
         'TIPOS_DOCUMENTO' => 'Tipos de documento',
+        'RESEND_CORRECT_EMAIL' => 'Reenvío con corrección de correo',
+        'REORDER' => 'Reordenamiento',
+        'INSERT' => 'Creación',
+        'UPDATE' => 'Actualización',
+        'DELETE' => 'Eliminación',
+        'DEACTIVATE' => 'Desactivación',
+        'UPSERT' => 'Actualización',
+        'PASSWORD_RESET' => 'Restablecimiento de contraseña',
+        'MIXTA' => 'Mixta',
+        'INTERMEDIA' => 'Intermedia',
+        'INVITACIONES_PERMISOS' => 'Permisos de invitación',
     ];
 
     if (isset($dictionary[$upper])) {
@@ -311,9 +364,9 @@ function status_tag(mixed $value): string
 {
     $status = utf8_strtoupper(trim((string)$value));
     $tone = match ($status) {
-        'ENTREGADA', 'FINALIZADO', 'RESUELTA', 'ENVIADA', 'DISPONIBLE', 'ACTIVO', 'COMPLETADA' => 'success',
-        'CANCELADA', 'FALLIDA', 'ENTREGA_FALLIDA', 'ERROR', 'FUERA_SERVICIO', 'INACTIVO', 'CRITICA', 'REVOCADA', 'FALLIDO' => 'danger',
-        'EN_TRANSITO', 'EN_CURSO', 'ASIGNADA', 'ASIGNADO', 'EN_ATENCION', 'MANTENIMIENTO', 'URGENTE', 'ALTA', 'PENDIENTE_ASIGNACION', 'ABIERTA', 'PENDIENTE' => 'warning',
+        'ENTREGADA', 'FINALIZADO', 'RESUELTA', 'ENVIADA', 'ENVIADO', 'DISPONIBLE', 'ACTIVO', 'COMPLETADA', 'VERIFICADO' => 'success',
+        'CANCELADA', 'FALLIDA', 'ENTREGA_FALLIDA', 'ERROR', 'FUERA_SERVICIO', 'INACTIVO', 'CRITICA', 'REVOCADA', 'FALLIDO', 'NO_CONFORME' => 'danger',
+        'EN_TRANSITO', 'EN_CURSO', 'ASIGNADA', 'ASIGNADO', 'EN_ATENCION', 'MANTENIMIENTO', 'URGENTE', 'ALTA', 'PENDIENTE_ASIGNACION', 'ABIERTA', 'PENDIENTE', 'PENDIENTE_VERIFICACION' => 'warning',
         'EXPIRADA' => 'neutral',
         default => 'info',
     };
@@ -338,3 +391,57 @@ function user_initials(string $username): string
     return utf8_strtoupper(($chars[0] ?? '') . ($chars[1] ?? ''));
 }
 
+/**
+ * Texto secundario compacto para el estado de entrega de correo en invitaciones
+ * (evita apilar dos insignias/píldoras en la misma fila).
+ */
+function invitation_delivery_text(mixed $status): string
+{
+    $upper = utf8_strtoupper(trim((string)$status));
+    return match ($upper) {
+        'ENVIADO' => 'Aceptado por proveedor',
+        'FALLIDO' => 'Envío fallido',
+        'SIMULADO' => 'Modo prueba',
+        default => 'Envío pendiente',
+    };
+}
+
+/**
+ * Construye una URL pública validada hacia Google Maps sin API key a partir de
+ * coordenadas decimales ya persistidas. Retorna null si faltan o son inválidas.
+ */
+function google_maps_url(mixed $latRaw, mixed $lonRaw): ?string
+{
+    $latStr = trim((string)($latRaw ?? ''));
+    $lonStr = trim((string)($lonRaw ?? ''));
+    if ($latStr === '' || $lonStr === '' || !is_numeric($latStr) || !is_numeric($lonStr)) {
+        return null;
+    }
+
+    $lat = (float)$latStr;
+    $lon = (float)$lonStr;
+    if (!is_finite($lat) || !is_finite($lon) || $lat < -90.0 || $lat > 90.0 || $lon < -180.0 || $lon > 180.0) {
+        return null;
+    }
+
+    $query = number_format($lat, 6, '.', '') . ',' . number_format($lon, 6, '.', '');
+    return 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode($query);
+}
+
+/**
+ * Renderiza el enlace externo accesible "Abrir en Google Maps" cuando existen
+ * coordenadas válidas, o un texto discreto cuando la ubicación no tiene punto.
+ */
+function google_maps_link(mixed $latRaw, mixed $lonRaw, string $label = 'Abrir en Google Maps', bool $compact = false): string
+{
+    $url = google_maps_url($latRaw, $lonRaw);
+    if ($url === null) {
+        return '<span class="has-text-grey is-size-7">Sin punto registrado</span>';
+    }
+
+    $sizeClass = $compact ? ' is-small' : ' is-small';
+    return '<a class="button' . $sizeClass . ' button-secondary maps-external-link" href="' . e($url) . '" target="_blank" rel="noopener noreferrer" title="Abrir ubicación marcada en Google Maps (nueva pestaña)">'
+        . svg_icon('map-pin')
+        . '<span>' . e($label) . '</span>'
+        . '</a>';
+}

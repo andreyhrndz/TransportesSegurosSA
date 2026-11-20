@@ -7,7 +7,7 @@ require_once __DIR__ . '/../app/read_queries.php';
 $sections = [
     'vehiculos' => [
         'label' => 'Vehículos',
-        'subtitle' => 'Administración de unidades, capacidad de carga, odómetro y estado operativo.',
+        'subtitle' => 'Administración de unidades, capacidad de carga, PMA y estado operativo.',
         'read' => 'FLOTAS_VER',
         'write' => 'FLOTAS_GESTIONAR',
         'entity' => 'vehiculo',
@@ -16,7 +16,7 @@ $sections = [
     ],
     'conductores' => [
         'label' => 'Conductores',
-        'subtitle' => 'Gestión de personal de conducción, vigencia de licencias y disponibilidad.',
+        'subtitle' => 'Gestión de personal de conducción, categoría de licencia vigente y disponibilidad.',
         'read' => 'FLOTAS_VER',
         'write' => 'FLOTAS_GESTIONAR',
         'entity' => 'conductor',

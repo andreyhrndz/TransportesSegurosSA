@@ -59,7 +59,8 @@ async function runVisualVerification() {
     const ephemeralUser = JSON.parse(helperOutput.trim());
     console.log(`Cuenta efímera creada: ${ephemeralUser.username} (ID: ${ephemeralUser.user_id})`);
 
-    const browser = await chromium.launch({ headless: true });
+    const chromiumCandidate = path.join(process.env.USERPROFILE || '', 'AppData', 'Local', 'ms-playwright', 'chromium-1247', 'chrome-win64', 'chrome.exe');
+    const browser = await chromium.launch(fs.existsSync(chromiumCandidate) ? { headless: true, executablePath: chromiumCandidate } : { headless: true });
 
     try {
         // Test en resoluciones de laptop solicitadas (1366x768 y 1440x900)
@@ -189,20 +190,22 @@ async function runVisualVerification() {
                     const claseSelect = document.querySelector('select[name="clase_legal"]');
                     const articuladoCheck = document.querySelector('input[name="es_articulado"]');
                     const homologacionSelect = document.querySelector('select[name="estado_homologacion"]');
+                    const kmInput = document.querySelector('input[name="kilometraje_actual"]');
                     const helpCallout = document.querySelector('.pma-help-callout');
 
                     return {
                         hasPma: Boolean(pmaInput),
-                        hasClase: Boolean(claseSelect),
+                        hasClase: Boolean(claseSelect && claseSelect.tomselect),
                         hasArticulado: Boolean(articuladoCheck),
                         hasHomologacion: Boolean(homologacionSelect),
+                        hasKm: Boolean(kmInput),
                         hasCallout: Boolean(helpCallout)
                     };
                 });
 
-                console.log('Verificación campos Vehículo (PMA/Clase legal):', JSON.stringify(vehFormCheck, null, 2));
-                if (!vehFormCheck.hasPma || !vehFormCheck.hasClase || !vehFormCheck.hasCallout) {
-                    throw new Error('El modal de vehículo no incluye los campos normativos de PMA y clase legal');
+                console.log('Verificación campos Vehículo (PMA/Clase legal YAGNI):', JSON.stringify(vehFormCheck, null, 2));
+                if (!vehFormCheck.hasPma || !vehFormCheck.hasClase || !vehFormCheck.hasCallout || vehFormCheck.hasHomologacion || vehFormCheck.hasKm) {
+                    throw new Error('El modal de vehículo no cumple el contrato YAGNI (PMA/TomSelect sin odómetro ni homologación)');
                 }
 
                 await page.screenshot({ path: path.join(screenshotDir, `modal_nuevo_vehiculo_pma_${resolution.width}x${resolution.height}.png`) });
@@ -225,23 +228,24 @@ async function runVisualVerification() {
             if (newCondBtn) {
                 await newCondBtn.click();
                 await page.waitForSelector('#modal-contenido .modal-card', { timeout: 5000 });
-                await page.waitForSelector('.license-selector-table', { timeout: 5000 });
+                await page.waitForSelector('select[name="codigo_licencia"]', { timeout: 5000 });
 
                 const condFormCheck = await page.evaluate(() => {
-                    const table = document.querySelector('.license-selector-table');
-                    const rows = table ? table.querySelectorAll('tbody tr') : [];
-                    const checkboxes = table ? table.querySelectorAll('input[type="checkbox"][name="licencias_seleccionadas[]"]') : [];
+                    const legacyTable = document.querySelector('.license-selector-table');
+                    const licSelect = document.querySelector('select[name="codigo_licencia"]');
+                    const options = licSelect ? Array.from(licSelect.options).filter((o) => o.value !== '') : [];
 
                     return {
-                        hasTable: Boolean(table),
-                        categoryCount: rows.length,
-                        checkboxCount: checkboxes.length
+                        hasLegacyTable: Boolean(legacyTable),
+                        hasSingleSelect: Boolean(licSelect && licSelect.tomselect),
+                        initialValue: licSelect ? licSelect.value : null,
+                        categoryCount: options.length
                     };
                 });
 
-                console.log('Verificación catálogo Licencias Conductor:', JSON.stringify(condFormCheck, null, 2));
-                if (!condFormCheck.hasTable || condFormCheck.categoryCount < 10) {
-                    throw new Error(`Se esperaban categorías oficiales de licencia en la tabla, encontradas: ${condFormCheck.categoryCount}`);
+                console.log('Verificación selector único de Licencias Conductor:', JSON.stringify(condFormCheck, null, 2));
+                if (condFormCheck.hasLegacyTable || !condFormCheck.hasSingleSelect || condFormCheck.initialValue !== '' || condFormCheck.categoryCount < 10) {
+                    throw new Error(`El formulario de conductor no cumple el selector único YAGNI: ${JSON.stringify(condFormCheck)}`);
                 }
 
                 await page.screenshot({ path: path.join(screenshotDir, `modal_nuevo_conductor_licencias_${resolution.width}x${resolution.height}.png`) });

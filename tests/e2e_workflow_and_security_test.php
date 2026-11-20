@@ -618,8 +618,10 @@ try {
         'modelo' => 'FH16',
         'anio' => '2024',
         'capacidad_carga_kg' => '25000.00',
+        'pma_kg' => '34000.00',
+        'clase_legal' => 'PESADO_ARTICULADO',
+        'es_articulado' => '1',
         'capacidad_volumen_m3' => '60.000',
-        'kilometraje_actual' => '1200.0',
         'estado' => 'DISPONIBLE',
     ]);
     e2e_assert($vehCreateStatus === 200, "El alta HTTP de vehículo debe responder 200 (obtenido {$vehCreateStatus}): {$vehCreateBody}");

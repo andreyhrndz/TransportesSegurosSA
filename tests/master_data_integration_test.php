@@ -258,7 +258,7 @@ try {
          EXEC dbo.sp_crear_ruta @nombre=?, @origen_id=@u1, @destino_id=@u2, @distancia_km=18.5, @duracion_estimada_min=35, @ruta_id=@r OUTPUT;
          EXEC dbo.sp_crear_vehiculo @placa=?, @marca=N'Mack', @modelo=N'Anthem', @anio=2025, @capacidad_carga_kg=12000, @vehiculo_id=@v1 OUTPUT;
          EXEC dbo.sp_crear_vehiculo @placa=?, @marca=N'Mack', @modelo=N'MD6', @anio=2025, @capacidad_carga_kg=8000, @vehiculo_id=@v2 OUTPUT;
-         EXEC dbo.sp_crear_conductor @identificacion=?, @nombre=N'Jorge', @primer_apellido=N'Solano', @numero_licencia=?, @fecha_vencimiento_licencia=@lic, @conductor_id=@c OUTPUT;
+         EXEC dbo.sp_crear_conductor @identificacion=?, @nombre=N'Jorge', @primer_apellido=N'Solano', @numero_licencia=?, @fecha_vencimiento_licencia=@lic, @codigo_licencia_inicial=N'B3', @conductor_id=@c OUTPUT;
          SELECT @u1 AS ubi1_id, @u2 AS ubi2_id, @r AS ruta_id, @v1 AS veh1_id, @v2 AS veh2_id, @c AS cond_id;"
     );
     $seed->execute([

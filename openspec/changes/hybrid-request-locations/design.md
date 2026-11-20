@@ -1,0 +1,15 @@
+# Diseño técnico: Ubicaciones híbridas en solicitudes
+
+## 1. Estrategia SQL Server (Migración 12)
+- **Columna aditiva:** `dbo.ubicaciones.es_reutilizable BIT NOT NULL CONSTRAINT DF_ubicaciones_es_reutilizable DEFAULT (1)` + índice `IX_ubicaciones_reutilizable_activo_nombre (es_reutilizable, activo, nombre) INCLUDE (direccion, latitud, longitud)`.
+- **Atomicidad sin transacciones anidadas peligrosas:** `dbo.sp_crear_solicitud` gestiona su propia transacción con `IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION`, por lo que envolverlo en una transacción PDO generaría desajuste de `@@TRANCOUNT` ante errores. En su lugar, `dbo.sp_crear_solicitud_con_ubicaciones` ejecuta toda la validación, inserción de puntos de mapa (si aplica), auditoría, inserción de solicitud y mercancías (TVP `dbo.tipo_mercancias`) dentro de una única transacción con `SET XACT_ABORT ON`.
+- **Tolerancia geográfica documentada:** Haversine sobre radio terrestre 6 371 000 m; rechaza distancia `<= 25.0 m` entre cualquier combinación (guardada+guardada con IDs distintos si ambos tienen coordenadas, guardada+mapa, mapa+guardada, mapa+mapa).
+- **Seguridad anti-escalación:** `SOLICITUDES_CREAR` habilita inserción de puntos `es_reutilizable = 0` exclusivamente dentro de `sp_crear_solicitud_con_ubicaciones`. Guardar con `es_reutilizable = 1` exige `UBICACIONES_GESTIONAR` en PHP (HTTP 403) y en SQL (`THROW 50233`). Además, modo `GUARDADA` valida `activo = 1 AND es_reutilizable = 1` para impedir reutilizar IDs puntuales de otras solicitudes.
+- **Visibilidad operativa:** `sp_listar_ubicaciones` filtra `es_reutilizable = 1` por defecto (`@incluir_puntuales = 0`). `sp_obtener_solicitud`, `sp_listar_solicitudes` y `sp_obtener_viaje` resuelven por ID sin filtrar `es_reutilizable`. `sp_listar_ubicaciones_parada` expone frecuentes activas + puntuales activas de solicitudes `REGISTRADA`/`PENDIENTE_ASIGNACION` para `Viajes > Agregar parada`.
+- **Rollback no destructivo:** `rollback_12_hybrid_request_locations.sql` revierte los SP a su versión de Migración 11 sin eliminar la columna `es_reutilizable` ni datos históricos.
+
+## 2. Arquitectura UI/JS compartida
+- Refactorizar la creación del mapa Leaflet en `public/assets/js/app.js` en un factory único `createInteractiveLocationMap(...)` reutilizado por `Flota > Ubicaciones` y por el panel interno `#solicitud-mapa-panel` de `Nueva solicitud` (cero duplicación de Leaflet/OSM/CSP).
+- En `public/solicitudes/form.php`, cada extremo (`origen`, `destino`) renderiza su combobox Tom Select intacto más el botón `Elegir en el mapa` y un bloque de resumen humano del punto confirmado (`Cambiar`, `Quitar`). Un único panel colapsable `#solicitud-mapa-panel` atiende al extremo activo (`origen` o `destino`) conservando estado independiente por extremo y sin cerrar el modal.
+- `scrollWheelZoom` en mapas dentro de modales se habilita al enfocar/hacer clic en el mapa y se desactiva al salir (`mouseout`/`blur`), evitando zoom involuntario al desplazarse por `.modal-card-body` y manteniendo siempre bloqueado el scroll de fondo (`html.is-modal-open`).
+- Jerarquía `Escape`: Tom Select → Flatpickr → Panel de mapa interno de solicitud → Modal.

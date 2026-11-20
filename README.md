@@ -23,14 +23,13 @@ La plataforma cubre el ciclo de vida completo de la operación de transporte de 
   - Alta y seguimiento de solicitudes de transporte con mercancías asociadas y validación de cubicaje y peso.
   - Selector interactivo de destinatario: entrega al mismo cliente o a un tercero debidamente autorizado (obligatorio para personas jurídicas).
 
-- **Gestión de Flota Vehicular y Normativa de PMA:**
-  - Administración de flota con registro de **PMA (Peso Máximo Autorizado en kg)** según ficha técnica oficial del MOPT, distinguiendo claramente el PMA de la **capacidad de carga útil**.
-  - Clasificación legal de la unidad: `LIVIANO` (&le; 4.000 kg PMA), `MEDIANO_RIGIDO` (&le; 8.000 kg PMA), `PESADO_RIGIDO` (&gt; 8.000 kg PMA) y `PESADO_ARTICULADO`.
-  - Registro de condición de remolque/articulado y estado de homologación vehicular (`VERIFICADO`, `PENDIENTE_VERIFICACION`, `NO_CONFORME`).
+- **Gestión de Flota Vehicular, Ubicaciones en Mapa y Normativa de PMA:**
+  - Administración de flota con registro de **PMA (Peso Máximo Autorizado en kg)** y capacidad de carga útil, clasificación legal (`LIVIANO`, `MEDIANO_RIGIDO`, `PESADO_RIGIDO`, `PESADO_ARTICULADO`), preservación interna de odómetro y control administrativo de unidades `NO_CONFORME`.
+  - **Ubicaciones con mapa interactivo (Leaflet 1.9.4 vendoreado localmente + OpenStreetMap):** selección de punto por clic o arrastre con llenado automático de latitud/longitud (6 decimales) manteniendo independiente la dirección textual, panel de **Opciones avanzadas** para entrada manual sincronizada y **fallback automático** si no hay conexión a los tiles (`tile.openstreetmap.org`). Los registros con punto exponen enlaces públicos seguros **«Abrir en Google Maps»** (sin API key ni GPS en tiempo real) en Ubicaciones, Solicitudes y Paradas de viaje.
 
-- **Conductores y Catálogo Oficial de Licencias de Conducir (Ley 9078 / 9460):**
-  - Catálogo normativo oficial de **14 categorías** de licencias de Costa Rica (`A1`, `A2`, `A3`, `B1`, `B2`, `B3`, `B4`, `C1`, `C2`, `D1`, `D2`, `D3`, `E1`, `E2`).
-  - Soporte de múltiples licencias por conductor en `dbo.conductores_licencias` con número de documento, fecha de vencimiento individual y estado de verificación oficial.
+- **Conductores y Licencias (Ley 9078 / 9460 — flujo YAGNI):**
+  - Catálogo normativo oficial de **14 categorías** de licencias (`A1`–`E2`) con selector único en UI, fecha de vencimiento única (sin `B4` por defecto) y limpieza inmediata del vencimiento al cambiar de categoría.
+  - Sincronización atómica en SQL Server (`dbo.sp_actualizar_licencia_principal_conductor`) que impide habilitaciones ocultas heredadas conservando historial en `dbo.auditorias`.
 
 - **Planificación de Viajes y Validación Legal en Tiempo Real:**
   - Verificación autoritativa de compatibilidad de licencia, vigencia y PMA tanto en base de datos (`dbo.fn_conductor_habilitado_vehiculo`, con **Error 50320** en `sp_crear_viaje` y **Error 50321** en `sp_iniciar_viaje`) como en el navegador con diagnóstico visual dinámico.
@@ -42,9 +41,9 @@ La plataforma cubre el ciclo de vida completo de la operación de transporte de 
   - Registro y resolución de incidencias operativas en ruta.
   - Carga y vinculación de respaldos documentales protegidos.
 
-- **Reportes, Auditoría y Data Warehouse:**
-  - Visualización del historial de auditoría de modificaciones a entidades críticas.
-  - Esquema dimensional de analítica en `TransportesSegurosSA_DW` (6 tablas dimensionales y procedimientos ETL).
+- **Reportes, Bitácora Independiente y Data Warehouse:**
+  - Módulo independiente **Historial de actividad** (`/auditoria.php`) bajo Administración (visible solo con `AUDITORIA_VER`), con filtros SQL por usuario (preservando inactivos y sistema), módulo, acción y rango de fechas, descripción en lenguaje humano y detalle técnico desplegable con redacción de secretos.
+  - Módulo **Reportes** (`/reportes.php`) con tres vistas analíticas (**Solicitudes por período**, **Entregas y resultados** y **Desempeño histórico (DW)** conectado en modo solo lectura a `TransportesSegurosSA_DW`), gráficos Chart.js, exportación **CSV** segura (UTF-8 BOM + protección contra inyección de fórmulas) y vista limpia **Imprimir / PDF**.
 
 ---
 
@@ -81,7 +80,7 @@ Ejecute el asistente automatizado de configuración:
 > ```
 
 ### Paso 3: Inicializar la Base de Datos de Pruebas (`TransportesSegurosSA_Test`)
-Para aprovisionar la base de datos de pruebas local con las 28 tablas, procedimientos almacenados y contratos 01 a 09:
+Para aprovisionar la base de datos de pruebas local con las tablas, procedimientos almacenados y contratos `01` a `13`:
 ```powershell
 .\tools\scripts\init-test-db.ps1
 ```
@@ -156,15 +155,16 @@ TransportesSegurosSA/
 | Base de Datos | Propósito | Reglas Operativas |
 |---|---|---|
 | **`TransportesSegurosSA_Test`** | **Desarrollo y Pruebas** | Entorno predeterminado en `.env`. Destino seguro para ejecutar suites de pruebas automatizadas, pruebas de integración y creación de registros efímeros. |
-| **`TransportesSegurosSA`** | **Base Original de Producción** | Base de datos principal. Cuenta con las migraciones 01 a 09 aplicadas y verificadas. **PROHIBIDO ejecutar pruebas automatizadas con escrituras o modificaciones directas sobre esta base.** |
-| **`TransportesSegurosSA_DW`** | **Data Warehouse** | Base dimensional para analítica e indicadores operacionales (ETL programado). |
+| **`TransportesSegurosSA`** | **Base Original de Exposición** | Base de datos principal. Compatible con las migraciones `01` a `13` tras respaldo verificado y ensayo en staging (ver `docs/ops/deploy-migrations-pr4-exposicion.md`). **PROHIBIDO ejecutar pruebas automatizadas con escrituras o modificaciones directas sobre esta base.** |
+| **`TransportesSegurosSA_DW`** | **Data Warehouse** | Base dimensional en estrella (6 tablas + ETL) consultada en modo solo lectura (`ApplicationIntent=ReadOnly`) desde el reporte histórico. |
 
 ---
 
 ## 6. Pruebas Automatizadas y Calidad
 
-El proyecto cuenta con una cobertura integral de pruebas reproducibles:
-- **24 Suites Automatizadas PHP:** Pruebas unitarias, funcionales, de integración HTTP y de seguridad ASVS (100% PASS bajo PHP 8.4).
-- **13 Suites Contractuales T-SQL:** Ejecutadas sobre SQL Server validando reglas de negocio, rollback transaccional y catálogo de licencias.
-- **Verificación Visual Playwright:** Inspección automatizada en resoluciones de laptop (1366×768 y 1440×900) con comprobación de contraste, selectores personalizados y modales accesibles.
-- **OpenSpec:** 18 especificaciones activas validadas con `openspec validate --all` (18 passed, 0 failed).
+El proyecto cuenta con una cobertura integral de pruebas reproducibles ejecutables **exclusivamente sobre `TransportesSegurosSA_Test`**:
+- **Suites Automatizadas PHP (26 suites `tests/*_test.php`) + JS:** Pruebas unitarias, funcionales, de concurrencia HTTP, ubicaciones híbridas y seguridad ASVS bajo PHP 8.4.
+- **Suites Contractuales T-SQL (Migraciones 01 a 12):** Pruebas sobre SQL Server validando reglas de negocio, rollback transaccional, licencias/PMA, paginación SQL real, corrección atómica de correo en invitaciones y ubicaciones híbridas en solicitudes (`es_reutilizable` + validación Haversine 25 m).
+- **Verificación E2E y Visual Playwright (Chromium real, 3 suites):** Cobertura de flujos YAGNI, scroll modal global, mapa Leaflet compartido (catálogo + Nueva solicitud híbrida) + fallback offline + enlaces Google Maps, e inspección visual en resoluciones desktop (`1366×768`, `1440×900`, `1600×900`, `1920×1080`, `1280×720`), tablet (`768×1024`) y móvil (`375×667`).
+- **OpenSpec:** 21 especificaciones activas validadas con `openspec validate --all`.
+- **Plan de QA manual para exposición:** ver `docs/qa/plan-qa-exposicion.md` y el helper sintético `tests/qa_seed_test_fixtures.php`.
