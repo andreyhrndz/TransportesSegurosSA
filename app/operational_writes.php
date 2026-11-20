@@ -89,17 +89,17 @@ function operation_sql_error(PDOException $exception, array $messages = []): nev
     $message = $messages[$number] ?? match ($number) {
         2601, 2627 => 'Ya existe un registro con esos datos.',
         50101 => 'El registro solicitado no existe.',
-        50103, 50201, 50202, 50203, 50216, 50217, 50233, 50306, 50407, 50410, 50412, 50501 => 'No tienes permiso para realizar esta acción.',
+        50103, 50201, 50202, 50203, 50216, 50217, 50233, 50306, 50406, 50407, 50410, 50412, 50501 => 'No tienes permiso para realizar esta acción.',
         default => 'No se pudo completar la operación. Verifica el estado actual e inténtalo nuevamente.',
     };
 
-    $forbiddenCodes = [50103, 50201, 50202, 50203, 50216, 50217, 50233, 50306, 50407, 50410, 50412, 50501];
+    $forbiddenCodes = [50103, 50201, 50202, 50203, 50216, 50217, 50233, 50306, 50406, 50407, 50410, 50412, 50501];
     $notFoundCodes = [50101, 50335, 50415, 50436, 50437, 50503];
     $conflictCodes = [
         2601, 2627, 547,
         50220, 50221,
         50307, 50311, 50324, 50333, 50336, 50405, 50409,
-        50416, 50417, 50418, 50419, 50420, 50441, 50442,
+        50416, 50417, 50418, 50419, 50420, 50434, 50441, 50442,
         50504, 50505, 50506,
     ];
 

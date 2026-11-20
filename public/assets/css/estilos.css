@@ -3489,3 +3489,218 @@ body.is-modal-open {
         break-inside: avoid;
     }
 }
+
+/* ==========================================================================
+   CARGA SEGURA DE DOCUMENTOS (MODO DUAL + ZONA DRAG & DROP ACCESIBLE)
+   ========================================================================== */
+
+.doc-mode-fieldset {
+    border: 0;
+    padding: 0;
+    margin: 0 0 1rem;
+}
+
+.doc-mode-switch {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.55rem;
+}
+
+.doc-mode-option {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    padding: 0.6rem 0.85rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border);
+    background: var(--color-surface-elevated);
+    color: var(--color-text-muted);
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.16s ease, background-color 0.16s ease, color 0.16s ease;
+}
+
+.doc-mode-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+    pointer-events: none;
+}
+
+.doc-mode-option:focus-within {
+    outline: 2px solid var(--color-accent, #38BDF8);
+    outline-offset: 2px;
+}
+
+.doc-mode-option.is-active {
+    border-color: rgba(56, 189, 248, 0.55);
+    background: rgba(56, 189, 248, 0.13);
+    color: var(--color-text);
+}
+
+.doc-dropzone {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.6rem;
+    padding: 1.2rem 1rem;
+    border: 1.5px dashed var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-elevated);
+    transition: border-color 0.16s ease, background-color 0.16s ease;
+}
+
+.doc-dropzone:focus-visible {
+    outline: 2px solid var(--color-accent, #38BDF8);
+    outline-offset: 2px;
+}
+
+.doc-dropzone.is-dragover {
+    border-color: #38BDF8;
+    background: rgba(56, 189, 248, 0.12);
+}
+
+.doc-dropzone.is-selected {
+    border-color: rgba(52, 211, 153, 0.55);
+    background: rgba(16, 185, 129, 0.08);
+}
+
+.doc-dropzone.is-invalid {
+    border-color: rgba(248, 113, 113, 0.65);
+    background: rgba(239, 68, 68, 0.08);
+}
+
+.doc-file-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.doc-dropzone-icon {
+    width: 2.4rem;
+    height: 2.4rem;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(56, 189, 248, 0.14);
+    color: #7DD3FC;
+}
+
+.doc-dropzone-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    max-width: 30rem;
+}
+
+.doc-dropzone-copy strong {
+    color: var(--color-text);
+    font-size: 0.92rem;
+}
+
+.doc-dropzone-copy span {
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    line-height: 1.4;
+}
+
+.doc-upload-status {
+    margin-top: 0.5rem;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+}
+
+.doc-upload-status[data-tone="success"] {
+    color: #6EE7B7;
+}
+
+.doc-upload-status[data-tone="error"] {
+    color: #FCA5A5;
+    font-weight: 500;
+}
+
+.doc-upload-status[data-tone="loading"] {
+    color: #7DD3FC;
+}
+
+.doc-file-card {
+    margin-top: 0.6rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--color-border-subtle);
+    background: var(--color-surface);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.doc-file-card-info {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    min-width: 0;
+}
+
+.doc-file-card-info strong {
+    color: var(--color-text);
+    font-size: 0.88rem;
+    overflow-wrap: anywhere;
+}
+
+.doc-file-card-info span {
+    color: var(--color-text-muted);
+    font-size: 0.78rem;
+}
+
+.doc-support-meta {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    max-width: 100%;
+}
+
+.doc-support-filename {
+    display: inline-block;
+    max-width: 34ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.is-nowrap {
+    white-space: nowrap;
+}
+
+@media (max-width: 960px) {
+    .doc-support-filename {
+        max-width: 16ch;
+    }
+}
+
+@media (max-width: 540px) {
+    .doc-mode-switch {
+        grid-template-columns: 1fr;
+    }
+
+    .doc-file-card {
+        flex-direction: column;
+        align-items: stretch;
+    }
+}
