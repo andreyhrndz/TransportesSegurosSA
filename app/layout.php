@@ -12,10 +12,11 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
     $puedeEntregas = has_any_permission(['ENTREGAS_VER', 'INCIDENCIAS_VER', 'DOCUMENTOS_VER', 'NOTIFICACIONES_VER']);
     $puedeFlota = has_any_permission(['FLOTAS_VER', 'RUTAS_VER', 'UBICACIONES_VER', 'CATALOGOS_VER']);
     $puedeUsuarios = has_permission('USUARIOS_VER');
+    $puedeRespaldos = $puedeAuditoria && has_permission('USUARIOS_GESTIONAR_CUENTAS');
 
     $grupoSeccion = match ($activo) {
         'solicitudes', 'viajes', 'entregas' => 'Operaciones',
-        'usuarios', 'flota', 'auditoria' => 'Administración',
+        'usuarios', 'flota', 'auditoria', 'respaldos' => 'Administración',
         default => 'Principal',
     };
     $nombreUsuario = (string)($usuario['nombre_usuario'] ?? 'Usuario');
@@ -73,12 +74,11 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
             <span class="brand-monogram" aria-hidden="true">TS</span>
         </div>
         <nav class="sidebar-navigation" aria-label="Módulos del sistema">
-            <?php if ($puedeReportes || $puedeClientes): ?>
             <div class="nav-group">
                 <p class="nav-section-label">Principal</p>
                 <div class="menu-list">
-                <?php if ($puedeReportes): ?>
                     <a class="sidebar-link <?= $activo === 'dashboard' ? 'active' : '' ?>" href="/" <?= $activo === 'dashboard' ? 'aria-current="page"' : '' ?> data-tooltip="Panel general"><?= svg_icon('dashboard') ?><span class="sidebar-link-text">Panel general</span></a>
+                <?php if ($puedeReportes): ?>
                     <a class="sidebar-link <?= $activo === 'reportes' ? 'active' : '' ?>" href="/reportes.php" <?= $activo === 'reportes' ? 'aria-current="page"' : '' ?> data-tooltip="Reportes"><?= svg_icon('reports') ?><span class="sidebar-link-text">Reportes</span></a>
                 <?php endif; ?>
                 <?php if ($puedeClientes): ?>
@@ -86,7 +86,6 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
                 <?php endif; ?>
                 </div>
             </div>
-            <?php endif; ?>
             <?php if ($puedeSolicitudes || $puedeViajes || $puedeEntregas): ?>
             <div class="nav-group">
                 <p class="nav-section-label">Operaciones</p>
@@ -115,6 +114,9 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
                 <?php endif; ?>
                 <?php if ($puedeAuditoria): ?>
                     <a class="sidebar-link <?= $activo === 'auditoria' ? 'active' : '' ?>" href="/auditoria.php" <?= $activo === 'auditoria' ? 'aria-current="page"' : '' ?> data-tooltip="Historial de actividad"><?= svg_icon('shield') ?><span class="sidebar-link-text">Historial de actividad</span></a>
+                <?php endif; ?>
+                <?php if ($puedeRespaldos): ?>
+                    <a class="sidebar-link <?= $activo === 'respaldos' ? 'active' : '' ?>" href="/respaldos.php" <?= $activo === 'respaldos' ? 'aria-current="page"' : '' ?> data-tooltip="Respaldos y recuperación"><?= svg_icon('download') ?><span class="sidebar-link-text">Respaldos y recuperación</span></a>
                 <?php endif; ?>
                 </div>
             </div>

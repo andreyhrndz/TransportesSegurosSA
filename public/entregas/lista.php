@@ -10,7 +10,14 @@ $perPage = 10;
 $state = strtoupper((string)($_GET['estado'] ?? ''));
 
 try {
-    if ($section === 'entregas') {
+    if ($section === 'pendientes') {
+        require_permission('ENTREGAS_VER');
+        $buscar = read_optional_text($_GET['buscar'] ?? null, 100);
+        $result = read_procedure_list(
+            'DECLARE @total_registros INT; EXEC dbo.sp_listar_entregas_pendientes @buscar=?,@pagina=?,@por_pagina=?,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;',
+            [$buscar, $page, $perPage]
+        );
+    } elseif ($section === 'entregas') {
         require_permission('ENTREGAS_VER');
         $state = in_array($state, ['ENTREGADA', 'FALLIDA'], true) ? $state : null;
         $result = read_procedure_list(
@@ -58,7 +65,14 @@ $page = min($page, $pages);
     <table class="table is-fullwidth is-hoverable">
         <thead>
             <tr>
-                <?php if ($section === 'entregas'): ?>
+                <?php if ($section === 'pendientes'): ?>
+                    <th>Solicitud</th>
+                    <th>Viaje / Unidad</th>
+                    <th>Destino</th>
+                    <th>Destinatario previsto</th>
+                    <th>Salida real</th>
+                    <th class="has-text-right">Acciones</th>
+                <?php elseif ($section === 'entregas'): ?>
                     <th>Solicitud</th>
                     <th>Viaje</th>
                     <th>Estado</th>
@@ -93,7 +107,34 @@ $page = min($page, $pages);
             <?php endif; ?>
             <?php foreach ($result['rows'] as $row): ?>
                 <tr>
-                    <?php if ($section === 'entregas'): ?>
+                    <?php if ($section === 'pendientes'): ?>
+                        <td><a class="table-link" href="/solicitudes/detalle.php?id=<?= (int)$row['solicitud_id'] ?>"><strong><?= e($row['codigo_solicitud']) ?></strong></a></td>
+                        <td>
+                            <div class="cell-stack">
+                                <a class="table-link" href="/viajes/detalle.php?id=<?= (int)$row['viaje_id'] ?>"><strong><?= e($row['codigo_viaje']) ?></strong></a>
+                                <span><code><?= e($row['placa']) ?></code> · <?= e($row['conductor_nombre']) ?></span>
+                            </div>
+                        </td>
+                        <td><?= e($row['destino_nombre']) ?></td>
+                        <td><?= e($row['destinatario_nombre'] ?: '—') ?></td>
+                        <td><?= format_utc_datetime($row['fecha_salida_real']) ?></td>
+                        <td>
+                            <div class="row-actions">
+                                <?php if (has_permission('ENTREGAS_REGISTRAR')): ?>
+                                    <button class="button is-small is-primary" type="button" hx-get="/entregas/registrar_form.php?viaje_solicitud_id=<?= (int)$row['viaje_solicitud_id'] ?>&return_to=<?= rawurlencode('/entregas.php?seccion=pendientes') ?>" hx-target="#modal-contenido">
+                                        <?= svg_icon('deliveries') ?>
+                                        <span>Registrar entrega</span>
+                                    </button>
+                                <?php endif; ?>
+                                <?php if (has_permission('INCIDENCIAS_REGISTRAR')): ?>
+                                    <button class="button is-small button-secondary" type="button" hx-get="/entregas/incidencia_form.php?accion=registrar&solicitud_id=<?= (int)$row['solicitud_id'] ?>" hx-target="#modal-contenido">
+                                        <?= svg_icon('alert-triangle') ?>
+                                        <span>Incidencia</span>
+                                    </button>
+                                <?php endif; ?>
+                            </div>
+                        </td>
+                    <?php elseif ($section === 'entregas'): ?>
                         <?php $url = read_safe_reference_url($row['comprobante_url']); ?>
                         <td><a class="table-link" href="/solicitudes/detalle.php?id=<?= (int)$row['solicitud_id'] ?>"><strong><?= e($row['codigo_solicitud']) ?></strong></a></td>
                         <td><a class="table-link" href="/viajes/detalle.php?id=<?= (int)$row['viaje_id'] ?>">#<?= (int)$row['viaje_id'] ?></a></td>

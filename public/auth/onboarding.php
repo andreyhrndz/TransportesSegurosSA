@@ -109,7 +109,7 @@ if ($tokenRaw === '' || strlen($tokenRaw) !== 64 || !ctype_xdigit($tokenRaw)) {
                                 <div class="control">
                                     <button type="button" class="button is-info" id="btn-onb-hacienda">
                                         <?= svg_icon('search') ?>
-                                        <span>Consultar Hacienda</span>
+                                        <span>Consultar</span>
                                     </button>
                                 </div>
                             </div>

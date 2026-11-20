@@ -78,6 +78,9 @@ function read_safe_reference_url(mixed $value): ?string
     if (str_starts_with($url, 'comprobantes/')) {
         return $url;
     }
+    if (preg_match('#^/entregas/archivo\.php\?id=[1-9]\d*$#', $url) === 1) {
+        return $url;
+    }
 
     $parts = parse_url($url);
     return is_array($parts) && in_array($parts['scheme'] ?? '', ['https', 'http'], true) ? $url : null;

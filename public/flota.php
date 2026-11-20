@@ -74,10 +74,17 @@ if ($requestedSection === null || $requestedSection === '') {
 $activeConfig = $sections[$section];
 require_permission($activeConfig['read']);
 $canWrite = has_permission($activeConfig['write']);
+$licenciaAlerta = ($section === 'conductores' && (string)($_GET['licencia_alerta'] ?? '') === '1');
 
 require_once __DIR__ . '/../app/layout.php';
 layout_start('flota', 'Flota y catálogos', 'Administra vehículos, conductores, rutas, ubicaciones y catálogos respetando la disponibilidad operativa.');
 ?>
+<?php if ($licenciaAlerta): ?>
+    <div class="notification notification-warning is-flex is-justify-content-space-between is-align-items-center py-2 px-3 mb-3" style="gap: 0.75rem; flex-wrap: wrap;">
+        <span>Mostrando únicamente conductores activos cuya licencia está vencida o vence en los próximos 30 días.</span>
+        <a class="button is-small button-secondary" href="/flota.php?seccion=conductores">Ver todos los conductores</a>
+    </div>
+<?php endif; ?>
 <nav class="tabs-bar" aria-label="Secciones de flota y catálogos">
     <?php foreach ($sections as $key => $cfg): ?>
         <?php if (has_permission($cfg['read'])): ?>
@@ -92,6 +99,9 @@ layout_start('flota', 'Flota y catálogos', 'Administra vehículos, conductores,
 <section class="toolbar-panel" aria-label="Filtros y acciones de <?= e(utf8_strtolower($activeConfig['label'])) ?>">
     <form class="filter-form" id="flota-filtros" hx-get="/flota/lista.php" hx-target="#flota-resultado" hx-trigger="keyup changed delay:350ms from:input, change" hx-include="this">
         <input type="hidden" name="seccion" value="<?= e($section) ?>">
+        <?php if ($licenciaAlerta): ?>
+            <input type="hidden" name="licencia_alerta" value="1">
+        <?php endif; ?>
         <div class="input-with-icon">
             <?= svg_icon('search', '', 'input-icon') ?>
             <input class="input" id="flota-buscar" type="search" name="buscar" maxlength="120" placeholder="Filtrar <?= e(utf8_strtolower($activeConfig['label'])) ?>…" autocomplete="off" aria-label="Buscar en <?= e($activeConfig['label']) ?>" aria-controls="flota-resultado">

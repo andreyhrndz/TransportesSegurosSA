@@ -3,12 +3,14 @@ declare(strict_types=1);
 require_once __DIR__ . '/../../app/bootstrap.php';
 require_once __DIR__ . '/../../app/read_queries.php';
 require_once __DIR__ . '/../../app/operational_writes.php';
+require_once __DIR__ . '/../../app/dispatch_advisor.php';
 
 $id = filter_var($_GET['id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
 $action = (string)($_GET['accion'] ?? '');
 $permissions = [
     'parada' => 'VIAJES_PARADAS',
     'asignar' => 'VIAJES_ASIGNAR',
+    'asignar_lote' => 'VIAJES_ASIGNAR',
     'iniciar' => 'VIAJES_INICIAR',
     'finalizar' => 'VIAJES_FINALIZAR',
     'cancelar' => 'VIAJES_CANCELAR',
@@ -18,6 +20,9 @@ if ($id === false || !isset($permissions[$action])) {
     exit('Acción no disponible.');
 }
 require_permission($permissions[$action]);
+if ($action === 'asignar_lote') {
+    require_permission('VIAJES_PARADAS');
+}
 try {
     $sets = read_procedure_sets('EXEC dbo.sp_obtener_viaje @viaje_id=?;', [(int)$id]);
     $viaje = $sets[0][0] ?? null;
@@ -42,11 +47,49 @@ if ($action === 'parada') {
         read_error_response();
     }
 }
-if ($action === 'asignar') {
+$capacidadViaje = null;
+$pesosSolicitudes = [];
+if (in_array($action, ['asignar', 'asignar_lote'], true)) {
     try {
         $registradas = operation_list('DECLARE @total_registros INT; EXEC dbo.sp_listar_solicitudes @buscar=NULL,@estado=?,@cliente_id=NULL,@desde=NULL,@hasta=NULL,@pagina=1,@por_pagina=100,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;', ['REGISTRADA']);
         $pendientes = operation_list('DECLARE @total_registros INT; EXEC dbo.sp_listar_solicitudes @buscar=NULL,@estado=?,@cliente_id=NULL,@desde=NULL,@hasta=NULL,@pagina=1,@por_pagina=100,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;', ['PENDIENTE_ASIGNACION']);
         $solicitudes = array_merge($registradas, $pendientes);
+        $capacidadViaje = read_procedure_sets('EXEC dbo.sp_obtener_capacidad_viaje @viaje_id=?;', [(int)$id])[0][0] ?? null;
+        $pesosRows = read_procedure_sets('EXEC dbo.sp_listar_pesos_solicitudes_disponibles;', [])[0] ?? [];
+        foreach ($pesosRows as $pr) {
+            $pesosSolicitudes[(int)$pr['solicitud_id']] = [
+                'peso' => (float)($pr['peso_total_kg'] ?? 0),
+                'vol' => (float)($pr['volumen_total_m3'] ?? 0),
+                'origen_lat' => $pr['origen_lat'] ?? null,
+                'origen_lon' => $pr['origen_lon'] ?? null,
+                'destino_lat' => $pr['destino_lat'] ?? null,
+                'destino_lon' => $pr['destino_lon'] ?? null,
+                'fecha_entrega_requerida' => $pr['fecha_entrega_requerida'] ?? null,
+            ];
+        }
+        if (is_array($capacidadViaje)) {
+            $tripEvalCtx = array_merge($capacidadViaje, [
+                'fecha_programada_salida' => $viaje['fecha_programada_salida'] ?? null,
+            ]);
+            foreach ($solicitudes as &$solRow) {
+                $sId = (int)$solRow['solicitud_id'];
+                $pm = $pesosSolicitudes[$sId] ?? [];
+                $reqCtx = [
+                    'origen_id' => (int)($solRow['origen_id'] ?? 0),
+                    'destino_id' => (int)($solRow['destino_id'] ?? 0),
+                    'origen_lat' => $pm['origen_lat'] ?? null,
+                    'origen_lon' => $pm['origen_lon'] ?? null,
+                    'destino_lat' => $pm['destino_lat'] ?? null,
+                    'destino_lon' => $pm['destino_lon'] ?? null,
+                    'peso_solicitud_kg' => (float)($pm['peso'] ?? 0),
+                    'volumen_solicitud_m3' => (float)($pm['vol'] ?? 0),
+                    'fecha_entrega_requerida' => $pm['fecha_entrega_requerida'] ?? ($solRow['fecha_entrega_requerida'] ?? null),
+                ];
+                $solRow['_fit'] = dispatch_evaluate_fit($reqCtx, $tripEvalCtx, $paradas);
+            }
+            unset($solRow);
+            usort($solicitudes, static fn(array $a, array $b): int => ($b['_fit']['puntaje'] ?? 0) <=> ($a['_fit']['puntaje'] ?? 0));
+        }
     } catch (PDOException) {
         read_error_response();
     }
@@ -55,6 +98,7 @@ if ($action === 'asignar') {
 $titles = [
     'parada' => 'Agregar parada',
     'asignar' => 'Asignar solicitud',
+    'asignar_lote' => 'Asignar varias solicitudes al viaje',
     'iniciar' => 'Iniciar viaje',
     'finalizar' => 'Finalizar viaje',
     'cancelar' => 'Cancelar viaje',
@@ -62,6 +106,7 @@ $titles = [
 $submitLabels = [
     'parada' => 'Agregar',
     'asignar' => 'Asignar',
+    'asignar_lote' => 'Asignar seleccionadas',
     'iniciar' => 'Iniciar',
     'finalizar' => 'Finalizar',
     'cancelar' => 'Confirmar cancelación',
@@ -69,7 +114,7 @@ $submitLabels = [
 ?>
 <div class="modal is-active" role="dialog" aria-modal="true" aria-labelledby="titulo-viaje-accion">
     <div class="modal-background" data-close-modal></div>
-    <div class="modal-card">
+    <div class="modal-card <?= $action === 'asignar_lote' ? 'modal-card-wide' : '' ?>">
         <?= modal_header('titulo-viaje-accion', $titles[$action]) ?>
         <form hx-post="/viajes/accion.php" hx-target="#mensaje-viaje-accion" hx-swap="innerHTML" hx-disabled-elt="find button[type=submit]">
             <section class="modal-card-body">
@@ -145,36 +190,146 @@ $submitLabels = [
                         $paradas
                     );
                     ?>
-                    <div data-assign-stops-root data-trip-stops="<?= e(json_encode($paradasCatalogo, JSON_UNESCAPED_UNICODE)) ?>">
+                    <?php $canAutoStops = has_permission('VIAJES_PARADAS'); ?>
+                    <?php if (is_array($capacidadViaje)): ?>
+                        <?php
+                        $capPesoMax = (float)($capacidadViaje['capacidad_carga_kg'] ?? 0);
+                        $capPesoUsado = (float)($capacidadViaje['peso_usado_kg'] ?? 0);
+                        $capPesoLibre = max(0.0, $capPesoMax - $capPesoUsado);
+                        ?>
+                        <div class="notification notification-info py-2 px-3 mb-3">
+                            <strong>Capacidad disponible en la unidad:</strong>
+                            <?= e(format_cr_measure($capPesoLibre)) ?> kg libres
+                            (<?= e(format_cr_measure($capPesoUsado)) ?> / <?= e(format_cr_measure($capPesoMax)) ?> kg usados)
+                        </div>
+                    <?php endif; ?>
+                    <div data-assign-stops-root data-can-auto-stops="<?= $canAutoStops ? '1' : '0' ?>" data-trip-stops="<?= e(json_encode($paradasCatalogo, JSON_UNESCAPED_UNICODE)) ?>">
                         <div class="field">
                             <label class="label" for="asignar-solicitud">Solicitud elegible <span class="required">*</span></label>
                             <select id="asignar-solicitud" name="solicitud_id" data-combobox data-allow-clear="true" data-placeholder="Buscar solicitud por código o cliente…" required>
                                 <option value="">Selecciona solicitud…</option>
                                 <?php foreach ($solicitudes as $row): ?>
-                                    <option value="<?= (int)$row['solicitud_id'] ?>" data-origen="<?= (int)($row['origen_id'] ?? 0) ?>" data-destino="<?= (int)($row['destino_id'] ?? 0) ?>" data-subtext="<?= e(($row['origen_nombre'] ?? '') . ' → ' . ($row['destino_nombre'] ?? '') . ' · ' . humanize_status($row['estado'])) ?>"><?= e($row['codigo_solicitud'] . ' · ' . ($row['cliente_nombre'] ?? humanize_status($row['estado']))) ?></option>
+                                    <?php
+                                    $pInfo = $pesosSolicitudes[(int)$row['solicitud_id']] ?? null;
+                                    $pesoTxt = ($pInfo && $pInfo['peso'] > 0) ? (' · ' . format_cr_measure($pInfo['peso']) . ' kg') : '';
+                                    $fitRow = $row['_fit'] ?? null;
+                                    $fitTag = is_array($fitRow) ? ('[' . $fitRow['etiqueta'] . '] ') : '';
+                                    ?>
+                                    <option value="<?= (int)$row['solicitud_id'] ?>" data-origen="<?= (int)($row['origen_id'] ?? 0) ?>" data-destino="<?= (int)($row['destino_id'] ?? 0) ?>" data-origen-nombre="<?= e($row['origen_nombre'] ?? '') ?>" data-destino-nombre="<?= e($row['destino_nombre'] ?? '') ?>" data-subtext="<?= e(($row['origen_nombre'] ?? '') . ' → ' . ($row['destino_nombre'] ?? '') . $pesoTxt . (is_array($fitRow) ? ' · ' . $fitRow['motivo'] : '')) ?>"><?= e($fitTag . $row['codigo_solicitud'] . ' · ' . ($row['cliente_nombre'] ?? humanize_status($row['estado'])) . $pesoTxt) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
+                        <?php if ($canAutoStops): ?>
+                            <div class="field mb-3">
+                                <label class="checkbox">
+                                    <input type="checkbox" name="auto_crear_paradas" value="1" checked data-auto-stops-toggle>
+                                    <span><strong>Crear automáticamente las paradas faltantes</strong> (reutiliza las existentes en el viaje y agrega solo las que falten)</span>
+                                </label>
+                            </div>
+                        <?php endif; ?>
                         <div class="columns">
                             <div class="column">
                                 <div class="field">
-                                    <label class="label" for="parada-recogida">Parada de recogida <span class="required">*</span></label>
-                                    <select id="parada-recogida" name="parada_recogida_id" data-combobox data-allow-clear="true" data-placeholder="Selecciona primero una solicitud…" disabled required>
+                                    <label class="label" for="parada-recogida">Parada de recogida<?= $canAutoStops ? '' : ' <span class="required">*</span>' ?></label>
+                                    <select id="parada-recogida" name="parada_recogida_id" data-combobox data-allow-clear="true" data-placeholder="Selecciona primero una solicitud…" disabled <?= $canAutoStops ? '' : 'required' ?>>
                                         <option value="">Selecciona primero una solicitud…</option>
                                     </select>
                                 </div>
                             </div>
                             <div class="column">
                                 <div class="field">
-                                    <label class="label" for="parada-entrega">Parada de entrega <span class="required">*</span></label>
-                                    <select id="parada-entrega" name="parada_entrega_id" data-combobox data-allow-clear="true" data-placeholder="Selecciona primero una solicitud…" disabled required>
+                                    <label class="label" for="parada-entrega">Parada de entrega<?= $canAutoStops ? '' : ' <span class="required">*</span>' ?></label>
+                                    <select id="parada-entrega" name="parada_entrega_id" data-combobox data-allow-clear="true" data-placeholder="Selecciona primero una solicitud…" disabled <?= $canAutoStops ? '' : 'required' ?>>
                                         <option value="">Selecciona primero una solicitud…</option>
                                     </select>
                                 </div>
                             </div>
                         </div>
                         <div id="asignar-validacion-aviso" class="notification notification-warning p-2 mb-2" role="status" aria-live="polite" hidden></div>
-                        <p class="help" id="asignar-paradas-ayuda">Selecciona primero una solicitud para mostrar únicamente las paradas compatibles en origen, destino y secuencia del itinerario.</p>
+                        <p class="help" id="asignar-paradas-ayuda">Selecciona una solicitud: el sistema reutilizará paradas compatibles del viaje o creará automáticamente las que falten.</p>
+                    </div>
+                <?php elseif ($action === 'asignar_lote'): ?>
+                    <?php
+                    $capPesoMax = (float)($capacidadViaje['capacidad_carga_kg'] ?? 0);
+                    $capPesoUsado = (float)($capacidadViaje['peso_usado_kg'] ?? 0);
+                    $capPesoLibre = max(0.0, $capPesoMax - $capPesoUsado);
+                    ?>
+                    <div data-batch-assign-root data-free-kg="<?= e((string)$capPesoLibre) ?>" data-max-kg="<?= e((string)$capPesoMax) ?>">
+                        <div class="notification notification-info py-2 px-3 mb-3 is-flex is-justify-content-space-between is-align-items-center" style="gap: 0.75rem; flex-wrap: wrap;">
+                            <div>
+                                <strong>Capacidad libre:</strong> <?= e(format_cr_measure($capPesoLibre)) ?> kg
+                                · <span data-batch-summary>0 seleccionadas (0 kg)</span>
+                            </div>
+                            <?php if ($solicitudes): ?>
+                                <button class="button is-small button-secondary" type="button" data-batch-select-compatible>
+                                    <span>Seleccionar compatibles</span>
+                                </button>
+                            <?php endif; ?>
+                        </div>
+                        <div class="notification notification-danger py-2 px-3 mb-3" data-batch-overweight hidden></div>
+
+                        <?php if (!$solicitudes): ?>
+                            <?= empty_state('Sin solicitudes disponibles', 'No hay solicitudes en estado Registrada o Pendiente de asignación.') ?>
+                        <?php else: ?>
+                            <p class="help mb-2">Marca las solicitudes que deseas subir a este viaje. El sistema reutilizará o creará automáticamente las paradas faltantes en una sola transacción.</p>
+                            <div class="field mb-3">
+                                <label class="checkbox">
+                                    <input type="checkbox" name="optimizar_orden" value="1" checked>
+                                    <span><strong>Aplicar Ruta inteligente automáticamente</strong> (ordena las paradas por cercanía Haversine respetando recogida antes que entrega)</span>
+                                </label>
+                            </div>
+                            <div class="table-container" style="max-height: 320px; overflow-y: auto;">
+                                <table class="table is-fullwidth is-hoverable is-narrow">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 36px;"></th>
+                                            <th>Compatibilidad</th>
+                                            <th>Solicitud / Cliente</th>
+                                            <th>Trayecto</th>
+                                            <th class="has-text-right">Peso</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($solicitudes as $row): ?>
+                                            <?php
+                                            $sId = (int)$row['solicitud_id'];
+                                            $pInfo = $pesosSolicitudes[$sId] ?? null;
+                                            $pesoVal = (float)($pInfo['peso'] ?? 0);
+                                            $fitRow = $row['_fit'] ?? null;
+                                            $cabe = is_array($fitRow) ? !empty($fitRow['cabe']) : true;
+                                            $nivel = is_array($fitRow) ? (string)$fitRow['nivel'] : 'compatible';
+                                            $tagCls = is_array($fitRow) ? (string)$fitRow['tag_class'] : 'is-info';
+                                            $etiqueta = is_array($fitRow) ? (string)$fitRow['etiqueta'] : 'Compatible';
+                                            ?>
+                                            <tr>
+                                                <td>
+                                                    <input
+                                                        type="checkbox"
+                                                        name="solicitudes[]"
+                                                        value="<?= $sId ?>"
+                                                        data-batch-check
+                                                        data-peso="<?= e((string)$pesoVal) ?>"
+                                                        data-nivel="<?= e($nivel) ?>"
+                                                        <?= $cabe ? '' : 'disabled title="Esta solicitud por sí sola excede la capacidad libre del camión."' ?>
+                                                    >
+                                                </td>
+                                                <td><span class="tag <?= e($tagCls) ?>"><?= e($etiqueta) ?></span></td>
+                                                <td>
+                                                    <div class="cell-stack">
+                                                        <strong><?= e($row['codigo_solicitud']) ?></strong>
+                                                        <span class="is-size-7"><?= e($row['cliente_nombre'] ?? '') ?></span>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="is-size-7"><?= e(($row['origen_nombre'] ?? '') . ' → ' . ($row['destino_nombre'] ?? '')) ?></span>
+                                                </td>
+                                                <td class="has-text-right"><strong><?= e(format_cr_measure($pesoVal)) ?> kg</strong></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 <?php elseif ($action === 'cancelar'): ?>
                     <div class="notification notification-danger mb-4">

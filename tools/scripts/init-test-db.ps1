@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Transportes Seguros S.A. — Inicializacion segura de la base de datos de pruebas (TransportesSegurosSA_Test).
 .DESCRIPTION
@@ -173,7 +173,8 @@ $migrationFiles = @(
     '10_yagni_fleet_licenses_and_invitations_contracts.sql',
     '11_invitations_search_correct_email_contracts.sql',
     '12_hybrid_request_locations_contracts.sql',
-    '13_trip_stops_audit_and_reports_contracts.sql'
+    '13_trip_stops_audit_and_reports_contracts.sql',
+    '14_operational_ux_stops_and_deliveries_contracts.sql'
 )
 
 foreach ($migFile in $migrationFiles) {

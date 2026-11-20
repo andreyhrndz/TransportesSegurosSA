@@ -54,7 +54,7 @@ $isPhysical = $customer['tipo_cliente'] === 'FISICA';
                     <div style="display: flex; align-items: flex-end;">
                         <button class="button button-secondary is-small" type="button" id="btn-consultar-hacienda-edit">
                             <?= svg_icon('search') ?>
-                            <span>Consultar Hacienda</span>
+                            <span>Consultar</span>
                         </button>
                     </div>
                 </div>

@@ -443,6 +443,21 @@ $vehIsNoConforme = ($entity === 'vehiculo' && $isEdit && (string)($record['estad
                             </div>
                         </div>
 
+                        <div class="map-search-box mb-2" data-map-search-box data-map-target-shell=".location-map-shell" data-address-target="#ubi-direccion">
+                            <div class="field has-addons mb-1">
+                                <div class="control is-expanded">
+                                    <input class="input is-small" type="search" data-map-search-input placeholder="Buscar lugar, cantón o dirección en Costa Rica (ej. Cartago Centro, Zona Franca El Coyol)…" autocomplete="off" aria-label="Buscar lugar en el mapa">
+                                </div>
+                                <div class="control">
+                                    <button class="button is-small button-secondary" type="button" data-map-search-btn>
+                                        <?= svg_icon('search') ?>
+                                        <span>Buscar</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="map-search-results" data-map-search-results hidden></div>
+                        </div>
+
                         <div class="location-map-shell" data-location-map-shell data-initial-lat="<?= e($latVal) ?>" data-initial-lon="<?= e($lonVal) ?>">
                             <div class="location-map-canvas" id="ubi-mapa" data-location-map tabindex="0" role="application" aria-label="Mapa interactivo de ubicación. Haz clic para colocar o arrastra el marcador."></div>
                         </div>

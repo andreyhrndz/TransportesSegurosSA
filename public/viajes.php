@@ -6,7 +6,11 @@ require_once __DIR__ . '/../app/layout.php';
 layout_start('viajes', 'Viajes', 'Planificación y seguimiento de despachos, unidades, rutas, paradas y órdenes asociadas.');
 ?>
 <section class="toolbar-panel" aria-label="Filtros y creación de viajes">
-    <form class="filter-form" id="viajes-filtros" hx-get="/viajes/lista.php" hx-target="#viajes-resultado" hx-trigger="change" hx-include="this">
+    <form class="filter-form" id="viajes-filtros" hx-get="/viajes/lista.php" hx-target="#viajes-resultado" hx-trigger="change, keyup changed delay:350ms from:input[type=search]" hx-include="this">
+        <div class="input-with-icon">
+            <?= svg_icon('search', '', 'input-icon') ?>
+            <input class="input" id="viaje-buscar" type="search" name="buscar" maxlength="100" placeholder="Código, placa, conductor o ruta…" autocomplete="off" aria-label="Buscar viajes">
+        </div>
         <div class="select">
             <select id="viaje-estado" name="estado" data-combobox data-allow-clear="false" data-placeholder="Todos los estados" aria-label="Estado del viaje">
                 <option value="">Todos los estados</option>

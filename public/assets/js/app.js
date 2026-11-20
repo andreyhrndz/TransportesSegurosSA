@@ -353,10 +353,13 @@
                         const todayBtn = document.createElement('button');
                         todayBtn.type = 'button';
                         todayBtn.className = 'flatpickr-footer-btn';
-                        todayBtn.textContent = 'Hoy';
+                        todayBtn.textContent = isDateTime ? 'Ahora (+5m)' : 'Hoy';
                         todayBtn.addEventListener('click', () => {
-                            instance.setDate(new Date(), true);
-                            instance.close();
+                            const targetDate = isDateTime ? new Date(Date.now() + 5 * 60 * 1000) : new Date();
+                            instance.setDate(targetDate, true);
+                            if (!isDateTime) {
+                                instance.close();
+                            }
                         });
 
                         const clearBtn = document.createElement('button');
@@ -370,10 +373,35 @@
 
                         footer.appendChild(todayBtn);
                         footer.appendChild(clearBtn);
+
+                        if (isDateTime) {
+                            const applyBtn = document.createElement('button');
+                            applyBtn.type = 'button';
+                            applyBtn.className = 'flatpickr-footer-btn is-apply';
+                            applyBtn.textContent = 'Aplicar';
+                            applyBtn.addEventListener('click', () => {
+                                if (instance.selectedDates.length === 0) {
+                                    instance.setDate(new Date(Date.now() + 5 * 60 * 1000), true);
+                                } else {
+                                    // Sincronizar hora editada antes de cerrar
+                                    instance.setDate(instance.selectedDates[0], true);
+                                }
+                                instance.close();
+                            });
+                            footer.appendChild(applyBtn);
+                        }
+
                         cal.appendChild(footer);
                     }
                 },
                 onChange(selectedDates, dateStr, instance) {
+                    // Evitar doble resalte visual por foco residual en días previos
+                    if (instance?.calendarContainer) {
+                        const focused = instance.calendarContainer.querySelector('.flatpickr-day:focus:not(.selected)');
+                        if (focused && typeof focused.blur === 'function') {
+                            focused.blur();
+                        }
+                    }
                     if (input.id === 'cond-vencimiento') {
                         clearInlineFieldError(input, document.getElementById('cond-vencimiento-error'));
                     }
@@ -721,11 +749,7 @@
                 }
             };
 
-            if (shell) {
-                shell._tssaMapInstance = map;
-            }
-
-            return {
+            const controller = {
                 map,
                 setPoint,
                 clearPoint,
@@ -733,6 +757,13 @@
                 invalidate,
                 destroy,
             };
+
+            if (shell) {
+                shell._tssaMapInstance = map;
+                shell._tssaMapController = controller;
+            }
+
+            return controller;
         } catch {
             onFallback(true);
             return null;
@@ -839,9 +870,25 @@
 
             if (!panel || !shell || !canvas || !refInput || !latInput || !lonInput) return;
 
+            const readSlotFromDom = (slotKey) => {
+                const card = section.querySelector('[data-location-slot="' + slotKey + '"]');
+                if (!card) {
+                    return { mode: 'guardada', lat: '', lon: '', direccion: '', nombre: '', guardarFrecuente: false };
+                }
+                const modeVal = card.querySelector('[data-slot-input="modo"]')?.value === 'mapa' ? 'mapa' : 'guardada';
+                return {
+                    mode: modeVal,
+                    lat: card.querySelector('[data-slot-input="latitud"]')?.value || '',
+                    lon: card.querySelector('[data-slot-input="longitud"]')?.value || '',
+                    direccion: card.querySelector('[data-slot-input="direccion"]')?.value || '',
+                    nombre: card.querySelector('[data-slot-input="nombre"]')?.value || '',
+                    guardarFrecuente: (card.querySelector('[data-slot-input="guardar_frecuente"]')?.value || '0') === '1',
+                };
+            };
+
             const slotState = {
-                origen: { mode: 'guardada', lat: '', lon: '', direccion: '', nombre: '', guardarFrecuente: false },
-                destino: { mode: 'guardada', lat: '', lon: '', direccion: '', nombre: '', guardarFrecuente: false },
+                origen: readSlotFromDom('origen'),
+                destino: readSlotFromDom('destino'),
             };
             let activeSlot = null;
             let lastTriggerBtn = null;
@@ -1198,6 +1245,7 @@
             const selSol = container.querySelector('#asignar-solicitud');
             const selRec = container.querySelector('#parada-recogida');
             const selEnt = container.querySelector('#parada-entrega');
+            const autoToggle = container.querySelector('[data-auto-stops-toggle]');
             const aviso = container.querySelector('#asignar-validacion-aviso');
             const ayuda = container.querySelector('#asignar-paradas-ayuda');
             const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
@@ -1340,6 +1388,40 @@
                     });
                     lastValidPairs = validPairs;
 
+                    const autoEnabled = Boolean(autoToggle && autoToggle.checked);
+
+                    if (validPairs.length === 0 && autoEnabled) {
+                        const existingRec = recCandidates[0] || null;
+                        if (existingRec) {
+                            setSelectOptions(selRec, recCandidates, existingRec.id, true, 'Se reutilizará parada existente…');
+                        } else {
+                            setSelectOptions(selRec, [], 0, false, 'Se creará automáticamente al asignar');
+                        }
+                        setSelectOptions(selEnt, [], 0, false, 'Se creará automáticamente al asignar');
+                        selRec.required = false;
+                        selEnt.required = false;
+
+                        if (aviso) {
+                            aviso.classList.remove('notification-warning');
+                            aviso.classList.add('notification-info');
+                        }
+                        if (existingRec) {
+                            showNotice('Se reutilizará la parada de recogida #' + existingRec.orden + ' y se creará automáticamente la parada de entrega al final del itinerario.');
+                        } else {
+                            showNotice('Se crearán automáticamente las paradas de recogida y entrega al final del itinerario en la misma transacción.');
+                        }
+                        setHelp('Después de asignar puedes usar «Reordenar paradas» o «Sugerir orden óptimo» si deseas ajustar la secuencia.');
+                        if (submitBtn) submitBtn.disabled = false;
+                        return;
+                    }
+
+                    if (aviso) {
+                        aviso.classList.remove('notification-info');
+                        aviso.classList.add('notification-warning');
+                    }
+                    selRec.required = !autoEnabled;
+                    selEnt.required = !autoEnabled;
+
                     if (recCandidates.length === 0 && entCandidates.length === 0) {
                         setSelectOptions(selRec, [], 0, false, 'Sin parada compatible en origen');
                         setSelectOptions(selEnt, [], 0, false, 'Sin parada compatible en destino');
@@ -1456,7 +1538,18 @@
             const onSolChange = () => recompute('solicitud');
             const onRecChange = () => recompute('recogida');
             const onEntChange = () => recompute('entrega');
+            const onAutoChange = () => recompute('auto');
             const onFormSubmit = (ev) => {
+                const solId = parseInt(selSol.value || '0', 10) || 0;
+                if (solId <= 0) {
+                    ev.preventDefault();
+                    ev.stopImmediatePropagation();
+                    showNotice('Selecciona una solicitud antes de asignar.');
+                    return;
+                }
+                if (autoToggle && autoToggle.checked && lastValidPairs.length === 0) {
+                    return;
+                }
                 const recId = parseInt(selRec.value || '0', 10) || 0;
                 const entId = parseInt(selEnt.value || '0', 10) || 0;
                 const ok = lastValidPairs.some((p) => p.rec.id === recId && p.ent.id === entId);
@@ -1470,12 +1563,14 @@
             selSol.addEventListener('change', onSolChange);
             selRec.addEventListener('change', onRecChange);
             selEnt.addEventListener('change', onEntChange);
+            autoToggle?.addEventListener('change', onAutoChange);
             form?.addEventListener('submit', onFormSubmit, true);
 
             container._tssaAssignStopsCleanup = () => {
                 selSol.removeEventListener('change', onSolChange);
                 selRec.removeEventListener('change', onRecChange);
                 selEnt.removeEventListener('change', onEntChange);
+                autoToggle?.removeEventListener('change', onAutoChange);
                 form?.removeEventListener('submit', onFormSubmit, true);
                 delete container._tssaAssignStopsCleanup;
             };
@@ -1872,6 +1967,13 @@
     document.addEventListener('click', (event) => {
         if (event.target.closest('[data-close-modal]')) {
             if (hasSubmittingModalForm()) return;
+            const isBackdrop = event.target.classList?.contains('modal-background');
+            if (isBackdrop && document.querySelector('.flatpickr-calendar.open')) {
+                document.querySelectorAll('input[data-datepicker]').forEach((inp) => {
+                    if (inp._flatpickr?.isOpen) inp._flatpickr.close();
+                });
+                return;
+            }
             cerrarModal();
             return;
         }
@@ -1985,7 +2087,7 @@
         if (successFields) successFields.hidden = !delivered;
         if (failureFields) failureFields.hidden = delivered;
         successFields?.querySelectorAll('input').forEach((field) => {
-            field.required = delivered && ['receptor_nombre', 'comprobante_url'].includes(field.name);
+            field.required = delivered && field.name === 'receptor_nombre';
         });
         failureFields?.querySelectorAll('textarea').forEach((field) => {
             field.required = !delivered && field.name === 'motivo_fallo';
@@ -3231,6 +3333,179 @@
             return;
         }
 
+        const suggestBtn = event.target.closest('[data-stop-suggest-order]');
+        if (suggestBtn) {
+            event.preventDefault();
+            const form = suggestBtn.closest('form');
+            const listEl = form ? form.querySelector('[data-stop-reorder-list]') : null;
+            const avisoEl = form ? form.querySelector('#orden-optimo-aviso') : null;
+            if (!listEl) return;
+
+            const items = Array.from(listEl.querySelectorAll('[data-stop-item]'));
+            if (items.length < 2) return;
+
+            let pairs = [];
+            try {
+                const parsed = JSON.parse(listEl.dataset.precedencePairs || '[]');
+                if (Array.isArray(parsed)) pairs = parsed;
+            } catch {
+                pairs = [];
+            }
+
+            const toRad = (deg) => (deg * Math.PI) / 180;
+            const haversineKm = (a, b) => {
+                if (!a.hasCoords || !b.hasCoords) return null;
+                const R = 6371;
+                const dLat = toRad(b.lat - a.lat);
+                const dLon = toRad(b.lon - a.lon);
+                const s1 = Math.sin(dLat / 2);
+                const s2 = Math.sin(dLon / 2);
+                const h = s1 * s1 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * s2 * s2;
+                return 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
+            };
+
+            const nodes = items.map((el, idx) => {
+                const lat = parseFloat(el.dataset.lat || '');
+                const lon = parseFloat(el.dataset.lon || '');
+                return {
+                    id: parseInt(el.dataset.paradaId || '0', 10),
+                    el,
+                    idx,
+                    tipo: (el.dataset.tipo || '').toUpperCase(),
+                    lat,
+                    lon,
+                    hasCoords: Number.isFinite(lat) && Number.isFinite(lon),
+                };
+            });
+
+            const totalDist = (seq) => {
+                let sum = 0;
+                let prev = null;
+                seq.forEach((n) => {
+                    if (n.hasCoords) {
+                        if (prev) {
+                            const d = haversineKm(prev, n);
+                            if (d !== null) sum += d;
+                        }
+                        prev = n;
+                    }
+                });
+                return sum;
+            };
+
+            const beforeKm = totalDist(nodes);
+            const prereqs = new Map();
+            nodes.forEach((n) => prereqs.set(n.id, new Set()));
+            pairs.forEach(([recId, entId]) => {
+                if (prereqs.has(entId) && prereqs.has(recId) && recId !== entId) {
+                    prereqs.get(entId).add(recId);
+                }
+            });
+
+            const remaining = new Set(nodes);
+            const visitedIds = new Set();
+            const ordered = [];
+            let current = null;
+
+            while (remaining.size > 0) {
+                const eligible = Array.from(remaining).filter((n) => {
+                    const reqs = prereqs.get(n.id);
+                    if (!reqs || reqs.size === 0) return true;
+                    for (const rId of reqs) {
+                        if (!visitedIds.has(rId)) return false;
+                    }
+                    return true;
+                });
+
+                const pool = eligible.length > 0 ? eligible : Array.from(remaining);
+                let chosen = null;
+
+                if (current === null) {
+                    // Preferir la primera parada de recogida/mixta con coordenadas; si no, la primera elegible
+                    chosen = pool.find((n) => n.hasCoords && (n.tipo === 'RECOGIDA' || n.tipo === 'MIXTA'))
+                        || pool.find((n) => n.hasCoords)
+                        || pool[0];
+                } else if (current.hasCoords) {
+                    let bestDist = Infinity;
+                    pool.forEach((cand) => {
+                        if (cand.hasCoords) {
+                            const d = haversineKm(current, cand);
+                            if (d !== null && d < bestDist) {
+                                bestDist = d;
+                                chosen = cand;
+                            }
+                        }
+                    });
+                    if (!chosen) chosen = pool[0];
+                } else {
+                    chosen = pool.find((n) => n.hasCoords) || pool[0];
+                }
+
+                ordered.push(chosen);
+                visitedIds.add(chosen.id);
+                remaining.delete(chosen);
+                if (chosen.hasCoords) current = chosen;
+            }
+
+            ordered.forEach((n) => listEl.appendChild(n.el));
+            refreshStopReorderState(listEl);
+
+            const afterKm = totalDist(ordered);
+            const sinCoords = nodes.filter((n) => !n.hasCoords).length;
+            if (avisoEl) {
+                let text = 'Orden sugerido aplicado en vista previa respetando recogida antes que entrega.';
+                if (nodes.length - sinCoords >= 2) {
+                    text += ' Recorrido estimado: ' + beforeKm.toFixed(1) + ' km → ' + afterKm.toFixed(1) + ' km.';
+                }
+                if (sinCoords > 0) {
+                    text += ' (' + sinCoords + ' parada(s) sin coordenadas no se optimizaron por distancia).';
+                }
+                text += ' Revisa la secuencia y pulsa «Guardar orden» para confirmar.';
+                avisoEl.textContent = text;
+                avisoEl.hidden = false;
+            }
+            return;
+        }
+
+        const searchBtn = event.target.closest('[data-map-search-btn]');
+        if (searchBtn) {
+            event.preventDefault();
+            const box = searchBtn.closest('[data-map-search-box]');
+            runMapGeocodeSearch(box);
+            return;
+        }
+
+        const pickBtn = event.target.closest('[data-map-search-pick]');
+        if (pickBtn) {
+            event.preventDefault();
+            const box = pickBtn.closest('[data-map-search-box]');
+            const lat = parseFloat(pickBtn.dataset.lat || '');
+            const lon = parseFloat(pickBtn.dataset.lon || '');
+            const label = pickBtn.dataset.label || '';
+            if (box && Number.isFinite(lat) && Number.isFinite(lon)) {
+                const scope = box.closest('form') || document;
+                const shellSel = box.dataset.mapTargetShell || '.location-map-shell';
+                const shell = scope.querySelector(shellSel) || document.querySelector(shellSel);
+                const ctrl = shell ? shell._tssaMapController : null;
+                if (ctrl && typeof ctrl.setPoint === 'function') {
+                    ctrl.setPoint(lat, lon, true);
+                }
+                const addrSel = box.dataset.addressTarget || '';
+                if (addrSel && label) {
+                    const addrEl = scope.querySelector(addrSel) || document.querySelector(addrSel);
+                    if (addrEl && String(addrEl.value || '').trim() === '') {
+                        addrEl.value = label.slice(0, 240);
+                    }
+                }
+                const resultsEl = box.querySelector('[data-map-search-results]');
+                if (resultsEl) {
+                    resultsEl.hidden = true;
+                    resultsEl.innerHTML = '';
+                }
+            }
+            return;
+        }
+
         const printBtn = event.target.closest('[data-print-report]');
         if (printBtn) {
             event.preventDefault();
@@ -3238,18 +3513,450 @@
         }
     });
 
+    async function runMapGeocodeSearch(box) {
+        if (!box) return;
+        const input = box.querySelector('[data-map-search-input]');
+        const resultsEl = box.querySelector('[data-map-search-results]');
+        const btn = box.querySelector('[data-map-search-btn]');
+        if (!input || !resultsEl) return;
+
+        const q = String(input.value || '').trim();
+        if (q.length < 3) {
+            resultsEl.innerHTML = '<p class="map-search-empty">Escribe al menos 3 caracteres para buscar.</p>';
+            resultsEl.hidden = false;
+            return;
+        }
+
+        if (btn) btn.classList.add('is-loading');
+        resultsEl.innerHTML = '<p class="map-search-empty">Buscando en Costa Rica…</p>';
+        resultsEl.hidden = false;
+
+        try {
+            const resp = await fetch('/api/geocodificar.php?q=' + encodeURIComponent(q), {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            });
+            const data = await resp.json();
+            if (!resp.ok || !data || data.ok === false) {
+                resultsEl.innerHTML = '<p class="map-search-empty">' + escapeHtml(data?.error || 'No se pudo conectar al buscador. Marca el punto manualmente en el mapa.') + '</p>';
+                return;
+            }
+            const items = Array.isArray(data.results) ? data.results : [];
+            if (items.length === 0) {
+                resultsEl.innerHTML = '<p class="map-search-empty">Sin coincidencias en Costa Rica. Prueba con otro cantón o haz clic en el mapa.</p>';
+                return;
+            }
+            resultsEl.innerHTML = items.map((item) => (
+                '<button type="button" class="map-search-item" data-map-search-pick data-lat="' + escapeHtml(String(item.lat)) + '" data-lon="' + escapeHtml(String(item.lon)) + '" data-label="' + escapeHtml(String(item.label || '')) + '">'
+                + '<strong>' + escapeHtml(String(item.short_name || item.label || '')) + '</strong>'
+                + '<span>' + escapeHtml(String(item.label || '')) + '</span>'
+                + '</button>'
+            )).join('');
+        } catch {
+            resultsEl.innerHTML = '<p class="map-search-empty">Buscador sin conexión. Puedes marcar el punto directamente en el mapa.</p>';
+        } finally {
+            if (btn) btn.classList.remove('is-loading');
+        }
+    }
+
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' && event.target && event.target.matches && event.target.matches('[data-map-search-input]')) {
+            event.preventDefault();
+            runMapGeocodeSearch(event.target.closest('[data-map-search-box]'));
+        }
+    });
+
+    function updateMercanciasTotales(root = document) {
+        const badge = root.querySelector ? root.querySelector('[data-mercancias-totales]') : null;
+        const lista = root.querySelector ? root.querySelector('[data-mercancias-lista]') : null;
+        if (!badge || !lista) return;
+        let peso = 0;
+        let vol = 0;
+        lista.querySelectorAll('input[name$="[peso_kg]"]').forEach((inp) => {
+            const v = parseFloat(String(inp.value || '').replace(',', '.'));
+            if (Number.isFinite(v) && v > 0) peso += v;
+        });
+        lista.querySelectorAll('input[name$="[volumen_m3]"]').forEach((inp) => {
+            const v = parseFloat(String(inp.value || '').replace(',', '.'));
+            if (Number.isFinite(v) && v > 0) vol += v;
+        });
+        const pesoFmt = peso.toLocaleString('es-CR', { maximumFractionDigits: 2 });
+        const volFmt = vol.toLocaleString('es-CR', { maximumFractionDigits: 3 });
+        badge.textContent = 'Total declarado: ' + pesoFmt + ' kg' + (vol > 0 ? (' · ' + volFmt + ' m³') : '');
+    }
+
     document.addEventListener('input', (event) => {
+        if (event.target && event.target.closest && event.target.closest('[data-mercancias-lista]')) {
+            updateMercanciasTotales(event.target.closest('form') || document);
+        }
         if (event.target && event.target.closest && event.target.closest('#reportes-filtros')) {
             syncReportExportLinks();
         }
     });
+    function updateBatchAssignSummary(root) {
+        const box = root && root.matches && root.matches('[data-batch-assign-root]')
+            ? root
+            : root?.querySelector?.('[data-batch-assign-root]');
+        if (!box) return;
+        const form = box.closest('form');
+        const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
+        const summaryEl = box.querySelector('[data-batch-summary]');
+        const overEl = box.querySelector('[data-batch-overweight]');
+        const freeKg = parseFloat(box.dataset.freeKg || '0') || 0;
+
+        let count = 0;
+        let totalKg = 0;
+        box.querySelectorAll('[data-batch-check]:checked').forEach((chk) => {
+            count++;
+            totalKg += parseFloat(chk.dataset.peso || '0') || 0;
+        });
+
+        const over = totalKg > freeKg + 0.001;
+        if (summaryEl) {
+            const rem = Math.max(0, freeKg - totalKg);
+            summaryEl.textContent = count + ' seleccionada' + (count === 1 ? '' : 's')
+                + ' (' + totalKg.toLocaleString('es-CR', { maximumFractionDigits: 2 }) + ' kg · quedan '
+                + rem.toLocaleString('es-CR', { maximumFractionDigits: 2 }) + ' kg libres)';
+        }
+        if (overEl) {
+            if (over) {
+                overEl.textContent = 'El peso seleccionado (' + totalKg.toLocaleString('es-CR', { maximumFractionDigits: 2 })
+                    + ' kg) excede la capacidad libre de la unidad (' + freeKg.toLocaleString('es-CR', { maximumFractionDigits: 2 }) + ' kg). Desmarca alguna solicitud.';
+                overEl.hidden = false;
+            } else {
+                overEl.hidden = true;
+                overEl.textContent = '';
+            }
+        }
+        if (submitBtn) {
+            submitBtn.disabled = (count === 0 || over);
+        }
+    }
+
+    document.addEventListener('click', (event) => {
+        const selCompatBtn = event.target.closest('[data-batch-select-compatible]');
+        if (selCompatBtn) {
+            event.preventDefault();
+            const box = selCompatBtn.closest('[data-batch-assign-root]');
+            if (!box) return;
+            const freeKg = parseFloat(box.dataset.freeKg || '0') || 0;
+            let acc = 0;
+            box.querySelectorAll('[data-batch-check]').forEach((chk) => {
+                if (chk.disabled) return;
+                const nivel = chk.dataset.nivel || '';
+                const peso = parseFloat(chk.dataset.peso || '0') || 0;
+                if ((nivel === 'optimo' || nivel === 'compatible') && (acc + peso <= freeKg + 0.001)) {
+                    chk.checked = true;
+                    acc += peso;
+                } else {
+                    chk.checked = false;
+                }
+            });
+            updateBatchAssignSummary(box);
+            return;
+        }
+
+        if (event.target && event.target.closest && event.target.closest('[data-add-mercancia], [data-remove-mercancia]')) {
+            const scope = event.target.closest('form') || document;
+            setTimeout(() => updateMercanciasTotales(scope), 30);
+        }
+
+        const openQcBtn = event.target.closest('[data-open-quick-client]');
+        if (openQcBtn) {
+            event.preventDefault();
+            const panel = document.querySelector('[data-quick-client-panel]');
+            if (panel) {
+                panel.hidden = !panel.hidden;
+                if (!panel.hidden) {
+                    panel.querySelector('#qc-identificacion')?.focus();
+                }
+            }
+            return;
+        }
+
+        const closeQcBtn = event.target.closest('[data-close-quick-client]');
+        if (closeQcBtn) {
+            event.preventDefault();
+            const panel = closeQcBtn.closest('[data-quick-client-panel]');
+            if (panel) panel.hidden = true;
+            return;
+        }
+
+        const qcHaciendaBtn = event.target.closest('[data-qc-hacienda]');
+        if (qcHaciendaBtn) {
+            event.preventDefault();
+            const panel = qcHaciendaBtn.closest('[data-quick-client-panel]');
+            if (!panel) return;
+            const idInput = panel.querySelector('#qc-identificacion');
+            const avisoEl = panel.querySelector('#qc-hacienda-aviso');
+            const idVal = String(idInput?.value || '').replace(/\D/g, '');
+            if (idVal.length < 9 || idVal.length > 12) {
+                if (avisoEl) {
+                    avisoEl.textContent = 'Ingresa entre 9 y 12 dígitos para consultar en Hacienda.';
+                    avisoEl.className = 'help has-text-warning';
+                    avisoEl.hidden = false;
+                }
+                return;
+            }
+            qcHaciendaBtn.classList.add('is-loading');
+            qcHaciendaBtn.disabled = true;
+            if (avisoEl) {
+                avisoEl.textContent = 'Consultando Ministerio de Hacienda…';
+                avisoEl.className = 'help';
+                avisoEl.hidden = false;
+            }
+            fetch('/api/hacienda.php?identificacion=' + encodeURIComponent(idVal), { credentials: 'same-origin' })
+                .then((res) => res.json())
+                .then((data) => {
+                    const rawNombre = data?.nombre || data?.datos?.nombre || '';
+                    if (data?.status === 'encontrado' && rawNombre) {
+                        const tipoChecked = panel.querySelector('[data-qc-tipo]:checked')?.value || 'fisico';
+                        if (tipoChecked === 'juridico') {
+                            const rEl = panel.querySelector('#qc-razon');
+                            const cEl = panel.querySelector('#qc-comercial');
+                            if (rEl) rEl.value = rawNombre;
+                            if (cEl && !cEl.value) cEl.value = rawNombre;
+                        } else {
+                            const parsed = descomponerNombreCR(rawNombre);
+                            const nEl = panel.querySelector('#qc-nombre');
+                            const a1El = panel.querySelector('#qc-apellido1');
+                            const a2El = panel.querySelector('#qc-apellido2');
+                            if (nEl) nEl.value = parsed.nombre;
+                            if (a1El) a1El.value = parsed.primerApellido;
+                            if (a2El) a2El.value = parsed.segundoApellido;
+                        }
+                        if (avisoEl) {
+                            avisoEl.textContent = 'Datos encontrados en Hacienda y precargados.';
+                            avisoEl.className = 'help has-text-success';
+                            avisoEl.hidden = false;
+                        }
+                    } else if (avisoEl) {
+                        avisoEl.textContent = data?.mensaje || 'No se encontró en Hacienda. Completa los datos manualmente.';
+                        avisoEl.className = 'help has-text-warning';
+                        avisoEl.hidden = false;
+                    }
+                })
+                .catch(() => {
+                    if (avisoEl) {
+                        avisoEl.textContent = 'No fue posible conectar con Hacienda. Completa los datos manualmente.';
+                        avisoEl.className = 'help has-text-warning';
+                        avisoEl.hidden = false;
+                    }
+                })
+                .finally(() => {
+                    qcHaciendaBtn.classList.remove('is-loading');
+                    qcHaciendaBtn.disabled = false;
+                });
+            return;
+        }
+
+        const qcSaveBtn = event.target.closest('[data-qc-save]');
+        if (qcSaveBtn) {
+            event.preventDefault();
+            const panel = qcSaveBtn.closest('[data-quick-client-panel]');
+            const form = qcSaveBtn.closest('form');
+            if (!panel || !form) return;
+            const errEl = panel.querySelector('#qc-error');
+            const showErr = (m) => {
+                if (!errEl) return;
+                errEl.textContent = m || '';
+                errEl.hidden = !m;
+            };
+            showErr('');
+
+            const tipo = panel.querySelector('[data-qc-tipo]:checked')?.value || 'fisico';
+            const csrf = form.querySelector('input[name="csrf_token"]')?.value || '';
+            const payload = new URLSearchParams();
+            payload.set('csrf_token', csrf);
+            payload.set('tipo', tipo);
+            payload.set('identificacion', (panel.querySelector('#qc-identificacion')?.value || '').trim());
+            payload.set('correo', (panel.querySelector('#qc-correo')?.value || '').trim());
+            payload.set('telefono', (panel.querySelector('#qc-telefono')?.value || '').trim());
+            if (tipo === 'fisico') {
+                payload.set('nombre', (panel.querySelector('#qc-nombre')?.value || '').trim());
+                payload.set('primer_apellido', (panel.querySelector('#qc-apellido1')?.value || '').trim());
+                payload.set('segundo_apellido', (panel.querySelector('#qc-apellido2')?.value || '').trim());
+            } else {
+                payload.set('razon_social', (panel.querySelector('#qc-razon')?.value || '').trim());
+                payload.set('nombre_comercial', (panel.querySelector('#qc-comercial')?.value || '').trim());
+            }
+
+            qcSaveBtn.classList.add('is-loading');
+            qcSaveBtn.disabled = true;
+
+            fetch('/clientes/crear_rapido.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8', Accept: 'application/json' },
+                credentials: 'same-origin',
+                body: payload.toString(),
+            })
+                .then(async (res) => ({ ok: res.ok, data: await res.json().catch(() => null) }))
+                .then(({ ok, data }) => {
+                    if (!ok || !data || !data.ok || !data.cliente) {
+                        showErr(data?.error || 'Revisa los datos obligatorios del cliente e inténtalo nuevamente.');
+                        return;
+                    }
+                    const cli = data.cliente;
+                    const selCli = form.querySelector('#solicitud-cliente');
+                    if (selCli) {
+                        const valStr = String(cli.cliente_id);
+                        const labelStr = cli.nombre + ' · ' + cli.identificacion;
+                        let opt = Array.from(selCli.options).find((o) => o.value === valStr);
+                        if (!opt) {
+                            opt = document.createElement('option');
+                            opt.value = valStr;
+                            opt.textContent = labelStr;
+                            opt.dataset.tipo = cli.tipo_cliente;
+                            opt.dataset.nombre = cli.nombre;
+                            opt.dataset.identificacion = cli.identificacion;
+                            opt.dataset.telefono = cli.telefono || '';
+                            opt.dataset.subtext = cli.correo || '';
+                            selCli.appendChild(opt);
+                        }
+                        if (selCli.tomselect) {
+                            selCli.tomselect.addOption({
+                                value: valStr,
+                                text: labelStr,
+                                subtext: cli.correo || '',
+                                tipo_cliente: cli.tipo_cliente,
+                                nombre: cli.nombre,
+                                identificacion: cli.identificacion,
+                                telefono: cli.telefono || '',
+                            });
+                            selCli.tomselect.setValue(valStr, false);
+                        } else {
+                            selCli.value = valStr;
+                            selCli.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                    }
+                    // Limpiar y cerrar solo el panel rápido
+                    panel.querySelectorAll('input[type="text"], input[type="email"]').forEach((i) => { i.value = ''; });
+                    const avH = panel.querySelector('#qc-hacienda-aviso');
+                    if (avH) avH.hidden = true;
+                    panel.hidden = true;
+                    mostrarAviso('Cliente registrado y seleccionado en la solicitud.', false);
+                })
+                .catch(() => {
+                    showErr('No se pudo conectar con el servidor para registrar el cliente.');
+                })
+                .finally(() => {
+                    qcSaveBtn.classList.remove('is-loading');
+                    qcSaveBtn.disabled = false;
+                });
+        }
+    });
     document.addEventListener('change', (event) => {
+        if (event.target && event.target.matches && event.target.matches('[data-auto-route-toggle]')) {
+            const form = event.target.closest('[data-trip-create-form]');
+            if (form) {
+                const autoOn = Boolean(event.target.checked);
+                const manualBox = form.querySelector('[data-manual-route-box]');
+                const rutaSel = form.querySelector('#viaje-ruta');
+                if (manualBox) manualBox.hidden = autoOn;
+                if (rutaSel) {
+                    rutaSel.required = !autoOn;
+                    rutaSel.disabled = autoOn;
+                    if (rutaSel.tomselect) {
+                        autoOn ? rutaSel.tomselect.disable() : rutaSel.tomselect.enable();
+                    }
+                }
+            }
+            return;
+        }
+        if (event.target && event.target.id === 'viaje-solicitud-inicial') {
+            const form = event.target.closest('[data-trip-create-form]');
+            if (form) {
+                const solSel = event.target;
+                const val = String(solSel.value || '').trim();
+                const autoWrap = form.querySelector('[data-auto-route-wrap]');
+                const autoChk = form.querySelector('[data-auto-route-toggle]');
+                const autoHelp = form.querySelector('[data-auto-route-help]');
+                const manualBox = form.querySelector('[data-manual-route-box]');
+                const rutaSel = form.querySelector('#viaje-ruta');
+
+                if (!val) {
+                    if (autoWrap) autoWrap.hidden = true;
+                    if (autoChk) autoChk.checked = false;
+                    if (manualBox) manualBox.hidden = false;
+                    if (rutaSel) {
+                        rutaSel.disabled = false;
+                        rutaSel.required = true;
+                        rutaSel.tomselect?.enable();
+                    }
+                    return;
+                }
+
+                const opt = Array.from(solSel.options || []).find((o) => o.value === val);
+                const oriId = opt?.dataset?.origen || '';
+                const desId = opt?.dataset?.destino || '';
+                const trayecto = opt?.dataset?.trayecto || '';
+                if (autoWrap) autoWrap.hidden = false;
+
+                // Buscar si ya existe una ruta exacta en #viaje-ruta
+                let exactRutaVal = '';
+                if (rutaSel && oriId && desId) {
+                    const matchOpt = Array.from(rutaSel.options || []).find(
+                        (rOpt) => rOpt.value && rOpt.dataset?.origen === oriId && rOpt.dataset?.destino === desId
+                    );
+                    if (matchOpt) exactRutaVal = matchOpt.value;
+                }
+
+                if (exactRutaVal !== '' && rutaSel) {
+                    if (autoChk) autoChk.checked = false;
+                    if (manualBox) manualBox.hidden = false;
+                    rutaSel.disabled = false;
+                    rutaSel.required = true;
+                    if (rutaSel.tomselect) {
+                        rutaSel.tomselect.enable();
+                        rutaSel.tomselect.setValue(exactRutaVal, true);
+                    } else {
+                        rutaSel.value = exactRutaVal;
+                    }
+                    if (autoHelp) {
+                        autoHelp.textContent = 'Se encontró y seleccionó una ruta exacta existente para ' + trayecto + '.';
+                    }
+                } else if (autoChk) {
+                    autoChk.checked = true;
+                    if (manualBox) manualBox.hidden = true;
+                    if (rutaSel) {
+                        rutaSel.disabled = true;
+                        rutaSel.required = false;
+                        rutaSel.tomselect?.disable();
+                    }
+                    if (autoHelp) {
+                        autoHelp.textContent = 'No existe una ruta exacta para ' + (trayecto || 'esta solicitud') + '; se creará automáticamente con distancia estimada (Haversine).';
+                    }
+                }
+            }
+            return;
+        }
+        if (event.target && event.target.matches && event.target.matches('[data-batch-check]')) {
+            updateBatchAssignSummary(event.target.closest('[data-batch-assign-root]'));
+        }
+        if (event.target && event.target.matches && event.target.matches('[data-qc-tipo]')) {
+            const panel = event.target.closest('[data-quick-client-panel]');
+            if (panel) {
+                const isJur = event.target.value === 'juridico';
+                const fisBox = panel.querySelector('[data-qc-fisico-fields]');
+                const jurBox = panel.querySelector('[data-qc-juridico-fields]');
+                if (fisBox) fisBox.hidden = isJur;
+                if (jurBox) jurBox.hidden = !isJur;
+            }
+        }
         if (event.target && event.target.closest && event.target.closest('#reportes-filtros')) {
             syncReportExportLinks();
         }
     });
     document.addEventListener('htmx:afterSwap', () => {
         syncReportExportLinks();
+        updateMercanciasTotales(document);
+        updateBatchAssignSummary(document);
+        const autoSuggestList = document.querySelector('#modal-contenido [data-stop-reorder-list][data-auto-suggest="1"]');
+        if (autoSuggestList && autoSuggestList.dataset.autoSuggestedDone !== '1') {
+            autoSuggestList.dataset.autoSuggestedDone = '1';
+            const btn = autoSuggestList.closest('form')?.querySelector('[data-stop-suggest-order]');
+            btn?.click();
+        }
     });
 
     if (document.readyState === 'loading') {

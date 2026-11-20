@@ -5,10 +5,27 @@ require_once __DIR__ . '/../app/bootstrap.php';
 require_permission('SOLICITUDES_VER');
 require_once __DIR__ . '/../app/layout.php';
 
+$rawAlerta = strtolower(trim((string)($_GET['alerta'] ?? '')));
+$alerta = in_array($rawAlerta, ['atrasadas', 'sin_asignar'], true) ? $rawAlerta : '';
+$alertaLabels = [
+    'atrasadas' => 'Mostrando únicamente solicitudes abiertas con fecha de entrega vencida (atrasadas).',
+    'sin_asignar' => 'Mostrando únicamente solicitudes pendientes de asignar a un viaje (Registrada / Pendiente de asignación).',
+];
+
 layout_start('solicitudes', 'Solicitudes', 'Consulta órdenes de transporte, destinatarios previstos y mercancías registradas.');
 ?>
+<?php if ($alerta !== ''): ?>
+    <div class="notification notification-warning is-flex is-justify-content-space-between is-align-items-center py-2 px-3 mb-3" style="gap: 0.75rem; flex-wrap: wrap;">
+        <span><?= e($alertaLabels[$alerta]) ?></span>
+        <a class="button is-small button-secondary" href="/solicitudes.php">Ver todas las solicitudes</a>
+    </div>
+<?php endif; ?>
+
 <section class="toolbar-panel" aria-label="Filtros y creación de solicitudes">
     <form class="filter-form" id="solicitudes-filtros" hx-get="/solicitudes/lista.php" hx-target="#solicitudes-resultado" hx-trigger="keyup changed delay:350ms from:input, change" hx-include="this">
+        <?php if ($alerta !== ''): ?>
+            <input type="hidden" name="alerta" value="<?= e($alerta) ?>">
+        <?php endif; ?>
         <div class="input-with-icon">
             <?= svg_icon('search', '', 'input-icon') ?>
             <input class="input" id="solicitud-buscar" type="search" name="buscar" maxlength="120" placeholder="Buscar por código, cliente o destinatario" aria-label="Buscar solicitudes">
@@ -37,6 +54,6 @@ layout_start('solicitudes', 'Solicitudes', 'Consulta órdenes de transporte, des
 </section>
 
 <section class="panel-box table-panel">
-    <div id="solicitudes-resultado" hx-get="/solicitudes/lista.php" hx-trigger="load" hx-swap="innerHTML"></div>
+    <div id="solicitudes-resultado" hx-get="/solicitudes/lista.php" hx-include="#solicitudes-filtros" hx-trigger="load" hx-swap="innerHTML"></div>
 </section>
 <?php layout_end(); ?>

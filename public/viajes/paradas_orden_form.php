@@ -41,11 +41,12 @@ if (count($paradas) < 2) {
 }
 
 $total = count($paradas);
+$autoSugerir = ((string)($_GET['auto_sugerir'] ?? '') === '1');
 ?>
 <div class="modal is-active" role="dialog" aria-modal="true" aria-labelledby="titulo-reordenar-paradas">
     <div class="modal-background" data-close-modal></div>
     <div class="modal-card">
-        <?= modal_header('titulo-reordenar-paradas', 'Reordenar paradas del itinerario') ?>
+        <?= modal_header('titulo-reordenar-paradas', $autoSugerir ? 'Ruta inteligente — Orden sugerido' : 'Reordenar paradas del itinerario') ?>
         <form hx-post="/viajes/paradas_orden_guardar.php" hx-target="#mensaje-reordenar-paradas" hx-swap="innerHTML" hx-disabled-elt="find button[type=submit]">
             <section class="modal-card-body">
                 <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
@@ -72,10 +73,29 @@ $total = count($paradas);
                     <p class="help mb-3">Usa los botones Subir y Bajar para definir el orden secuencial del itinerario y guarda los cambios.</p>
                 <?php endif; ?>
 
-                <ol class="stop-reorder-list" data-stop-reorder-list>
+                <?php
+                $precedencePairs = [];
+                foreach ($asignaciones as $asig) {
+                    $pRec = (int)($asig['parada_recogida_id'] ?? 0);
+                    $pEnt = (int)($asig['parada_entrega_id'] ?? 0);
+                    if ($pRec > 0 && $pEnt > 0 && $pRec !== $pEnt) {
+                        $precedencePairs[] = [$pRec, $pEnt];
+                    }
+                }
+                ?>
+                <div class="is-flex is-justify-content-space-between is-align-items-center mb-3" style="gap: 0.75rem; flex-wrap: wrap;">
+                    <span class="help mb-0">Puedes ajustar manualmente o pedir una sugerencia por cercanía geográfica.</span>
+                    <button class="button is-small button-secondary" type="button" data-stop-suggest-order>
+                        <?= svg_icon('map-pin') ?>
+                        <span>Sugerir orden óptimo</span>
+                    </button>
+                </div>
+                <div id="orden-optimo-aviso" class="notification notification-info p-2 mb-3" role="status" aria-live="polite" hidden></div>
+
+                <ol class="stop-reorder-list" data-stop-reorder-list data-auto-suggest="<?= $autoSugerir ? '1' : '0' ?>" data-precedence-pairs="<?= e(json_encode($precedencePairs)) ?>">
                     <?php foreach ($paradas as $index => $row): ?>
                         <?php $vinculada = !empty($row['tiene_solicitudes']); ?>
-                        <li class="stop-reorder-item" data-stop-item data-parada-id="<?= (int)$row['parada_id'] ?>">
+                        <li class="stop-reorder-item" data-stop-item data-parada-id="<?= (int)$row['parada_id'] ?>" data-lat="<?= e($row['latitud'] ?? '') ?>" data-lon="<?= e($row['longitud'] ?? '') ?>" data-tipo="<?= e($row['tipo_parada'] ?? '') ?>">
                             <input type="hidden" name="orden_paradas[]" value="<?= (int)$row['parada_id'] ?>">
                             <span class="stop-reorder-badge" data-stop-order-badge>#<?= $index + 1 ?></span>
                             <div class="stop-reorder-info">

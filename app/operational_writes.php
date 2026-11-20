@@ -61,11 +61,13 @@ function operation_email(mixed $value, int $maxLength = 150, bool $required = tr
 function operation_future_datetime(mixed $value): string
 {
     $text = trim((string)$value);
-    $date = DateTimeImmutable::createFromFormat('!Y-m-d\\TH:i', $text, new DateTimeZone('UTC'));
-    if ($date === false || $date->format('Y-m-d\\TH:i') !== $text || $date <= new DateTimeImmutable('now', new DateTimeZone('UTC'))) {
-        throw new InvalidArgumentException('Indica una fecha futura válida.');
+    $crTz = new DateTimeZone('America/Costa_Rica');
+    $date = DateTimeImmutable::createFromFormat('!Y-m-d\\TH:i', $text, $crTz);
+    $nowCr = new DateTimeImmutable('now', $crTz);
+    if ($date === false || $date->format('Y-m-d\\TH:i') !== $text || $date <= $nowCr) {
+        throw new InvalidArgumentException('Indica una fecha y hora futura válida (hora de Costa Rica).');
     }
-    return $date->format('Y-m-d H:i:s');
+    return $date->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s');
 }
 
 function operation_reference_url(mixed $value): string

@@ -43,8 +43,11 @@ function render_customer_detail_card(array $customer, int $id, bool $isPhysical,
         <p class="panel-box-subtitle"><?= e($isPhysical ? 'Persona física' : 'Persona jurídica') ?></p>
     </div>
     <div class="buttons">
+        <?php if ($isActive && has_permission('SOLICITUDES_CREAR')): ?>
+            <button class="button is-primary" type="button" hx-get="/solicitudes/form.php?cliente_id=<?= $id ?>" hx-target="#modal-contenido"><?= svg_icon('plus') ?><span>Nueva solicitud</span></button>
+        <?php endif; ?>
         <?php if ($canEdit): ?>
-            <button class="button is-primary" type="button" hx-get="/clientes/editar_form.php?id=<?= $id ?>" hx-target="#modal-contenido"><?= svg_icon('edit') ?><span>Editar</span></button>
+            <button class="button button-secondary" type="button" hx-get="/clientes/editar_form.php?id=<?= $id ?>" hx-target="#modal-contenido"><?= svg_icon('edit') ?><span>Editar</span></button>
         <?php endif; ?>
         <?php if ($canDeactivate && $isActive): ?>
             <button class="button is-danger" type="button" hx-get="/clientes/desactivar_form.php?id=<?= $id ?>" hx-target="#modal-contenido"><?= svg_icon('deactivate') ?><span>Desactivar</span></button>
@@ -85,4 +88,54 @@ layout_start('clientes', 'Detalle de cliente', 'Ficha administrativa con edició
 <section class="panel-box" id="cliente-detalle-panel" hx-get="/clientes/detalle.php?id=<?= (int)$id ?>&parcial=1" hx-trigger="clienteActualizado from:body" hx-swap="innerHTML">
     <?php render_customer_detail_card($customer, (int)$id, $isPhysical, $isActive, $canEdit, $canDeactivate, $displayName); ?>
 </section>
+
+<?php if (has_permission('SOLICITUDES_VER')): ?>
+    <?php
+    $solicitudesCliente = [];
+    try {
+        $solicitudesCliente = read_procedure_list(
+            'DECLARE @total_registros INT; EXEC dbo.sp_listar_solicitudes @buscar=NULL,@estado=NULL,@cliente_id=?,@desde=NULL,@hasta=NULL,@pagina=1,@por_pagina=15,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;',
+            [(int)$id]
+        )['rows'];
+    } catch (PDOException) {
+        $solicitudesCliente = [];
+    }
+    ?>
+    <section class="panel-box table-panel">
+        <div class="panel-box-header">
+            <div>
+                <h2 class="panel-box-title">Solicitudes de este cliente (<?= count($solicitudesCliente) ?>)</h2>
+                <p class="panel-box-subtitle">Últimas órdenes de transporte registradas para este cliente.</p>
+            </div>
+        </div>
+        <?php if (!$solicitudesCliente): ?>
+            <?= empty_state('Sin solicitudes registradas', 'Usa «Nueva solicitud» arriba para registrar el primer pedido de este cliente.') ?>
+        <?php else: ?>
+            <div class="table-container">
+                <table class="table is-fullwidth is-hoverable">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Trayecto</th>
+                            <th>Estado</th>
+                            <th>Prioridad</th>
+                            <th>Entrega requerida</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($solicitudesCliente as $sol): ?>
+                            <tr>
+                                <td><a class="table-link" href="/solicitudes/detalle.php?id=<?= (int)$sol['solicitud_id'] ?>"><strong><?= e($sol['codigo_solicitud']) ?></strong></a></td>
+                                <td><?= e(($sol['origen_nombre'] ?? '') . ' → ' . ($sol['destino_nombre'] ?? '')) ?></td>
+                                <td><?= status_tag($sol['estado']) ?></td>
+                                <td><?= status_tag($sol['prioridad_actual']) ?></td>
+                                <td><?= format_utc_datetime($sol['fecha_entrega_requerida']) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        <?php endif; ?>
+    </section>
+<?php endif; ?>
 <?php layout_end(); ?>

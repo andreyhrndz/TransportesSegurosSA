@@ -21,7 +21,7 @@ $tipo = ($_GET['tipo'] ?? '') === 'juridico' ? 'juridico' : 'fisico';
             <div class="control">
               <button class="button button-secondary" type="button" id="btn-consultar-hacienda-cli">
                 <?= svg_icon('search') ?>
-                <span>Consultar Hacienda</span>
+                <span>Consultar</span>
               </button>
             </div>
           </div>

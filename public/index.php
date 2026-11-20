@@ -10,13 +10,16 @@ if (is_string($requestedPath) && preg_match('/\.(?:avif|bmp|css|gif|ico|jpe?g|js
 
 require_once __DIR__ . '/../app/bootstrap.php';
 require_once __DIR__ . '/../app/read_queries.php';
-require_permission('REPORTES_VER');
+require_login();
 require_once __DIR__ . '/../app/layout.php';
 
 $stats = [];
 $recientes = [];
 $solicitudesPorEstado = [];
 $panoramaOperativo = [];
+$alertasResumen = [];
+$urgentesSinAsignar = [];
+$licenciasAlerta = [];
 
 try {
     if (has_permission('CLIENTES_VER')) {
@@ -80,6 +83,18 @@ try {
             []
         )['total'];
         $panoramaOperativo['Unidades disponibles'] = $vehiculosDisponibles;
+    }
+    try {
+        $alertaSets = read_procedure_sets('EXEC dbo.sp_obtener_alertas_panel;', []);
+        $alertasResumen = $alertaSets[0][0] ?? [];
+        if (has_permission('SOLICITUDES_VER')) {
+            $urgentesSinAsignar = $alertaSets[1] ?? [];
+        }
+        if (has_permission('FLOTAS_VER')) {
+            $licenciasAlerta = $alertaSets[2] ?? [];
+        }
+    } catch (PDOException) {
+        $alertasResumen = [];
     }
 } catch (PDOException) {
     read_error_response('No se pudo actualizar el resumen de operaciones.');
@@ -175,6 +190,104 @@ layout_start('dashboard', 'Panel general', 'Resumen de operaciones, estado del s
         </article>
     </div>
 </section>
+
+<?php
+$pendientesEnt = has_permission('ENTREGAS_VER') ? (int)($alertasResumen['entregas_pendientes'] ?? 0) : 0;
+$sinAsignarCnt = has_permission('SOLICITUDES_VER') ? (int)($alertasResumen['solicitudes_sin_asignar'] ?? 0) : 0;
+$atrasadasCnt = has_permission('SOLICITUDES_VER') ? (int)($alertasResumen['solicitudes_atrasadas'] ?? 0) : 0;
+$incAbiertasCnt = has_permission('INCIDENCIAS_VER') ? (int)($alertasResumen['incidencias_abiertas'] ?? 0) : 0;
+$licAlertaCnt = has_permission('FLOTAS_VER') ? (int)($alertasResumen['licencias_alerta'] ?? 0) : 0;
+$hayAlertas = ($pendientesEnt + $sinAsignarCnt + $atrasadasCnt + $incAbiertasCnt + $licAlertaCnt) > 0;
+?>
+<?php if ($hayAlertas): ?>
+<section class="panel-box" aria-labelledby="centro-atencion-hoy">
+    <div class="panel-box-header">
+        <div>
+            <h2 id="centro-atencion-hoy" class="panel-box-title">Centro de atención operativa</h2>
+            <p class="panel-box-subtitle">Pendientes que requieren acción inmediata del equipo de despacho y flota.</p>
+        </div>
+    </div>
+    <div class="buttons mb-3" style="flex-wrap: wrap;">
+        <?php if ($atrasadasCnt > 0): ?>
+            <a class="button is-small is-danger" href="/solicitudes.php?alerta=atrasadas">
+                <?= svg_icon('alert-triangle') ?>
+                <span><?= $atrasadasCnt ?> solicitud<?= $atrasadasCnt === 1 ? '' : 'es' ?> atrasada<?= $atrasadasCnt === 1 ? '' : 's' ?></span>
+            </a>
+        <?php endif; ?>
+        <?php if ($sinAsignarCnt > 0): ?>
+            <a class="button is-small is-warning" href="/solicitudes.php?alerta=sin_asignar">
+                <?= svg_icon('requests') ?>
+                <span><?= $sinAsignarCnt ?> por asignar a viaje</span>
+            </a>
+        <?php endif; ?>
+        <?php if ($pendientesEnt > 0): ?>
+            <a class="button is-small is-primary" href="/entregas.php?seccion=pendientes">
+                <?= svg_icon('deliveries') ?>
+                <span><?= $pendientesEnt ?> entrega<?= $pendientesEnt === 1 ? '' : 's' ?> en tránsito</span>
+            </a>
+        <?php endif; ?>
+        <?php if ($incAbiertasCnt > 0): ?>
+            <a class="button is-small button-secondary" href="/entregas.php?seccion=incidencias&estado=ABIERTA">
+                <?= svg_icon('alert-triangle') ?>
+                <span><?= $incAbiertasCnt ?> incidencia<?= $incAbiertasCnt === 1 ? '' : 's' ?> abierta<?= $incAbiertasCnt === 1 ? '' : 's' ?></span>
+            </a>
+        <?php endif; ?>
+        <?php if ($licAlertaCnt > 0): ?>
+            <a class="button is-small is-warning" href="/flota.php?seccion=conductores&licencia_alerta=1">
+                <?= svg_icon('shield') ?>
+                <span><?= $licAlertaCnt ?> licencia<?= $licAlertaCnt === 1 ? '' : 's' ?> vencida<?= $licAlertaCnt === 1 ? '' : 's' ?> o por vencer (≤30d)</span>
+            </a>
+        <?php endif; ?>
+    </div>
+
+    <?php if ($urgentesSinAsignar): ?>
+        <div class="table-container mb-3">
+            <table class="table is-fullwidth is-hoverable is-narrow">
+                <thead>
+                    <tr>
+                        <th>Solicitud sin asignar</th>
+                        <th>Cliente</th>
+                        <th>Trayecto</th>
+                        <th>Prioridad</th>
+                        <th>Entrega requerida</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($urgentesSinAsignar as $u): ?>
+                        <tr>
+                            <td><a class="table-link" href="/solicitudes/detalle.php?id=<?= (int)$u['solicitud_id'] ?>"><strong><?= e($u['codigo_solicitud']) ?></strong></a></td>
+                            <td><?= e($u['cliente_nombre']) ?></td>
+                            <td><?= e($u['origen_nombre'] . ' → ' . $u['destino_nombre']) ?></td>
+                            <td>
+                                <?= status_tag($u['prioridad_actual']) ?>
+                                <?php if (!empty($u['esta_atrasada'])): ?>
+                                    <span class="tag is-danger is-light ml-1">Atrasada</span>
+                                <?php endif; ?>
+                            </td>
+                            <td><?= e(format_utc_datetime($u['fecha_entrega_requerida'])) ?></td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($licenciasAlerta): ?>
+        <div class="notification notification-warning py-2 px-3 mb-0">
+            <strong>Alertas de licencias de conductores (Ley 9078):</strong>
+            <?php
+            $licItems = [];
+            foreach ($licenciasAlerta as $la) {
+                $dias = (int)$la['dias_restantes'];
+                $estadoLic = $dias < 0 ? 'VENCIDA hace ' . abs($dias) . ' d' : ($dias === 0 ? 'vence HOY' : 'vence en ' . $dias . ' d');
+                $licItems[] = e($la['conductor_nombre']) . ' (' . e($la['categoria_codigo']) . ' · ' . $estadoLic . ')';
+            }
+            echo implode(' · ', $licItems);
+            ?>
+        </div>
+    <?php endif; ?>
+</section>
+<?php endif; ?>
 
 <?php if ($solicitudesPorEstado || $panoramaOperativo): ?>
 <section class="dashboard-charts-grid" aria-label="Analítica operativa">

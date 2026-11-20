@@ -3489,3 +3489,72 @@ body.is-modal-open {
         break-inside: avoid;
     }
 }
+
+/* Buscador de direcciones sobre mapa Leaflet */
+.map-search-results {
+    background: var(--surface-card, #141b26);
+    border: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.25));
+    border-radius: 6px;
+    max-height: 190px;
+    overflow-y: auto;
+    margin-top: 0.25rem;
+}
+.map-search-item {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+    text-align: left;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--border-subtle, rgba(148, 163, 184, 0.14));
+    padding: 0.45rem 0.65rem;
+    color: inherit;
+    cursor: pointer;
+    font-size: 0.82rem;
+}
+.map-search-item:last-child {
+    border-bottom: 0;
+}
+.map-search-item:hover,
+.map-search-item:focus-visible {
+    background: rgba(59, 130, 246, 0.14);
+    outline: none;
+}
+.map-search-item span {
+    font-size: 0.74rem;
+    opacity: 0.78;
+}
+.map-search-empty {
+    padding: 0.45rem 0.65rem;
+    font-size: 0.8rem;
+    opacity: 0.8;
+    margin: 0;
+}
+
+/* Mejoras visuales y boton Aplicar en Flatpickr datetime */
+.flatpickr-day.today:not(.selected) {
+    border: 1px dashed var(--color-border-strong) !important;
+    background: transparent !important;
+    color: var(--color-text) !important;
+    font-weight: 600;
+}
+.flatpickr-day.selected,
+.flatpickr-day.selected:hover,
+.flatpickr-day.selected:focus {
+    background: var(--color-primary) !important;
+    border-color: var(--color-primary) !important;
+    color: var(--color-primary-ink) !important;
+    font-weight: 700;
+}
+.flatpickr-footer-btn.is-apply {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    color: var(--color-primary-ink);
+    font-weight: 600;
+    margin-left: auto;
+}
+.flatpickr-footer-btn.is-apply:hover {
+    filter: brightness(1.08);
+    color: var(--color-primary-ink);
+}

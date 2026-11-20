@@ -30,6 +30,7 @@ function audit_module_options(): array
         'tipos_mercancia' => 'Tipos de mercancía',
         'tipos_incidencia' => 'Tipos de incidencia',
         'tipos_documento' => 'Tipos de documento',
+        'respaldos' => 'Respaldos y recuperación',
     ];
 }
 
@@ -49,6 +50,10 @@ function audit_action_options(): array
         'PASSWORD_RESET' => 'Restablecimiento de contraseña',
         'ACTUALIZAR_PRINCIPAL' => 'Actualización de licencia',
         'UPSERT' => 'Actualización de registro',
+        'BACKUP_FULL' => 'Respaldo FULL verificado',
+        'BACKUP_DIFF' => 'Respaldo Diferencial verificado',
+        'BACKUP_LOG' => 'Respaldo Transaction Log (.trn) verificado',
+        'ETL_SYNC' => 'Sincronización ETL Data Warehouse',
     ];
 }
 

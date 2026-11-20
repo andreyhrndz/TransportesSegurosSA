@@ -11,6 +11,7 @@ if (!in_array($action, ['registrar', 'resolver'], true)) {
 }
 require_permission($action === 'registrar' ? 'INCIDENCIAS_REGISTRAR' : 'INCIDENCIAS_RESOLVER');
 
+$preselectedSolicitud = filter_var($_GET['solicitud_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 0;
 if ($action === 'registrar') {
     try {
         $solicitudes = operation_list('DECLARE @total_registros INT; EXEC dbo.sp_listar_solicitudes @buscar=NULL,@estado=NULL,@cliente_id=NULL,@desde=NULL,@hasta=NULL,@pagina=1,@por_pagina=100,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;');
@@ -42,7 +43,7 @@ if ($action === 'registrar') {
                         <select id="incidencia-solicitud" name="solicitud_id" data-combobox <?= has_permission('SOLICITUDES_VER') ? 'data-remote-url="/solicitudes/lista.php"' : '' ?> data-placeholder="Buscar solicitud por código o cliente…" required>
                             <option value="">Selecciona solicitud…</option>
                             <?php foreach ($solicitudes as $row): ?>
-                                <option value="<?= (int)$row['solicitud_id'] ?>" data-subtext="<?= e(($row['origen_nombre'] ?? '') . ' → ' . ($row['destino_nombre'] ?? '') . ' · ' . humanize_status($row['estado'])) ?>">
+                                <option value="<?= (int)$row['solicitud_id'] ?>" <?= (int)$row['solicitud_id'] === $preselectedSolicitud ? 'selected' : '' ?> data-subtext="<?= e(($row['origen_nombre'] ?? '') . ' → ' . ($row['destino_nombre'] ?? '') . ' · ' . humanize_status($row['estado'])) ?>">
                                     <?= e($row['codigo_solicitud'] . ' · ' . humanize_status($row['estado'])) ?>
                                 </option>
                             <?php endforeach; ?>

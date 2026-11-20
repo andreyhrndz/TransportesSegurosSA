@@ -6,6 +6,7 @@ require_permission('VIAJES_VER');
 header('Cache-Control: no-store');
 
 $allowed = ['PLANIFICADO', 'EN_CURSO', 'FINALIZADO', 'CANCELADO'];
+$search = read_optional_text($_GET['buscar'] ?? null, 100);
 $status = strtoupper((string)($_GET['estado'] ?? ''));
 $status = in_array($status, $allowed, true) ? $status : null;
 $from = read_optional_date($_GET['desde'] ?? null);
@@ -15,8 +16,8 @@ $perPage = 10;
 
 try {
     $result = read_procedure_list(
-        'DECLARE @total_registros INT; EXEC dbo.sp_listar_viajes @estado=?, @desde=?, @hasta=?, @pagina=?, @por_pagina=?, @total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;',
-        [$status, $from, $to, $page, $perPage]
+        'DECLARE @total_registros INT; EXEC dbo.sp_listar_viajes @estado=?, @desde=?, @hasta=?, @pagina=?, @por_pagina=?, @total_registros=@total_registros OUTPUT, @buscar=?; SELECT @total_registros AS total_registros;',
+        [$status, $from, $to, $page, $perPage, $search]
     );
 } catch (PDOException) {
     read_error_response();
@@ -34,16 +35,21 @@ $page = min($page, $pages);
                 <th>Vehículo</th>
                 <th>Conductor</th>
                 <th>Ruta</th>
+                <th>Órdenes / Entregas</th>
                 <th>Salida programada</th>
             </tr>
         </thead>
         <tbody>
             <?php if (!$result['rows']): ?>
                 <tr>
-                    <td colspan="6"><?= empty_state('Sin viajes', 'No hay viajes que coincidan con los filtros seleccionados.') ?></td>
+                    <td colspan="7"><?= empty_state('Sin viajes', 'No hay viajes que coincidan con los filtros seleccionados.') ?></td>
                 </tr>
             <?php endif; ?>
             <?php foreach ($result['rows'] as $row): ?>
+                <?php
+                $totSol = (int)($row['total_solicitudes'] ?? 0);
+                $totEnt = (int)($row['entregas_registradas'] ?? 0);
+                ?>
                 <tr>
                     <td>
                         <a class="table-link" href="/viajes/detalle.php?id=<?= (int)$row['viaje_id'] ?>">
@@ -54,6 +60,13 @@ $page = min($page, $pages);
                     <td><code><?= e($row['placa']) ?></code></td>
                     <td><?= e($row['conductor_nombre']) ?></td>
                     <td><?= e($row['ruta_nombre']) ?></td>
+                    <td>
+                        <?php if ($totSol === 0): ?>
+                            <span class="has-text-grey">Sin órdenes</span>
+                        <?php else: ?>
+                            <span><strong><?= $totEnt ?> / <?= $totSol ?></strong> entregada<?= $totEnt === 1 ? '' : 's' ?></span>
+                        <?php endif; ?>
+                    </td>
                     <td><?= format_utc_datetime($row['fecha_programada_salida']) ?></td>
                 </tr>
             <?php endforeach; ?>

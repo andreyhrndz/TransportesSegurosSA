@@ -187,6 +187,7 @@ if ($isStopLocationsContext) {
 $search = read_optional_text($_GET['buscar'] ?? null, $section === 'vehiculos' ? 80 : 120);
 $page = read_page_number($_GET['pagina'] ?? null);
 $perPage = $isJson ? 25 : 10;
+$licenciaAlerta = (!$isJson && $section === 'conductores' && (string)($_GET['licencia_alerta'] ?? '') === '1');
 
 $allowedStates = $section === 'vehiculos'
     ? ['DISPONIBLE', 'ASIGNADO', 'MANTENIMIENTO', 'FUERA_SERVICIO']
@@ -198,6 +199,26 @@ try {
     if ($isStopLocationsContext) {
         $sqlToRun = 'DECLARE @total_registros INT; EXEC dbo.sp_listar_ubicaciones_parada @buscar=?,@pagina=?,@por_pagina=?,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;';
         $params = [$search, $page, $perPage];
+        $result = read_procedure_list($sqlToRun, $params);
+    } elseif ($licenciaAlerta) {
+        $rawRes = read_procedure_list($cfg['sql'], [$state, 1, $search, 1, 100]);
+        $todayCr = (new DateTimeImmutable('now', new DateTimeZone('America/Costa_Rica')))->setTime(0, 0);
+        $limitCr = $todayCr->modify('+30 days');
+        $filtered = array_values(array_filter($rawRes['rows'], static function (array $row) use ($limitCr): bool {
+            $iso = substr((string)($row['fecha_vencimiento_licencia'] ?? ''), 0, 10);
+            if ($iso === '') {
+                return false;
+            }
+            $dt = DateTimeImmutable::createFromFormat('!Y-m-d', $iso, new DateTimeZone('America/Costa_Rica'));
+            return $dt !== false && $dt <= $limitCr;
+        }));
+        $totLic = count($filtered);
+        $pagesTmp = max(1, (int)ceil($totLic / $perPage));
+        $pageSafe = min($page, $pagesTmp);
+        $result = [
+            'rows' => array_slice($filtered, ($pageSafe - 1) * $perPage, $perPage),
+            'total' => $totLic,
+        ];
     } else {
         $sqlToRun = $cfg['sql'];
         $params = match ($section) {
@@ -205,8 +226,8 @@ try {
             'rutas' => [$soloActivos, $search, $page, $perPage],
             'ubicaciones' => [$search, $soloActivos, $page, $perPage],
         };
+        $result = read_procedure_list($sqlToRun, $params);
     }
-    $result = read_procedure_list($sqlToRun, $params);
 } catch (PDOException) {
     if ($isJson) {
         header('Content-Type: application/json; charset=UTF-8');
@@ -326,6 +347,14 @@ $todayUtc = gmdate('Y-m-d');
                         $licBadges = $hasValidCats ? array_filter(array_map('trim', explode(',', $licVerifRaw))) : [];
                         $licDateIso = substr((string)($row['fecha_vencimiento_licencia'] ?? ''), 0, 10);
                         $isExpiredLic = $licDateIso !== '' && $licDateIso < $todayUtc;
+                        $licDaysLeft = null;
+                        if ($licDateIso !== '' && !$isExpiredLic) {
+                            $d1 = DateTimeImmutable::createFromFormat('!Y-m-d', $todayUtc, new DateTimeZone('UTC'));
+                            $d2 = DateTimeImmutable::createFromFormat('!Y-m-d', $licDateIso, new DateTimeZone('UTC'));
+                            if ($d1 && $d2) {
+                                $licDaysLeft = (int)$d1->diff($d2)->format('%r%a');
+                            }
+                        }
                         ?>
                         <td><strong><?= e(trim($row['nombre'] . ' ' . $row['primer_apellido'] . ' ' . ($row['segundo_apellido'] ?? ''))) ?></strong></td>
                         <td>
@@ -350,6 +379,8 @@ $todayUtc = gmdate('Y-m-d');
                                     Vence: <?= e(format_cr_date($row['fecha_vencimiento_licencia'])) ?>
                                     <?php if ($isExpiredLic): ?>
                                         <span class="status-tag status-tag-danger ml-1">Vencida</span>
+                                    <?php elseif ($licDaysLeft !== null && $licDaysLeft <= 30): ?>
+                                        <span class="status-tag status-tag-warning ml-1"><?= $licDaysLeft === 0 ? 'Vence hoy' : 'Vence en ' . $licDaysLeft . ' d' ?></span>
                                     <?php endif; ?>
                                 </span>
                             </div>

@@ -11,16 +11,48 @@ $states = ['REGISTRADA', 'PENDIENTE_ASIGNACION', 'ASIGNADA', 'EN_TRANSITO', 'ENT
 $search = read_optional_text($_GET['buscar'] ?? null, 120);
 $state = strtoupper((string)($_GET['estado'] ?? ''));
 $state = in_array($state, $states, true) ? $state : null;
+$rawAlerta = strtolower(trim((string)($_GET['alerta'] ?? '')));
+$alerta = (!$isJson && in_array($rawAlerta, ['atrasadas', 'sin_asignar'], true)) ? $rawAlerta : '';
 $from = read_optional_date($_GET['desde'] ?? null);
 $to = read_optional_date($_GET['hasta'] ?? null);
 $page = read_page_number($_GET['pagina'] ?? null);
 $perPage = $isJson ? 25 : 10;
 
 try {
-    $result = read_procedure_list(
-        'DECLARE @total_registros INT; EXEC dbo.sp_listar_solicitudes @buscar=?, @estado=?, @cliente_id=NULL, @desde=?, @hasta=?, @pagina=?, @por_pagina=?, @total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;',
-        [$search, $state, $from, $to, $page, $perPage]
-    );
+    if ($alerta !== '') {
+        // Consultar conjunto amplio para aplicar el filtro de alerta operativa con exactitud
+        $rawRes = read_procedure_list(
+            'DECLARE @total_registros INT; EXEC dbo.sp_listar_solicitudes @buscar=?, @estado=?, @cliente_id=NULL, @desde=?, @hasta=?, @pagina=1, @por_pagina=100, @total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;',
+            [$search, $state, $from, $to]
+        );
+        $nowTs = time();
+        $filtered = array_values(array_filter($rawRes['rows'], static function (array $row) use ($alerta, $nowTs): bool {
+            $st = (string)($row['estado'] ?? '');
+            if ($alerta === 'sin_asignar') {
+                return in_array($st, ['REGISTRADA', 'PENDIENTE_ASIGNACION'], true);
+            }
+            if ($alerta === 'atrasadas') {
+                if (!in_array($st, ['REGISTRADA', 'PENDIENTE_ASIGNACION', 'ASIGNADA', 'EN_TRANSITO'], true)) {
+                    return false;
+                }
+                $ts = !empty($row['fecha_entrega_requerida']) ? strtotime((string)$row['fecha_entrega_requerida'] . ' UTC') : false;
+                return $ts !== false && $ts < $nowTs;
+            }
+            return true;
+        }));
+        $totalFiltered = count($filtered);
+        $pagesTmp = max(1, (int)ceil($totalFiltered / $perPage));
+        $pageSafe = min($page, $pagesTmp);
+        $result = [
+            'rows' => array_slice($filtered, ($pageSafe - 1) * $perPage, $perPage),
+            'total' => $totalFiltered,
+        ];
+    } else {
+        $result = read_procedure_list(
+            'DECLARE @total_registros INT; EXEC dbo.sp_listar_solicitudes @buscar=?, @estado=?, @cliente_id=NULL, @desde=?, @hasta=?, @pagina=?, @por_pagina=?, @total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;',
+            [$search, $state, $from, $to, $page, $perPage]
+        );
+    }
 } catch (PDOException) {
     if ($isJson) {
         header('Content-Type: application/json; charset=UTF-8');
@@ -82,7 +114,16 @@ $page = min($page, $pages);
                     <td><?= e($row['origen_nombre']) ?> → <?= e($row['destino_nombre']) ?></td>
                     <td><?= status_tag($row['estado']) ?></td>
                     <td><?= status_tag($row['prioridad_actual']) ?></td>
-                    <td><?= format_utc_datetime($row['fecha_entrega_requerida']) ?></td>
+                    <td>
+                        <?= format_utc_datetime($row['fecha_entrega_requerida']) ?>
+                        <?php
+                        $esAbierta = in_array($row['estado'], ['REGISTRADA', 'PENDIENTE_ASIGNACION', 'ASIGNADA', 'EN_TRANSITO'], true);
+                        $tsReq = !empty($row['fecha_entrega_requerida']) ? strtotime((string)$row['fecha_entrega_requerida'] . ' UTC') : false;
+                        if ($esAbierta && $tsReq !== false && $tsReq < time()):
+                        ?>
+                            <span class="tag is-danger is-light ml-1">Atrasada</span>
+                        <?php endif; ?>
+                    </td>
                 </tr>
             <?php endforeach; ?>
         </tbody>

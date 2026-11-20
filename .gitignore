@@ -18,3 +18,4 @@
 node_modules/
 tests/visual_results/
 /tools/local/
+/storage/
