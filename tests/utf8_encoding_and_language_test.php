@@ -215,6 +215,7 @@ try {
         '/usuarios.php' => 'Usuarios y permisos',
         '/flota.php' => 'Flota y catálogos',
         '/reportes.php' => 'Reportes',
+        '/auditoria.php' => 'Historial de actividad',
     ];
 
     foreach ($fullPages as $path => $expectedText) {
@@ -255,11 +256,11 @@ try {
         '/flota/lista.php?seccion=ubicaciones',
         '/flota/lista.php?seccion=catalogos',
         '/flota/form.php?entidad=vehiculo',
-        '/reportes/lista.php?seccion=auditoria',
+        '/auditoria/lista.php',
         '/reportes/lista.php?seccion=solicitudes',
-        '/reportes/lista.php?seccion=viajes',
         '/reportes/lista.php?seccion=entregas',
-        '/reportes/lista.php?seccion=flota',
+        '/reportes/lista.php?seccion=historico_dw',
+        '/reportes/exportar.php?seccion=solicitudes&formato=imprimir',
     ];
 
     foreach ($htmxFragments as $fragPath) {
@@ -347,7 +348,10 @@ try {
         str_contains($listHtml, $nombreUnicode) && str_contains($listHtml, $direccionUnicode),
         'El fragmento HTML debe mostrar exactamente los caracteres "á é í ó ú Á É Í Ó Ú ñ Ñ ü ¿ ¡" sin doble escape.'
     );
-    utf8_assert(!str_contains($listHtml, '&amp;'), 'No debe existir doble escape HTML (&amp;) al presentar el texto Unicode.');
+    utf8_assert(
+        !str_contains(strip_tags($listHtml), '&amp;') && !str_contains($listHtml, '&amp;amp;'),
+        'No debe existir doble escape HTML (&amp;) al presentar el texto Unicode.'
+    );
 
     // Recuperar en modal de edición
     [$editStatus, $editHtml] = utf8_http_request(

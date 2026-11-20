@@ -15,7 +15,7 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
 
     $grupoSeccion = match ($activo) {
         'solicitudes', 'viajes', 'entregas' => 'Operaciones',
-        'usuarios', 'flota' => 'Administración',
+        'usuarios', 'flota', 'auditoria' => 'Administración',
         default => 'Principal',
     };
     $nombreUsuario = (string)($usuario['nombre_usuario'] ?? 'Usuario');
@@ -33,6 +33,7 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css">
     <link rel="stylesheet" href="/assets/vendor/tom-select/tom-select.css">
     <link rel="stylesheet" href="/assets/vendor/flatpickr/flatpickr.min.css">
+    <link rel="stylesheet" href="/assets/vendor/leaflet/leaflet.css">
     <link rel="stylesheet" href="/assets/css/estilos.css">
     <script>
     (function() {
@@ -52,6 +53,7 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
     <script src="/assets/vendor/flatpickr/flatpickr.min.js" defer></script>
     <script src="/assets/vendor/flatpickr/es.js" defer></script>
     <script src="/assets/vendor/chartjs/chart.umd.min.js" defer></script>
+    <script src="/assets/vendor/leaflet/leaflet.js" defer></script>
     <script src="/assets/js/app.js" defer></script>
 </head>
 <body>
@@ -71,14 +73,12 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
             <span class="brand-monogram" aria-hidden="true">TS</span>
         </div>
         <nav class="sidebar-navigation" aria-label="Módulos del sistema">
-            <?php if ($puedeReportes || $puedeAuditoria || $puedeClientes): ?>
+            <?php if ($puedeReportes || $puedeClientes): ?>
             <div class="nav-group">
                 <p class="nav-section-label">Principal</p>
                 <div class="menu-list">
                 <?php if ($puedeReportes): ?>
                     <a class="sidebar-link <?= $activo === 'dashboard' ? 'active' : '' ?>" href="/" <?= $activo === 'dashboard' ? 'aria-current="page"' : '' ?> data-tooltip="Panel general"><?= svg_icon('dashboard') ?><span class="sidebar-link-text">Panel general</span></a>
-                <?php endif; ?>
-                <?php if ($puedeReportes || $puedeAuditoria): ?>
                     <a class="sidebar-link <?= $activo === 'reportes' ? 'active' : '' ?>" href="/reportes.php" <?= $activo === 'reportes' ? 'aria-current="page"' : '' ?> data-tooltip="Reportes"><?= svg_icon('reports') ?><span class="sidebar-link-text">Reportes</span></a>
                 <?php endif; ?>
                 <?php if ($puedeClientes): ?>
@@ -103,7 +103,7 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
                 </div>
             </div>
             <?php endif; ?>
-            <?php if ($puedeFlota || $puedeUsuarios): ?>
+            <?php if ($puedeFlota || $puedeUsuarios || $puedeAuditoria): ?>
             <div class="nav-group">
                 <p class="nav-section-label">Administración</p>
                 <div class="menu-list">
@@ -112,6 +112,9 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
                 <?php endif; ?>
                 <?php if ($puedeFlota): ?>
                     <a class="sidebar-link <?= $activo === 'flota' ? 'active' : '' ?>" href="/flota.php" <?= $activo === 'flota' ? 'aria-current="page"' : '' ?> data-tooltip="Flota y catálogos"><?= svg_icon('fleet') ?><span class="sidebar-link-text">Flota y catálogos</span></a>
+                <?php endif; ?>
+                <?php if ($puedeAuditoria): ?>
+                    <a class="sidebar-link <?= $activo === 'auditoria' ? 'active' : '' ?>" href="/auditoria.php" <?= $activo === 'auditoria' ? 'aria-current="page"' : '' ?> data-tooltip="Historial de actividad"><?= svg_icon('shield') ?><span class="sidebar-link-text">Historial de actividad</span></a>
                 <?php endif; ?>
                 </div>
             </div>
@@ -173,13 +176,20 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
 
 function layout_end(): void
 {
+    $flash = null;
+    if (isset($_SESSION['tssa_flash_notice']) && is_array($_SESSION['tssa_flash_notice'])) {
+        $flash = $_SESSION['tssa_flash_notice'];
+        unset($_SESSION['tssa_flash_notice']);
+    }
+    $flashMsg = is_array($flash) ? (string)($flash['message'] ?? '') : '';
+    $flashErr = is_array($flash) && !empty($flash['error']) ? '1' : '0';
 ?>
         </main>
     </div>
 </div>
 <div class="sidebar-backdrop" id="sidebar-backdrop" data-sidebar-close hidden aria-hidden="true"></div>
 <div id="modal-contenido" aria-live="polite"></div>
-<div id="aviso-temporal" class="toast" role="status" aria-live="polite" hidden></div>
+<div id="aviso-temporal" class="toast" role="status" aria-live="polite" hidden<?= $flashMsg !== '' ? ' data-flash-message="' . e($flashMsg) . '" data-flash-error="' . $flashErr . '"' : '' ?>></div>
 </body>
 </html>
 <?php

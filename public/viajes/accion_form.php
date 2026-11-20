@@ -37,7 +37,7 @@ if (!$valid) {
 
 if ($action === 'parada') {
     try {
-        $ubicaciones = operation_list('DECLARE @total_registros INT; EXEC dbo.sp_listar_ubicaciones @buscar=NULL,@solo_activos=1,@pagina=1,@por_pagina=100,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;');
+        $ubicaciones = operation_list('DECLARE @total_registros INT; EXEC dbo.sp_listar_ubicaciones_parada @buscar=NULL,@pagina=1,@por_pagina=100,@total_registros=@total_registros OUTPUT; SELECT @total_registros AS total_registros;');
     } catch (PDOException) {
         read_error_response();
     }
@@ -92,12 +92,21 @@ $submitLabels = [
                 <?php if ($action === 'parada'): ?>
                     <div class="field">
                         <label class="label" for="parada-ubicacion">Ubicación <span class="required">*</span></label>
-                        <select id="parada-ubicacion" name="ubicacion_id" data-combobox data-remote-url="/flota/lista.php?seccion=ubicaciones" data-placeholder="Buscar ubicación…" required>
+                        <select id="parada-ubicacion" name="ubicacion_id" data-combobox data-remote-url="/flota/lista.php?seccion=ubicaciones&contexto=parada" data-placeholder="Buscar ubicación frecuente o de solicitud abierta…" required>
                             <option value="">Selecciona ubicación…</option>
                             <?php foreach ($ubicaciones as $row): ?>
-                                <option value="<?= (int)$row['ubicacion_id'] ?>" data-subtext="<?= e($row['direccion'] ?? '') ?>"><?= e($row['nombre']) ?></option>
+                                <?php
+                                $sub = (string)($row['direccion'] ?? '');
+                                if (isset($row['es_reutilizable']) && (int)$row['es_reutilizable'] === 0) {
+                                    $solCode = trim((string)($row['solicitud_codigo'] ?? ''));
+                                    $prefix = $solCode !== '' ? "Solicitud {$solCode} · Punto puntual" : 'Punto puntual';
+                                    $sub = $sub !== '' ? "{$prefix} · {$sub}" : $prefix;
+                                }
+                                ?>
+                                <option value="<?= (int)$row['ubicacion_id'] ?>" data-subtext="<?= e($sub) ?>"><?= e($row['nombre']) ?></option>
                             <?php endforeach; ?>
                         </select>
+                        <p class="help">Incluye ubicaciones frecuentes y puntos marcados en mapa de solicitudes pendientes por asignar.</p>
                     </div>
                     <div class="columns">
                         <div class="column">
@@ -121,41 +130,52 @@ $submitLabels = [
                         </div>
                     </div>
                 <?php elseif ($action === 'asignar'): ?>
-                    <div class="field">
-                        <label class="label" for="asignar-solicitud">Solicitud elegible <span class="required">*</span></label>
-                        <select id="asignar-solicitud" name="solicitud_id" data-combobox data-placeholder="Buscar solicitud por código o cliente…" required>
-                            <option value="">Selecciona solicitud…</option>
-                            <?php foreach ($solicitudes as $row): ?>
-                                <option value="<?= (int)$row['solicitud_id'] ?>" data-origen="<?= (int)($row['origen_id'] ?? 0) ?>" data-destino="<?= (int)($row['destino_id'] ?? 0) ?>" data-subtext="<?= e(($row['origen_nombre'] ?? '') . ' → ' . ($row['destino_nombre'] ?? '') . ' · ' . humanize_status($row['estado'])) ?>"><?= e($row['codigo_solicitud'] . ' · ' . ($row['cliente_nombre'] ?? humanize_status($row['estado']))) ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div class="columns">
-                        <div class="column">
-                            <div class="field">
-                                <label class="label" for="parada-recogida">Parada de recogida <span class="required">*</span></label>
-                                <select id="parada-recogida" name="parada_recogida_id" data-combobox data-placeholder="Selecciona parada…" required>
-                                    <option value="">Selecciona</option>
-                                    <?php foreach ($paradas as $row): ?>
-                                        <option value="<?= (int)$row['parada_id'] ?>" data-ubicacion="<?= (int)$row['ubicacion_id'] ?>" data-orden="<?= (int)$row['orden'] ?>" data-tipo="<?= e($row['tipo_parada']) ?>"><?= (int)$row['orden'] ?> · <?= e($row['ubicacion_nombre'] . ' (' . humanize_status($row['tipo_parada']) . ')') ?></option>
-                                    <?php endforeach; ?>
-                                </select>
+                    <?php
+                    $paradasCatalogo = array_map(
+                        static fn(array $row): array => [
+                            'id' => (int)$row['parada_id'],
+                            'ubicacion_id' => (int)$row['ubicacion_id'],
+                            'orden' => (int)$row['orden'],
+                            'tipo_parada' => strtoupper(trim((string)$row['tipo_parada'])),
+                            'ubicacion_nombre' => (string)$row['ubicacion_nombre'],
+                            'direccion' => (string)($row['direccion'] ?? ''),
+                            'label' => '#' . (int)$row['orden'] . ' · ' . (string)$row['ubicacion_nombre'] . ' (' . humanize_status($row['tipo_parada']) . ')',
+                            'subtext' => trim((string)($row['direccion'] ?? '')),
+                        ],
+                        $paradas
+                    );
+                    ?>
+                    <div data-assign-stops-root data-trip-stops="<?= e(json_encode($paradasCatalogo, JSON_UNESCAPED_UNICODE)) ?>">
+                        <div class="field">
+                            <label class="label" for="asignar-solicitud">Solicitud elegible <span class="required">*</span></label>
+                            <select id="asignar-solicitud" name="solicitud_id" data-combobox data-allow-clear="true" data-placeholder="Buscar solicitud por código o cliente…" required>
+                                <option value="">Selecciona solicitud…</option>
+                                <?php foreach ($solicitudes as $row): ?>
+                                    <option value="<?= (int)$row['solicitud_id'] ?>" data-origen="<?= (int)($row['origen_id'] ?? 0) ?>" data-destino="<?= (int)($row['destino_id'] ?? 0) ?>" data-subtext="<?= e(($row['origen_nombre'] ?? '') . ' → ' . ($row['destino_nombre'] ?? '') . ' · ' . humanize_status($row['estado'])) ?>"><?= e($row['codigo_solicitud'] . ' · ' . ($row['cliente_nombre'] ?? humanize_status($row['estado']))) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="columns">
+                            <div class="column">
+                                <div class="field">
+                                    <label class="label" for="parada-recogida">Parada de recogida <span class="required">*</span></label>
+                                    <select id="parada-recogida" name="parada_recogida_id" data-combobox data-allow-clear="true" data-placeholder="Selecciona primero una solicitud…" disabled required>
+                                        <option value="">Selecciona primero una solicitud…</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="column">
+                                <div class="field">
+                                    <label class="label" for="parada-entrega">Parada de entrega <span class="required">*</span></label>
+                                    <select id="parada-entrega" name="parada_entrega_id" data-combobox data-allow-clear="true" data-placeholder="Selecciona primero una solicitud…" disabled required>
+                                        <option value="">Selecciona primero una solicitud…</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
-                        <div class="column">
-                            <div class="field">
-                                <label class="label" for="parada-entrega">Parada de entrega <span class="required">*</span></label>
-                                <select id="parada-entrega" name="parada_entrega_id" data-combobox data-placeholder="Selecciona parada…" required>
-                                    <option value="">Selecciona</option>
-                                    <?php foreach ($paradas as $row): ?>
-                                        <option value="<?= (int)$row['parada_id'] ?>" data-ubicacion="<?= (int)$row['ubicacion_id'] ?>" data-orden="<?= (int)$row['orden'] ?>" data-tipo="<?= e($row['tipo_parada']) ?>"><?= (int)$row['orden'] ?> · <?= e($row['ubicacion_nombre'] . ' (' . humanize_status($row['tipo_parada']) . ')') ?></option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </div>
-                        </div>
+                        <div id="asignar-validacion-aviso" class="notification notification-warning p-2 mb-2" role="status" aria-live="polite" hidden></div>
+                        <p class="help" id="asignar-paradas-ayuda">Selecciona primero una solicitud para mostrar únicamente las paradas compatibles en origen, destino y secuencia del itinerario.</p>
                     </div>
-                    <div id="asignar-validacion-aviso" class="notification notification-warning p-2 mb-2" hidden></div>
-                    <p class="help">Las paradas deben corresponder al origen y destino de la orden y respetar el orden secuencial del itinerario.</p>
                 <?php elseif ($action === 'cancelar'): ?>
                     <div class="notification notification-danger mb-4">
                         <p><strong>¿Confirmas la cancelación de este despacho?</strong></p>

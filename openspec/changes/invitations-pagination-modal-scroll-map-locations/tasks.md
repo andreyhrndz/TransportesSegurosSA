@@ -1,0 +1,9 @@
+# Tareas: Cierre PR #4 — Invitaciones, scroll modal global y ubicaciones en mapa
+
+- [x] 1. Reproducir y medir cuantitativamente el bug de scroll de fondo en navegador real (Nueva solicitud / Tipo de mercancía y Flota y catálogos) y capturar evidencias ANTES.
+- [x] 2. Crear y aplicar en `TransportesSegurosSA_Test` la Migración 11 (`11_invitations_search_correct_email_contracts.sql`, espejo `sql/`, rollback y suite T-SQL `15_contract_tests_invitations_pagination_and_locations.sql`) actualizando `tools/scripts/init-test-db.ps1`.
+- [x] 3. Implementar búsqueda/filtro/paginación real de invitaciones, vista simplificada con una sola insignia y sin botón «Cancelar», y modal único «Reenviar» con confirmación/corrección de correo (`public/usuarios.php`, `public/usuarios/invitaciones_lista.php`, `public/usuarios/reenviar_form.php`, `public/usuarios/reenviar_invitacion.php`).
+- [x] 4. Implementar scroll lock global en modales y posicionamiento/clamping/flip inteligente de Tom Select en `public/assets/js/app.js` y `public/assets/css/estilos.css`.
+- [x] 5. Vendorizar Leaflet 1.9.4 localmente, ajustar CSP estricta para tiles OSM en `app/bootstrap.php`, integrar mapa interactivo + fallback manual en `public/flota/form.php` y enlaces «Abrir en Google Maps» en `app/components.php`, `public/flota/lista.php`, `public/solicitudes/detalle.php` y `public/viajes/detalle.php`.
+- [x] 6. Implementar y ejecutar suites completas en `TransportesSegurosSA_Test` (PHP, T-SQL, JS, OpenSpec y Playwright real en 1366×768, 1440×900, 1600×900, 1920×1080, 1280×720, 768×1024 y 375×667) con inspección visual real de capturas sanitizadas.
+- [x] 7. Actualizar `docs/qa/plan-qa-exposicion.md` y documentación operativa (`README.md`), verificar integridad de `TransportesSegurosSA` original y `TransportesSegurosSA_DW`, hacer `git push` a la rama del PR #4 y actualizar su descripción sin hacer merge.

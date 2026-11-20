@@ -74,14 +74,18 @@ if ($entity === 'ruta') {
 
 $activeUsers = [];
 $catalogLicencias = [];
-$driverLicenses = [];
+$licenseState = [
+    'has_multiple_legacy' => false,
+    'has_unverified_only' => false,
+    'legacy_codes' => [],
+    'selected_code' => '',
+    'selected_expiry' => '',
+];
 if ($entity === 'conductor') {
     $catalogLicencias = master_license_catalog();
     if ($isEdit && isset($id)) {
         $driverLicensesRaw = master_driver_licenses($id);
-        foreach ($driverLicensesRaw as $dl) {
-            $driverLicenses[$dl['codigo_licencia']] = $dl;
-        }
+        $licenseState = master_driver_license_state($driverLicensesRaw);
     }
     if (has_permission('USUARIOS_VER')) {
         try {
@@ -107,12 +111,13 @@ $titles = [
 $wideModal = in_array($entity, ['vehiculo', 'conductor', 'ruta', 'ubicacion'], true);
 $maxYear = (int)gmdate('Y') + 1;
 $todayUtc = gmdate('Y-m-d');
+$vehIsNoConforme = ($entity === 'vehiculo' && $isEdit && (string)($record['estado_homologacion'] ?? '') === 'NO_CONFORME');
 ?>
 <div class="modal is-active" role="dialog" aria-modal="true" aria-labelledby="titulo-form-maestro">
     <div class="modal-background" data-close-modal></div>
     <div class="modal-card <?= $wideModal ? 'modal-card-wide' : '' ?>">
         <?= modal_header('titulo-form-maestro', $titles[$entity]) ?>
-        <form hx-post="/flota/guardar.php" hx-target="#mensaje-form-maestro" hx-swap="innerHTML" hx-disabled-elt="find button[type=submit]">
+        <form hx-post="/flota/guardar.php" hx-target="#mensaje-form-maestro" hx-swap="innerHTML" hx-disabled-elt="find button[type=submit]"<?= $entity === 'conductor' ? ' data-conductor-form="1" novalidate' : '' ?><?= $entity === 'vehiculo' ? ' data-vehiculo-form="1"' : '' ?>>
             <section class="modal-card-body">
                 <input type="hidden" name="csrf_token" value="<?= e(csrf_token()) ?>">
                 <input type="hidden" name="entidad" value="<?= e($entity) ?>">
@@ -125,8 +130,21 @@ $todayUtc = gmdate('Y-m-d');
                     <?php if ($isEdit): ?>
                         <div class="readonly-summary">
                             <div><span>Placa (inmutable)</span><strong><?= e($record['placa']) ?></strong></div>
-                            <div><span>Odómetro registrado</span><strong><?= e($record['kilometraje_actual']) ?> km</strong></div>
+                            <div><span>Condición de registro</span><strong>Activo</strong></div>
                         </div>
+                        <?php if ($vehIsNoConforme): ?>
+                            <div class="notification notification-warning mb-4" role="status">
+                                <?= svg_icon('alert-triangle') ?>
+                                <div>
+                                    <strong>Unidad bloqueada para viajes (No conforme).</strong>
+                                    <p class="is-size-7 mt-1">Editar los datos generales no levanta este bloqueo operativo. Si ya se resolvió la incidencia técnica, confirma el levantamiento administrativo a continuación:</p>
+                                    <label class="checkbox is-flex is-align-items-center mt-2">
+                                        <input type="checkbox" id="veh-levantar-bloqueo" name="levantar_bloqueo_no_conforme" value="1" class="mr-2">
+                                        <span class="is-size-7"><strong>Confirmar levantamiento administrativo del bloqueo</strong> (habilitar unidad para operación)</span>
+                                    </label>
+                                </div>
+                            </div>
+                        <?php endif; ?>
                     <?php else: ?>
                         <div class="field">
                             <label class="label" for="veh-placa">Placa <span class="required">*</span></label>
@@ -155,33 +173,28 @@ $todayUtc = gmdate('Y-m-d');
                         </div>
                     </div>
 
-                    <div class="notification is-info is-light py-3 px-4 mb-4">
-                        <p class="is-size-7"><strong>Distinción técnica legal (Ley 9078):</strong> La <em>capacidad de carga</em> corresponde al peso neto transportable de mercancía. El <strong>PMA (Peso Máximo Autorizado)</strong> es la masa total del vehículo cargado (Tara + Capacidad), la cual determina obligatoriamente la habilitación de licencias de conducir: B-1 (&le; 4.000 kg), B-2 (&le; 8.000 kg) o B-3 / B-4 (&gt; 8.000 kg).</p>
-                    </div>
-
-                    <div class="notification is-info is-light pma-help-callout mb-3" role="note" style="border-left: 4px solid var(--bulma-info, #2563eb); font-size: 0.875rem;">
-                        <p><strong>Distinción legal Ley 9078:</strong> El <em>PMA (Peso Máximo Autorizado)</em> corresponde a la masa total reglamentaria en ficha técnica oficial. La <em>capacidad de carga</em> es el peso neto útil transportable.</p>
+                    <div class="pma-help-callout mb-4" role="note">
+                        <?= svg_icon('shield') ?>
+                        <span>Carga útil = mercancía transportable. <strong>PMA</strong> = peso total máximo autorizado del vehículo; se usa para validar la licencia del conductor.</span>
                     </div>
 
                     <div class="columns">
                         <div class="column">
                             <div class="field">
-                                <label class="label" for="veh-carga">Capacidad carga útil (kg) <span class="required">*</span></label>
-                                <input class="input" id="veh-carga" name="capacidad_carga_kg" inputmode="decimal" maxlength="15" value="<?= e($record['capacidad_carga_kg'] ?? '') ?>" required>
-                                <p class="help">Peso neto máximo de mercancías admitido.</p>
+                                <label class="label" for="veh-carga">Capacidad de carga útil (kg) <span class="required">*</span></label>
+                                <input class="input" id="veh-carga" name="capacidad_carga_kg" inputmode="decimal" maxlength="15" value="<?= e(isset($record['capacidad_carga_kg']) ? format_number_str($record['capacidad_carga_kg']) : '') ?>" placeholder="Ej. 3500" required>
                             </div>
                         </div>
                         <div class="column">
                             <div class="field">
-                                <label class="label" for="veh-pma">PMA / Peso Bruto (kg) <span class="required">*</span></label>
-                                <input class="input" id="veh-pma" name="pma_kg" inputmode="decimal" maxlength="15" value="<?= e($record['pma_kg'] ?? '') ?>" placeholder="Ej. 7500.00" required>
-                                <p class="help">Masa máxima autorizada en ficha técnica MOPT.</p>
+                                <label class="label" for="veh-pma">PMA / Peso bruto autorizado (kg) <span class="required">*</span></label>
+                                <input class="input" id="veh-pma" name="pma_kg" inputmode="decimal" maxlength="15" value="<?= e(isset($record['pma_kg']) && $record['pma_kg'] !== null ? format_number_str($record['pma_kg']) : '') ?>" placeholder="Ej. 7500" required>
                             </div>
                         </div>
                         <div class="column">
                             <div class="field">
-                                <label class="label" for="veh-volumen">Capacidad volumen (m³)</label>
-                                <input class="input" id="veh-volumen" name="capacidad_volumen_m3" inputmode="decimal" maxlength="16" value="<?= e($record['capacidad_volumen_m3'] ?? '') ?>">
+                                <label class="label" for="veh-volumen">Capacidad de volumen (m³)</label>
+                                <input class="input" id="veh-volumen" name="capacidad_volumen_m3" inputmode="decimal" maxlength="16" value="<?= e(isset($record['capacidad_volumen_m3']) && $record['capacidad_volumen_m3'] !== null ? format_number_str($record['capacidad_volumen_m3']) : '') ?>" placeholder="Opcional">
                             </div>
                         </div>
                     </div>
@@ -190,61 +203,35 @@ $todayUtc = gmdate('Y-m-d');
                         <div class="column">
                             <div class="field">
                                 <label class="label" for="veh-clase">Clasificación legal <span class="required">*</span></label>
-                                <div class="select is-fullwidth">
-                                    <?php $vehClase = (string)($record['clase_legal'] ?? 'LIVIANO'); ?>
-                                    <select id="veh-clase" name="clase_legal" required>
-                                        <option value="LIVIANO" <?= $vehClase === 'LIVIANO' ? 'selected' : '' ?>>Liviano (&le; 4.000 kg PMA)</option>
-                                        <option value="MEDIANO_RIGIDO" <?= $vehClase === 'MEDIANO_RIGIDO' ? 'selected' : '' ?>>Mediano rígido (&le; 8.000 kg PMA)</option>
-                                        <option value="PESADO_RIGIDO" <?= $vehClase === 'PESADO_RIGIDO' ? 'selected' : '' ?>>Pesado rígido (&gt; 8.000 kg PMA)</option>
-                                        <option value="PESADO_ARTICULADO" <?= $vehClase === 'PESADO_ARTICULADO' ? 'selected' : '' ?>>Pesado articulado (cabezal/tráiler)</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="column">
-                            <div class="field">
-                                <label class="label" for="veh-homologacion">Estado de homologación <span class="required">*</span></label>
-                                <div class="select is-fullwidth">
-                                    <?php $vehHomo = (string)($record['estado_homologacion'] ?? 'VERIFICADO'); ?>
-                                    <select id="veh-homologacion" name="estado_homologacion" required>
-                                        <option value="VERIFICADO" <?= $vehHomo === 'VERIFICADO' ? 'selected' : '' ?>>Verificado (habilitado para viajes)</option>
-                                        <option value="PENDIENTE_VERIFICACION" <?= $vehHomo === 'PENDIENTE_VERIFICACION' ? 'selected' : '' ?>>Pendiente de verificación</option>
-                                        <option value="NO_CONFORME" <?= $vehHomo === 'NO_CONFORME' ? 'selected' : '' ?>>No conforme</option>
-                                    </select>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="field mb-4">
-                        <label class="checkbox">
-                            <input type="checkbox" id="veh-articulado" name="es_articulado" value="1" <?= !empty($record['es_articulado']) ? 'checked' : '' ?>>
-                            <strong>Vehículo articulado o combinación de cabezal con semirremolque</strong>
-                        </label>
-                        <p class="help">Los vehículos articulados exigen obligatoriamente licencia de conducir Clase B-4 o E-2 según el art. 86 de la Ley 9078.</p>
-                    </div>
-
-                    <div class="columns">
-                        <div class="column">
-                            <div class="field">
-                                <label class="label" for="veh-km">Kilometraje actual <span class="required">*</span></label>
-                                <input class="input" id="veh-km" name="kilometraje_actual" inputmode="decimal" maxlength="14" value="<?= e($record['kilometraje_actual'] ?? '0') ?>" required>
+                                <?php $vehClase = (string)($record['clase_legal'] ?? 'LIVIANO'); ?>
+                                <select id="veh-clase" name="clase_legal" data-combobox data-allow-clear="false" data-placeholder="Selecciona clasificación…" required>
+                                    <option value="LIVIANO" <?= $vehClase === 'LIVIANO' ? 'selected' : '' ?>>Liviano (hasta 4.000 kg)</option>
+                                    <option value="MEDIANO_RIGIDO" <?= $vehClase === 'MEDIANO_RIGIDO' ? 'selected' : '' ?>>Mediano rígido (hasta 8.000 kg)</option>
+                                    <option value="PESADO_RIGIDO" <?= $vehClase === 'PESADO_RIGIDO' ? 'selected' : '' ?>>Pesado rígido (más de 8.000 kg)</option>
+                                    <option value="PESADO_ARTICULADO" <?= $vehClase === 'PESADO_ARTICULADO' ? 'selected' : '' ?>>Pesado articulado (cabezal/tráiler)</option>
+                                </select>
                             </div>
                         </div>
                         <div class="column">
                             <div class="field">
                                 <label class="label" for="veh-estado">Estado operativo <span class="required">*</span></label>
-                                <div class="select is-fullwidth">
-                                    <?php $vehState = (string)($record['estado'] ?? 'DISPONIBLE'); ?>
-                                    <select id="veh-estado" name="estado" required>
-                                        <option value="DISPONIBLE" <?= $vehState === 'DISPONIBLE' ? 'selected' : '' ?>>Disponible</option>
-                                        <option value="MANTENIMIENTO" <?= $vehState === 'MANTENIMIENTO' ? 'selected' : '' ?>>En mantenimiento</option>
-                                        <option value="FUERA_SERVICIO" <?= $vehState === 'FUERA_SERVICIO' ? 'selected' : '' ?>>Fuera de servicio</option>
-                                    </select>
-                                </div>
-                                <p class="help">El estado Asignado se actualiza automáticamente desde la planificación de viajes.</p>
+                                <?php $vehState = (string)($record['estado'] ?? 'DISPONIBLE'); ?>
+                                <select id="veh-estado" name="estado" data-combobox data-allow-clear="false" data-placeholder="Selecciona estado operativo…" required>
+                                    <option value="DISPONIBLE" <?= $vehState === 'DISPONIBLE' ? 'selected' : '' ?>>Disponible</option>
+                                    <option value="MANTENIMIENTO" <?= $vehState === 'MANTENIMIENTO' ? 'selected' : '' ?>>En mantenimiento</option>
+                                    <option value="FUERA_SERVICIO" <?= $vehState === 'FUERA_SERVICIO' ? 'selected' : '' ?>>Fuera de servicio</option>
+                                </select>
+                                <p class="help">El estado Asignado se gestiona automáticamente al planificar viajes.</p>
                             </div>
                         </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="checkbox is-flex is-align-items-center">
+                            <input type="checkbox" id="veh-articulado" name="es_articulado" value="1" class="mr-2" <?= !empty($record['es_articulado']) ? 'checked' : '' ?>>
+                            <span><strong>Vehículo articulado</strong> (cabezal con semirremolque)</span>
+                        </label>
+                        <p class="help">Las unidades articuladas requieren licencia B4 o E2.</p>
                     </div>
 
                 <?php elseif ($entity === 'conductor'): ?>
@@ -281,71 +268,49 @@ $todayUtc = gmdate('Y-m-d');
                         </div>
                     </div>
 
+                    <?php if ($licenseState['has_multiple_legacy']): ?>
+                        <div class="notification notification-warning mb-3" role="status" id="aviso-licencias-heredadas">
+                            <?= svg_icon('alert-triangle') ?>
+                            <span>Este conductor posee varias categorías heredadas (<strong><?= e(implode(', ', $licenseState['legacy_codes'])) ?></strong>). Selecciona la que quedará como principal e ingresa su fecha de vencimiento.</span>
+                        </div>
+                    <?php elseif ($licenseState['has_unverified_only']): ?>
+                        <div class="notification notification-warning mb-3" role="status" id="aviso-licencias-pendientes">
+                            <?= svg_icon('alert-triangle') ?>
+                            <span>Este conductor no tiene una categoría habilitada vigente. Selecciona la categoría revisada en el documento físico y su fecha de vencimiento.</span>
+                        </div>
+                    <?php endif; ?>
+
                     <div class="columns">
                         <div class="column">
                             <div class="field">
-                                <label class="label" for="cond-licencia">Número de cédula / licencia física <span class="required">*</span></label>
-                                <input class="input" id="cond-licencia" name="numero_licencia" maxlength="50" value="<?= e($record['numero_licencia'] ?? '') ?>" required>
+                                <label class="label" for="cond-licencia">Número de licencia <span class="required">*</span></label>
+                                <input class="input" id="cond-licencia" name="numero_licencia" maxlength="50" value="<?= e($record['numero_licencia'] ?? '') ?>" aria-describedby="cond-licencia-help" required>
+                                <p class="help" id="cond-licencia-help">Número impreso en el documento físico.</p>
                             </div>
                         </div>
                         <div class="column">
                             <div class="field">
-                                <label class="label" for="cond-vencimiento">Vencimiento general de licencia <span class="required">*</span></label>
-                                <input class="input" id="cond-vencimiento" name="fecha_vencimiento_licencia" type="text" data-datepicker="date" min="<?= e($todayUtc) ?>" value="<?= e($record['fecha_vencimiento_licencia'] ?? '') ?>" placeholder="dd/mm/aaaa" required>
+                                <label class="label" for="cond-tipo-licencia">Tipo de licencia <span class="required">*</span></label>
+                                <select id="cond-tipo-licencia" name="codigo_licencia" data-combobox data-allow-clear="false" data-placeholder="Selecciona categoría…" data-license-select="1" data-prev-license-code="<?= e($licenseState['selected_code']) ?>" aria-required="true" aria-describedby="cond-tipo-licencia-help cond-tipo-licencia-error">
+                                    <option value="">Selecciona categoría…</option>
+                                    <?php foreach ($catalogLicencias as $catLic): ?>
+                                        <?php $catCod = strtoupper((string)$catLic['codigo']); ?>
+                                        <option value="<?= e($catCod) ?>" <?= $licenseState['selected_code'] === $catCod ? 'selected' : '' ?>>
+                                            <?= e(master_license_short_label($catCod, (string)$catLic['nombre'])) ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <p class="help" id="cond-tipo-licencia-help">Categoría confirmada al revisar el documento.</p>
+                                <p class="help is-danger" id="cond-tipo-licencia-error" role="alert" hidden></p>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="field mb-4">
-                        <label class="label">Categorías de licencia habilitadas (Ley de Tránsito 9078) <span class="required">*</span></label>
-                        <p class="help mb-3">Selecciona una o más categorías oficiales. El sistema validará en cada viaje que el conductor cuente con categoría verificada y vigente según el PMA del vehículo asignado.</p>
-                        <div class="table-container">
-                            <table class="table is-fullwidth is-narrow is-bordered license-selector-table">
-                                <thead>
-                                    <tr>
-                                        <th style="width: 40px;" class="has-text-center">Activa</th>
-                                        <th style="width: 220px;">Categoría</th>
-                                        <th>PMA y vehículos autorizados</th>
-                                        <th style="width: 150px;">Vencimiento</th>
-                                        <th style="width: 140px;">Verificación</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php foreach ($catalogLicencias as $catLic): ?>
-                                        <?php
-                                        $catCod = (string)$catLic['codigo'];
-                                        $hasCat = isset($driverLicenses[$catCod]);
-                                        $catData = $driverLicenses[$catCod] ?? null;
-                                        $catVenc = (string)($catData['fecha_vencimiento'] ?? ($record['fecha_vencimiento_licencia'] ?? ''));
-                                        $catEst = (string)($catData['estado_verificacion'] ?? 'VERIFICADA');
-                                        ?>
-                                        <tr>
-                                            <td class="has-text-center">
-                                                <input type="checkbox" name="licencias_seleccionadas[]" value="<?= e($catCod) ?>" <?= $hasCat ? 'checked' : '' ?> aria-label="Habilitar categoría <?= e($catCod) ?>">
-                                            </td>
-                                            <td>
-                                                <strong class="tag is-dark is-rounded mr-1"><?= e($catCod) ?></strong>
-                                                <span class="is-size-7"><?= e($catLic['nombre']) ?></span>
-                                            </td>
-                                            <td class="is-size-7">
-                                                <?= e($catLic['descripcion']) ?>
-                                            </td>
-                                            <td>
-                                                <input class="input is-small" name="licencia_vencimiento[<?= e($catCod) ?>]" type="text" data-datepicker="date" min="<?= e($todayUtc) ?>" value="<?= e($catVenc) ?>" placeholder="dd/mm/aaaa">
-                                            </td>
-                                            <td>
-                                                <div class="select is-small is-fullwidth">
-                                                    <select name="licencia_estado[<?= e($catCod) ?>]">
-                                                        <option value="VERIFICADA" <?= $catEst === 'VERIFICADA' ? 'selected' : '' ?>>Verificada</option>
-                                                        <option value="PENDIENTE" <?= $catEst === 'PENDIENTE' ? 'selected' : '' ?>>Pendiente</option>
-                                                        <option value="RECHAZADA" <?= $catEst === 'RECHAZADA' ? 'selected' : '' ?>>Rechazada</option>
-                                                    </select>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label" for="cond-vencimiento">Fecha de vencimiento <span class="required">*</span></label>
+                                <input class="input" id="cond-vencimiento" name="fecha_vencimiento_licencia" type="text" data-datepicker="date" min="<?= e($todayUtc) ?>" value="<?= e($isEdit ? $licenseState['selected_expiry'] : '') ?>" placeholder="dd/mm/aaaa" aria-required="true" aria-describedby="cond-vencimiento-help cond-vencimiento-error">
+                                <p class="help" id="cond-vencimiento-help">Al cambiar la categoría se limpia para ingresar la nueva vigencia.</p>
+                                <p class="help is-danger" id="cond-vencimiento-error" role="alert" hidden></p>
+                            </div>
                         </div>
                     </div>
 
@@ -368,13 +333,11 @@ $todayUtc = gmdate('Y-m-d');
                         <div class="column">
                             <div class="field">
                                 <label class="label" for="cond-estado">Estado operativo <span class="required">*</span></label>
-                                <div class="select is-fullwidth">
-                                    <?php $condState = (string)($record['estado_operativo'] ?? 'DISPONIBLE'); ?>
-                                    <select id="cond-estado" name="estado_operativo" required>
-                                        <option value="DISPONIBLE" <?= $condState === 'DISPONIBLE' ? 'selected' : '' ?>>Disponible</option>
-                                        <option value="INACTIVO" <?= $condState === 'INACTIVO' ? 'selected' : '' ?>>Inactivo</option>
-                                    </select>
-                                </div>
+                                <?php $condState = (string)($record['estado_operativo'] ?? 'DISPONIBLE'); ?>
+                                <select id="cond-estado" name="estado_operativo" data-combobox data-allow-clear="false" data-placeholder="Selecciona estado operativo…" required>
+                                    <option value="DISPONIBLE" <?= $condState === 'DISPONIBLE' ? 'selected' : '' ?>>Disponible</option>
+                                    <option value="INACTIVO" <?= $condState === 'INACTIVO' ? 'selected' : '' ?>>Inactivo</option>
+                                </select>
                             </div>
                         </div>
                         <div class="column">
@@ -434,7 +397,7 @@ $todayUtc = gmdate('Y-m-d');
                         <div class="column">
                             <div class="field">
                                 <label class="label" for="ruta-distancia">Distancia (km) <span class="required">*</span></label>
-                                <input class="input" id="ruta-distancia" name="distancia_km" inputmode="decimal" maxlength="12" value="<?= e($record['distancia_km'] ?? '') ?>" required>
+                                <input class="input" id="ruta-distancia" name="distancia_km" inputmode="decimal" maxlength="12" value="<?= e(isset($record['distancia_km']) ? format_number_str($record['distancia_km']) : '') ?>" required>
                             </div>
                         </div>
                         <div class="column">
@@ -449,31 +412,77 @@ $todayUtc = gmdate('Y-m-d');
                     <?php endif; ?>
 
                 <?php elseif ($entity === 'ubicacion'): ?>
+                    <?php
+                    $latVal = isset($record['latitud']) && $record['latitud'] !== null ? trim((string)$record['latitud']) : '';
+                    $lonVal = isset($record['longitud']) && $record['longitud'] !== null ? trim((string)$record['longitud']) : '';
+                    $hasSavedCoords = ($latVal !== '' && $lonVal !== '');
+                    ?>
                     <div class="field">
                         <label class="label" for="ubi-nombre">Nombre de la ubicación <span class="required">*</span></label>
                         <input class="input" id="ubi-nombre" name="nombre" maxlength="150" value="<?= e($record['nombre'] ?? '') ?>" required autofocus>
                     </div>
 
                     <div class="field">
-                        <label class="label" for="ubi-direccion">Dirección exacta <span class="required">*</span></label>
-                        <textarea class="textarea" id="ubi-direccion" name="direccion" rows="2" maxlength="250" required><?= e($record['direccion'] ?? '') ?></textarea>
+                        <label class="label" for="ubi-direccion">Dirección y referencias <span class="required">*</span></label>
+                        <textarea class="textarea" id="ubi-direccion" name="direccion" rows="2" maxlength="250" placeholder="Ej. 200 m norte de la entrada principal, bodega #4, Alajuela" required><?= e($record['direccion'] ?? '') ?></textarea>
+                        <p class="help">Escribe siempre la dirección o señas exactas; el punto en el mapa registra únicamente coordenadas.</p>
                     </div>
 
-                    <div class="columns">
-                        <div class="column">
-                            <div class="field">
-                                <label class="label" for="ubi-latitud">Latitud (-90 a 90)</label>
-                                <input class="input" id="ubi-latitud" name="latitud" inputmode="decimal" maxlength="12" placeholder="Ej. 9.934739" value="<?= e($record['latitud'] ?? '') ?>">
+                    <div class="field">
+                        <div class="location-map-header">
+                            <label class="label mb-0" for="ubi-mapa">Selecciona el punto exacto en el mapa (opcional)</label>
+                            <div class="location-map-actions">
+                                <button class="button is-small button-secondary" type="button" data-map-reset title="Centrar vista en Costa Rica">
+                                    <?= svg_icon('map-pin') ?>
+                                    <span>Reencuadrar</span>
+                                </button>
+                                <button class="button is-small button-secondary" type="button" data-map-clear <?= $hasSavedCoords ? '' : 'hidden' ?>>
+                                    <?= svg_icon('close') ?>
+                                    <span>Quitar punto</span>
+                                </button>
                             </div>
                         </div>
-                        <div class="column">
-                            <div class="field">
-                                <label class="label" for="ubi-longitud">Longitud (-180 a 180)</label>
-                                <input class="input" id="ubi-longitud" name="longitud" inputmode="decimal" maxlength="13" placeholder="Ej. -84.087502" value="<?= e($record['longitud'] ?? '') ?>">
-                            </div>
+
+                        <div class="location-map-shell" data-location-map-shell data-initial-lat="<?= e($latVal) ?>" data-initial-lon="<?= e($lonVal) ?>">
+                            <div class="location-map-canvas" id="ubi-mapa" data-location-map tabindex="0" role="application" aria-label="Mapa interactivo de ubicación. Haz clic para colocar o arrastra el marcador."></div>
+                        </div>
+
+                        <div class="location-map-status mt-2" id="ubi-mapa-estado" role="status" aria-live="polite">
+                            <?php if ($hasSavedCoords): ?>
+                                <?= svg_icon('map-pin') ?>
+                                <span>Punto seleccionado: <code><?= e($latVal . ', ' . $lonVal) ?></code> (haz clic o arrastra el marcador para ajustar).</span>
+                            <?php else: ?>
+                                <?= svg_icon('map-pin') ?>
+                                <span>Sin punto seleccionado (opcional). Haz clic en el mapa para marcar la ubicación.</span>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="notification notification-warning mt-2" id="ubi-mapa-fallback" role="status" hidden>
+                            <?= svg_icon('alert-triangle') ?>
+                            <span>No se pudo cargar el mapa interactivo en este momento. Puedes ingresar las coordenadas manualmente abajo o guardar solo la dirección.</span>
                         </div>
                     </div>
-                    <p class="help">Las coordenadas son opcionales, pero si se registran deben completarse ambas.</p>
+
+                    <details class="advanced-coords-panel mt-3" id="ubi-coords-avanzadas">
+                        <summary>Opciones avanzadas: ingresar coordenadas manualmente</summary>
+                        <div class="advanced-coords-body">
+                            <div class="columns mb-0">
+                                <div class="column">
+                                    <div class="field">
+                                        <label class="label" for="ubi-latitud">Latitud (-90 a 90)</label>
+                                        <input class="input" id="ubi-latitud" name="latitud" inputmode="decimal" maxlength="12" placeholder="Ej. 9.934739" value="<?= e($latVal) ?>">
+                                    </div>
+                                </div>
+                                <div class="column">
+                                    <div class="field">
+                                        <label class="label" for="ubi-longitud">Longitud (-180 a 180)</label>
+                                        <input class="input" id="ubi-longitud" name="longitud" inputmode="decimal" maxlength="13" placeholder="Ej. -84.087502" value="<?= e($lonVal) ?>">
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="help mt-1">Las coordenadas son opcionales, pero si se registran deben completarse ambas (hasta 6 decimales). Al editarlas se sincronizan con el marcador.</p>
+                        </div>
+                    </details>
 
                 <?php else: ?>
                     <div class="field">

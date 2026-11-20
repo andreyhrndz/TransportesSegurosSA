@@ -1,0 +1,9 @@
+# Tareas: Itinerarios editables, bitácora independiente, reportes con DW y promoción segura
+
+- [x] 1. Crear Migración 13 (`13_trip_stops_audit_and_reports_contracts.sql`, espejo `sql/`, rollback no destructivo y suite T-SQL `17_contract_tests_trip_stops_audit_and_reports.sql`), actualizar `tools/scripts/init-test-db.ps1`, aplicar en `TransportesSegurosSA_Test` validando idempotencia y rollback.
+- [x] 2. Implementar reordenamiento y edición de paradas en `public/viajes/detalle.php`, `paradas_orden_form.php`, `paradas_orden_guardar.php`, `parada_editar_form.php`, `parada_editar_guardar.php`, `app.js` y `estilos.css`.
+- [x] 3. Separar la bitácora al sidebar en `app/layout.php`, crear `app/audit_presenter.php`, `public/auditoria.php` y `public/auditoria/lista.php`, y redirigir `/reportes.php?seccion=auditoria`.
+- [x] 4. Implementar `db_dw()` read-only, `app/reports_service.php`, los 3 reportes reales en `public/reportes.php` y `public/reportes/lista.php`, y exportación CSV segura + impresión/PDF en `public/reportes/exportar.php`.
+- [x] 5. Crear y ejecutar suites PHP/HTTP/Seguridad y Playwright real (7 resoluciones con inspección visual de capturas sanitizadas) sobre `TransportesSegurosSA_Test`, más regresión completa con timeouts explícitos por suite.
+- [x] 6. Ejecutar respaldo FULL con `CHECKSUM` + `RESTORE VERIFYONLY` de `TransportesSegurosSA` original (y respaldo DW), ensayar migraciones `10 → 11 → 12 → 13` en staging efímero restaurado verificando compatibilidad con `main` y PR #4, promover de forma controlada a Original si pasa el 100%, ejecutar postflight read-only PHP/SQL en Original y DW, y documentar en `docs/ops/deploy-migrations-pr4-exposicion.md` y `docs/qa/plan-qa-exposicion.md`.
+- [x] 7. Validar `openspec validate --all`, higiene/secretos, hacer commit y `git push` normal a PR #4 y actualizar su descripción sin hacer merge.

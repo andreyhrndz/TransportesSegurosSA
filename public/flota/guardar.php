@@ -20,6 +20,10 @@ $idParam = $_POST['id'] ?? null;
 $isEdit = $idParam !== null && $idParam !== '';
 $maxYear = (int)gmdate('Y') + 1;
 
+$codigoLicencia = '';
+$licencia = '';
+$vencimiento = '';
+
 try {
     $recordId = $isEdit ? operation_id($idParam) : 0;
 
@@ -29,31 +33,50 @@ try {
             $modelo = (string)operation_text($_POST['modelo'] ?? null, 80);
             $anio = (int)master_int($_POST['anio'] ?? null, 1980, $maxYear, true, 'año');
             $carga = (string)master_decimal($_POST['capacidad_carga_kg'] ?? null, 0.0, 9999999999.99, true, 'capacidad de carga útil', true);
+
             $pmaRaw = trim((string)($_POST['pma_kg'] ?? ''));
-            $pma = (string)master_decimal($pmaRaw !== '' ? $pmaRaw : $carga, 0.0, 9999999999.99, true, 'PMA / peso bruto vehicular', true);
-            $volumen = master_decimal($_POST['capacidad_volumen_m3'] ?? null, 0.0, 999999999.999, false, 'capacidad de volumen', true);
-            $km = (string)master_decimal($_POST['kilometraje_actual'] ?? '0', 0.0, 99999999999.9, true, 'kilometraje actual');
-            $claseLegal = strtoupper(trim((string)($_POST['clase_legal'] ?? '')));
-            if ($claseLegal === '') {
-                $claseLegal = ((float)$pma > 8000 ? 'PESADO_RIGIDO' : ((float)$pma > 4000 ? 'MEDIANO_RIGIDO' : 'LIVIANO'));
+            if ($pmaRaw === '') {
+                throw new InvalidArgumentException('Indica el PMA / peso bruto autorizado del vehículo.');
             }
+            $pma = (string)master_decimal($pmaRaw, 0.0, 9999999999.99, true, 'PMA / peso bruto autorizado', true);
+
+            $volumen = master_decimal($_POST['capacidad_volumen_m3'] ?? null, 0.0, 999999999.999, false, 'capacidad de volumen', true);
+
+            // Odómetro retirado de la UI: en alta inicia en 0; en edición preserva el valor almacenado en BD si se omite.
+            $kmProvided = isset($_POST['kilometraje_actual']) && trim((string)$_POST['kilometraje_actual']) !== '';
+            $km = $kmProvided
+                ? (string)master_decimal($_POST['kilometraje_actual'], 0.0, 99999999999.9, true, 'kilometraje actual')
+                : ($isEdit ? null : '0');
+
+            $claseLegal = strtoupper(trim((string)($_POST['clase_legal'] ?? '')));
             if (!in_array($claseLegal, ['LIVIANO', 'MEDIANO_RIGIDO', 'PESADO_RIGIDO', 'PESADO_ARTICULADO'], true)) {
                 throw new InvalidArgumentException('Selecciona una clasificación legal válida.');
             }
             $esArticulado = !empty($_POST['es_articulado']) ? 1 : 0;
-            $estadoHomologacion = strtoupper(trim((string)($_POST['estado_homologacion'] ?? 'VERIFICADO')));
-            if (!in_array($estadoHomologacion, ['VERIFICADO', 'PENDIENTE_VERIFICACION', 'NO_CONFORME'], true)) {
-                throw new InvalidArgumentException('Selecciona un estado de homologación válido.');
-            }
+            master_validate_vehicle_coherence((float)$carga, (float)$pma, $claseLegal, $esArticulado === 1);
+
             $estado = strtoupper(trim((string)($_POST['estado'] ?? 'DISPONIBLE')));
             if (!in_array($estado, ['DISPONIBLE', 'MANTENIMIENTO', 'FUERA_SERVICIO'], true)) {
                 throw new InvalidArgumentException('Selecciona un estado operativo permitido para el vehículo.');
             }
+
+            // ASVS 2.3.1, 8.2.1: nunca aceptar promoción arbitraria de estado_homologacion desde POST ordinario.
+            // En alta se registra PENDIENTE_VERIFICACION (no simula homologación oficial MOPT);
+            // en edición se envía NULL para preservar el valor existente (incluido NO_CONFORME),
+            // salvo levantamiento administrativo explícito sobre una unidad bloqueada.
             if ($isEdit) {
+                $estadoHomologacion = null;
+                if (!empty($_POST['levantar_bloqueo_no_conforme'])) {
+                    $existingVehicle = master_find_record('vehiculo', $recordId);
+                    if (is_array($existingVehicle) && (string)($existingVehicle['estado_homologacion'] ?? '') === 'NO_CONFORME') {
+                        $estadoHomologacion = 'PENDIENTE_VERIFICACION';
+                    }
+                }
                 $sql = 'EXEC dbo.sp_actualizar_vehiculo @vehiculo_id=?, @marca=?, @modelo=?, @anio=?, @capacidad_carga_kg=?, @capacidad_volumen_m3=?, @kilometraje_actual=?, @estado=?, @pma_kg=?, @clase_legal=?, @es_articulado=?, @estado_homologacion=?;';
                 $params = [$recordId, $marca, $modelo, $anio, $carga, $volumen, $km, $estado, $pma, $claseLegal, $esArticulado, $estadoHomologacion];
             } else {
                 $placa = strtoupper((string)operation_text($_POST['placa'] ?? null, 20));
+                $estadoHomologacion = 'PENDIENTE_VERIFICACION';
                 $sql = 'DECLARE @nuevo_id INT; EXEC dbo.sp_crear_vehiculo @placa=?, @marca=?, @modelo=?, @anio=?, @capacidad_carga_kg=?, @capacidad_volumen_m3=?, @kilometraje_actual=?, @estado=?, @pma_kg=?, @clase_legal=?, @es_articulado=?, @estado_homologacion=?, @vehiculo_id=@nuevo_id OUTPUT;';
                 $params = [$placa, $marca, $modelo, $anio, $carga, $volumen, $km, $estado, $pma, $claseLegal, $esArticulado, $estadoHomologacion];
             }
@@ -66,40 +89,35 @@ try {
             $telefono = operation_text($_POST['telefono'] ?? null, 30, false);
             $correo = operation_email($_POST['correo'] ?? null, 150, false);
             $licencia = strtoupper((string)operation_text($_POST['numero_licencia'] ?? null, 50));
+
+            // ASVS 2.2.1, 2.3.1: categoría única explícita validada contra catálogo activo; sin B4 por defecto ni estado libre desde POST.
+            $codigoLicencia = strtoupper(trim((string)($_POST['codigo_licencia'] ?? '')));
+            if ($codigoLicencia === '') {
+                throw new InvalidArgumentException('Selecciona el tipo de licencia del conductor.');
+            }
+            $activeCatalogCodes = array_map(
+                static fn(array $row): string => strtoupper(trim((string)($row['codigo'] ?? ''))),
+                master_license_catalog()
+            );
+            if (!in_array($codigoLicencia, $activeCatalogCodes, true)) {
+                throw new InvalidArgumentException('La categoría de licencia seleccionada no es válida o no está activa.');
+            }
+
             $vencimiento = master_license_date($_POST['fecha_vencimiento_licencia'] ?? null);
+
             $estadoOp = strtoupper(trim((string)($_POST['estado_operativo'] ?? 'DISPONIBLE')));
             if (!in_array($estadoOp, ['DISPONIBLE', 'INACTIVO'], true)) {
                 throw new InvalidArgumentException('Selecciona un estado operativo permitido para el conductor.');
             }
             $usuarioId = master_int($_POST['usuario_id'] ?? null, 1, 2147483647, false, 'cuenta de usuario');
 
-            $selectedLicencias = (array)($_POST['licencias_seleccionadas'] ?? []);
-            if (empty($selectedLicencias)) {
-                $selectedLicencias = ['B4'];
-            }
-
-            $licenciasPayload = [];
-            foreach ($selectedLicencias as $codeRaw) {
-                $code = strtoupper(trim((string)$codeRaw));
-                if ($code === '') continue;
-                $vencLic = master_license_date($_POST['licencia_vencimiento'][$code] ?? $vencimiento);
-                $estLic = strtoupper(trim((string)($_POST['licencia_estado'][$code] ?? 'VERIFICADA')));
-                if (!in_array($estLic, ['VERIFICADA', 'PENDIENTE', 'RECHAZADA'], true)) {
-                    $estLic = 'VERIFICADA';
-                }
-                $licenciasPayload[$code] = [
-                    'vencimiento' => $vencLic,
-                    'estado' => $estLic,
-                ];
-            }
-
             if ($isEdit) {
                 $sql = 'EXEC dbo.sp_actualizar_conductor @conductor_id=?, @nombre=?, @primer_apellido=?, @segundo_apellido=?, @telefono=?, @correo=?, @numero_licencia=?, @fecha_vencimiento_licencia=?, @estado_operativo=?, @usuario_id=?;';
                 $params = [$recordId, $nombre, $ap1, $ap2, $telefono, $correo, $licencia, $vencimiento, $estadoOp, $usuarioId];
             } else {
                 $identificacion = (string)operation_text($_POST['identificacion'] ?? null, 30);
-                $sql = 'DECLARE @nuevo_id INT; EXEC dbo.sp_crear_conductor @identificacion=?, @nombre=?, @primer_apellido=?, @segundo_apellido=?, @telefono=?, @correo=?, @numero_licencia=?, @fecha_vencimiento_licencia=?, @estado_operativo=?, @usuario_id=?, @conductor_id=@nuevo_id OUTPUT; SELECT @nuevo_id AS nuevo_id;';
-                $params = [$identificacion, $nombre, $ap1, $ap2, $telefono, $correo, $licencia, $vencimiento, $estadoOp, $usuarioId];
+                $sql = 'DECLARE @nuevo_id INT; EXEC dbo.sp_crear_conductor @identificacion=?, @nombre=?, @primer_apellido=?, @segundo_apellido=?, @telefono=?, @correo=?, @numero_licencia=?, @fecha_vencimiento_licencia=?, @estado_operativo=?, @usuario_id=?, @codigo_licencia_inicial=?, @conductor_id=@nuevo_id OUTPUT; SELECT @nuevo_id AS nuevo_id;';
+                $params = [$identificacion, $nombre, $ap1, $ap2, $telefono, $correo, $licencia, $vencimiento, $estadoOp, $usuarioId, $codigoLicencia];
             }
             break;
 
@@ -179,56 +197,34 @@ try {
     operation_error($exception->getMessage());
 }
 
-try {
-    $stmt = db()->prepare($sql);
-    $stmt->execute($params);
+$pdo = db();
+$useAtomicDriverTx = ($entity === 'conductor' && $isEdit);
 
-    $savedConductorId = $recordId;
-    if ($entity === 'conductor' && !$isEdit) {
-        do {
-            if ($stmt->columnCount() > 0) {
-                $row = $stmt->fetch();
-                if (is_array($row) && isset($row['nuevo_id'])) {
-                    $savedConductorId = (int)$row['nuevo_id'];
-                }
-            }
-        } while ($stmt->nextRowset());
+try {
+    if ($useAtomicDriverTx) {
+        $pdo->beginTransaction();
     }
+
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
     $stmt->closeCursor();
 
-    if ($entity === 'conductor' && $savedConductorId > 0 && !empty($licenciasPayload)) {
-        if ($isEdit) {
-            $stmtCur = db()->prepare('EXEC dbo.sp_listar_licencias_conductor @conductor_id=?;');
-            $stmtCur->execute([$savedConductorId]);
-            $currentLicencias = $stmtCur->fetchAll(PDO::FETCH_ASSOC);
-            $stmtCur->closeCursor();
-
-            foreach ($currentLicencias as $curLic) {
-                $curCod = (string)$curLic['codigo_licencia'];
-                if (!isset($licenciasPayload[$curCod])) {
-                    $stmtRem = db()->prepare('EXEC dbo.sp_remover_licencia_conductor @conductor_id=?, @codigo_licencia=?;');
-                    $stmtRem->execute([$savedConductorId, $curCod]);
-                    $stmtRem->closeCursor();
-                }
-            }
-        }
-
-        $stmtLic = db()->prepare('EXEC dbo.sp_asignar_licencia_conductor @conductor_id=?, @codigo_licencia=?, @numero_licencia=?, @fecha_vencimiento=?, @estado_verificacion=?, @observaciones=NULL;');
-        foreach ($licenciasPayload as $catCod => $catInfo) {
-            $stmtLic->execute([
-                $savedConductorId,
-                $catCod,
-                $licencia,
-                $catInfo['vencimiento'],
-                $catInfo['estado'],
-            ]);
-            $stmtLic->closeCursor();
-        }
+    if ($useAtomicDriverTx) {
+        // Contrato atómico: sustituye categorías previas para evitar habilitaciones ocultas y sincroniza dbo.conductores.
+        $stmtLic = $pdo->prepare(
+            'EXEC dbo.sp_actualizar_licencia_principal_conductor @conductor_id=?, @codigo_licencia=?, @numero_licencia=?, @fecha_vencimiento=?, @observaciones=NULL;'
+        );
+        $stmtLic->execute([$recordId, $codigoLicencia, $licencia, $vencimiento]);
+        $stmtLic->closeCursor();
+        $pdo->commit();
     }
 } catch (PDOException $exception) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
     operation_sql_error($exception, [
         50501 => 'No tienes permiso para gestionar este registro.',
-        50502 => 'Revisa los valores ingresados (capacidad, kilometraje no regresivo, vigencia o coordenadas).',
+        50502 => 'Revisa los valores ingresados (carga útil y PMA coherentes, categoría y vigencia de licencia o coordenadas).',
         50503 => 'El registro solicitado no existe.',
         50504 => 'Ya existe un registro con esos datos únicos (placa, identificación, licencia, usuario o nombre).',
         50505 => 'No se puede modificar el registro porque participa en viajes activos o tiene referencias históricas protegidas.',

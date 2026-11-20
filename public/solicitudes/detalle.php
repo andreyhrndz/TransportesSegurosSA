@@ -59,8 +59,28 @@ layout_start('solicitudes', 'Solicitud ' . (string)$solicitud['codigo_solicitud'
         <div class="detail-field"><span>Estado</span><strong><?= status_tag($solicitud['estado']) ?></strong></div>
         <div class="detail-field"><span>Prioridad</span><strong><?= status_tag($solicitud['prioridad_actual']) ?></strong></div>
         <div class="detail-field"><span>Entrega requerida</span><strong><?= format_utc_datetime($solicitud['fecha_entrega_requerida']) ?></strong></div>
-        <div class="detail-field"><span>Ubicación de origen</span><strong><?= e($solicitud['origen_nombre']) ?></strong></div>
-        <div class="detail-field"><span>Ubicación de destino</span><strong><?= e($solicitud['destino_nombre']) ?></strong></div>
+        <div class="detail-field">
+            <span>Ubicación de origen</span>
+            <strong><?= e($solicitud['origen_nombre']) ?></strong>
+            <?php if ((int)($solicitud['origen_es_reutilizable'] ?? 1) === 0): ?>
+                <p class="is-size-7 has-text-grey mt-1 mb-0">Punto puntual de esta solicitud</p>
+            <?php endif; ?>
+            <?php if (!empty($solicitud['origen_direccion'])): ?>
+                <p class="help mt-1 mb-1"><?= e($solicitud['origen_direccion']) ?></p>
+            <?php endif; ?>
+            <div class="mt-2"><?= google_maps_link($solicitud['origen_latitud'] ?? null, $solicitud['origen_longitud'] ?? null) ?></div>
+        </div>
+        <div class="detail-field">
+            <span>Ubicación de destino</span>
+            <strong><?= e($solicitud['destino_nombre']) ?></strong>
+            <?php if ((int)($solicitud['destino_es_reutilizable'] ?? 1) === 0): ?>
+                <p class="is-size-7 has-text-grey mt-1 mb-0">Punto puntual de esta solicitud</p>
+            <?php endif; ?>
+            <?php if (!empty($solicitud['destino_direccion'])): ?>
+                <p class="help mt-1 mb-1"><?= e($solicitud['destino_direccion']) ?></p>
+            <?php endif; ?>
+            <div class="mt-2"><?= google_maps_link($solicitud['destino_latitud'] ?? null, $solicitud['destino_longitud'] ?? null) ?></div>
+        </div>
         <div class="detail-field"><span>Viaje asignado</span><strong><?= $solicitud['codigo_viaje'] ? e($solicitud['codigo_viaje']) : 'Sin asignar' ?></strong></div>
     </div>
 </section>
