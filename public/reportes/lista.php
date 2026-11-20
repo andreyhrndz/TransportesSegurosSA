@@ -117,7 +117,7 @@ $page = min($page, $pages);
     ?>
     <div class="report-source-banner">
         <?= svg_icon('requests') ?>
-        <span><strong>Fuente:</strong> Base operacional en tiempo real · <strong>Período:</strong> <?= e($periodLabel) ?></span>
+        <span><strong>Fuente:</strong> Base operacional (datos en tiempo real) · <strong>Período:</strong> <?= e($periodLabel) ?></span>
     </div>
 
     <section class="stats-grid report-kpi-grid" aria-label="Indicadores de solicitudes">
@@ -242,7 +242,7 @@ $page = min($page, $pages);
     ?>
     <div class="report-source-banner">
         <?= svg_icon('deliveries') ?>
-        <span><strong>Fuente:</strong> Base operacional en tiempo real · <strong>Período:</strong> <?= e($periodLabel) ?></span>
+        <span><strong>Fuente:</strong> Base operacional (datos en tiempo real) · <strong>Período:</strong> <?= e($periodLabel) ?></span>
     </div>
 
     <section class="stats-grid report-kpi-grid" aria-label="Indicadores de entregas">
@@ -385,8 +385,8 @@ $page = min($page, $pages);
         <div class="report-source-banner report-source-dw" data-dw-source="<?= e($data['dw_db_name']) ?>">
             <?= svg_icon('database') ?>
             <div>
-                <strong>Data Warehouse (última carga conocida: <?= e($ultimaCargaTexto) ?>)</strong>
-                <span> · Base analítica de solo lectura <code><?= e($data['dw_db_name']) ?></code> (<?= (int)$data['total_hechos_dw'] ?> hecho(s) históricos consolidados por ETL de la base operacional). Período filtrado: <?= e($periodLabel) ?>.</span>
+                <strong>Data Warehouse de solo lectura (última carga conocida: <?= e($ultimaCargaTexto) ?>)</strong>
+                <span> · Datos históricos consolidados por ETL en <code><?= e($data['dw_db_name']) ?></code> (<?= (int)$data['total_hechos_dw'] ?> hecho(s)); puede no coincidir con cambios operativos recientes. Período filtrado: <?= e($periodLabel) ?>.</span>
             </div>
         </div>
 

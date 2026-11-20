@@ -262,16 +262,15 @@ async function assertNoDesktopOverflow(page, label) {
         await assertNoDesktopOverflow(page, 'auditoria 1440x900');
         await page.screenshot({ path: path.join(SHOT_DIR, '04_bitacora_independiente_1440.png'), fullPage: true });
 
-        // Filtrar por usuario efímero + acción REORDER vía formulario
+        // Filtrar automáticamente por usuario efímero (sin botón Filtrar, con debounce)
         await page.fill('#auditoria-usuario', ADMIN_USER);
-        await page.click('#auditoria-filtros button[type="submit"]');
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(700);
         const audTableText = await page.locator('#auditoria-lista').innerText();
         assert(audTableText.includes('Reordenó las paradas del itinerario de un viaje'), 'La bitácora debe mostrar el reordenamiento en lenguaje humano.');
         await page.locator('#auditoria-lista details summary').first().click();
         await page.waitForTimeout(150);
         await page.screenshot({ path: path.join(SHOT_DIR, '05_bitacora_filtrada_soporte_1440.png'), fullPage: true });
-        console.log('[OK] E2E 2: Bitácora independiente en sidebar, filtrado por usuario, texto humano y soporte desplegable.');
+        console.log('[OK] E2E 2: Bitácora independiente en sidebar, filtrado automático por usuario, texto humano y soporte desplegable.');
 
         // ------------------------------------------------------------------
         // FLUJO 3: Reportes (3 pestañas sin auditoría, Chart.js, DW, CSV, Impresión)
@@ -295,7 +294,7 @@ async function assertNoDesktopOverflow(page, label) {
         assert.strictEqual(await page.locator('#reportes-cargando').isVisible(), false, 'El indicador de carga de reportes debe ocultarse al terminar la petición.');
         await page.waitForTimeout(500);
         const dwHtmlText = await page.locator('#reportes-resultado').innerText();
-        assert(dwHtmlText.includes('Data Warehouse (última carga conocida:'), 'Reporte 3 debe rotular fuente DW y última carga.');
+        assert(dwHtmlText.includes('Data Warehouse de solo lectura (última carga conocida:'), 'Reporte 3 debe rotular fuente DW solo lectura y última carga.');
         await assertNoDesktopOverflow(page, 'reporte DW 1440x900');
         await page.screenshot({ path: path.join(SHOT_DIR, '08_reporte_dw_historico_1440.png'), fullPage: true });
 

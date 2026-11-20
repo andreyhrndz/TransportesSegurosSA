@@ -34,7 +34,7 @@ require_once __DIR__ . '/../app/layout.php';
 layout_start(
     'reportes',
     'Reportes',
-    'Indicadores operativos por período, desempeño histórico del Data Warehouse y exportación controlada.'
+    'Consultas operacionales en tiempo real, análisis histórico del Data Warehouse y exportación controlada.'
 );
 ?>
 <nav class="tabs-bar" aria-label="Tipos de reporte">
@@ -52,7 +52,8 @@ layout_start(
         id="reportes-filtros"
         hx-get="/reportes/lista.php"
         hx-target="#reportes-resultado"
-        hx-trigger="submit, keyup changed delay:350ms from:input[type=search], change from:select, change from:input[data-datepicker]"
+        hx-trigger="submit, input changed delay:350ms from:input[type=search], change from:select, change from:input[data-datepicker]"
+        hx-sync="this:abort"
         hx-include="this"
         hx-indicator="#reportes-cargando"
     >
@@ -112,13 +113,7 @@ layout_start(
         <input class="input" id="reporte-desde" type="text" name="desde" data-datepicker="date" placeholder="Desde (dd/mm/aaaa)" aria-label="Fecha desde">
         <input class="input" id="reporte-hasta" type="text" name="hasta" data-datepicker="date" placeholder="Hasta (dd/mm/aaaa)" aria-label="Fecha hasta">
 
-        <div class="buttons">
-            <button class="button is-primary" type="submit">
-                <?= svg_icon('filter') ?>
-                <span>Aplicar</span>
-            </button>
-            <a class="button button-secondary" href="/reportes.php?seccion=<?= e($section) ?>">Limpiar</a>
-        </div>
+        <a class="button button-secondary filter-clear-btn" href="/reportes.php?seccion=<?= e($section) ?>">Limpiar</a>
     </form>
 
     <div class="report-export-actions">

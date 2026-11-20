@@ -17,25 +17,25 @@ function report_available_sections(): array
     }
     if (has_permission('SOLICITUDES_VER')) {
         $sections['solicitudes'] = [
-            'label' => 'Solicitudes por período',
-            'subtitle' => 'Volumen de solicitudes, distribución por estado y prioridad, y detalle operativo.',
+            'label' => 'Solicitudes',
+            'subtitle' => 'Volumen de solicitudes en la base operacional, distribución por estado y prioridad, y detalle actual.',
             'icon' => 'requests',
-            'source_label' => 'Base operacional en tiempo real',
+            'source_label' => 'Base operacional (datos en tiempo real)',
         ];
     }
     if (has_permission('ENTREGAS_VER')) {
         $sections['entregas'] = [
-            'label' => 'Entregas y resultados',
-            'subtitle' => 'Resultados registrados, tasa de éxito sobre entregas concluidas y puntualidad operativa.',
+            'label' => 'Entregas operativas',
+            'subtitle' => 'Resultados registrados en la base operacional, tasa de éxito sobre entregas concluidas y entregas a tiempo.',
             'icon' => 'deliveries',
-            'source_label' => 'Base operacional en tiempo real',
+            'source_label' => 'Base operacional (datos en tiempo real)',
         ];
     }
     $sections['historico_dw'] = [
-        'label' => 'Desempeño histórico (DW)',
+        'label' => 'Análisis histórico (DW)',
         'subtitle' => 'Indicadores consolidados de entregas históricas desde el Data Warehouse (solo lectura).',
         'icon' => 'database',
-        'source_label' => 'Data Warehouse histórico (TransportesSegurosSA_DW)',
+        'source_label' => 'Data Warehouse de solo lectura (datos históricos consolidados por ETL)',
     ];
     return $sections;
 }

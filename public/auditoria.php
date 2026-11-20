@@ -20,7 +20,8 @@ layout_start(
         class="filter-form"
         hx-get="/auditoria/lista.php"
         hx-target="#auditoria-lista"
-        hx-trigger="submit, keyup changed delay:350ms from:#auditoria-usuario, change from:select, change from:input[data-datepicker]"
+        hx-trigger="submit, input changed delay:350ms from:#auditoria-usuario, change from:select, change from:input[data-datepicker]"
+        hx-sync="this:abort"
         hx-include="this"
         hx-indicator="#auditoria-cargando"
     >
@@ -46,13 +47,7 @@ layout_start(
         </div>
         <input class="input" id="auditoria-desde" name="desde" type="text" data-datepicker="date" placeholder="Desde (dd/mm/aaaa)" aria-label="Fecha desde">
         <input class="input" id="auditoria-hasta" name="hasta" type="text" data-datepicker="date" placeholder="Hasta (dd/mm/aaaa)" aria-label="Fecha hasta">
-        <div class="buttons">
-            <button class="button is-primary" type="submit">
-                <?= svg_icon('filter') ?>
-                <span>Filtrar</span>
-            </button>
-            <a class="button button-secondary" href="/auditoria.php">Limpiar</a>
-        </div>
+        <a class="button button-secondary filter-clear-btn" href="/auditoria.php">Limpiar</a>
     </form>
 </section>
 

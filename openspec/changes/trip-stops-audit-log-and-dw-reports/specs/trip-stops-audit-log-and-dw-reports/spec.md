@@ -31,11 +31,19 @@ El sistema SHALL ofrecer `/auditoria.php` y `/auditoria/lista.php` como módulo 
 - **THEN** se presenta una acción humana fiel a la entidad/acción registrada (fallback «Acción registrada» si es desconocida), sin exponer contraseñas ni tokens y conservando IDs originales en un detalle técnico desplegable para soporte
 
 ### Requirement: Reportes analíticos con exportación CSV segura, impresión y Data Warehouse real
-`/reportes.php` SHALL exigir `REPORTES_VER` (sin incluir la pestaña de auditoría) y presentar tres reportes con indicadores, gráficos Chart.js, exportación CSV protegida contra formula injection y vista print-friendly: Solicitudes por período, Entregas y resultados (tasa de éxito explícita) y Desempeño histórico conectado en solo lectura a `TransportesSegurosSA_DW`.
+`/reportes.php` SHALL exigir `REPORTES_VER` (sin incluir la pestaña de auditoría) y presentar tres reportes con indicadores, gráficos Chart.js, filtros automáticos sin botón redundante «Aplicar» (conservando «Limpiar»), exportación CSV protegida contra formula injection y vista print-friendly: **Solicitudes**, **Entregas operativas** (ambos identificados como base operacional en tiempo real, con tasa de éxito explícita) y **Análisis histórico (DW)** conectado en solo lectura a `TransportesSegurosSA_DW`.
+
+#### Scenario: Filtros automáticos en Reportes e Historial de actividad
+- **WHEN** un usuario modifica la búsqueda (debounce ~350 ms), un combobox Tom Select o una fecha Flatpickr en `/reportes.php` o `/auditoria.php`
+- **THEN** la tabla, los KPIs y los enlaces de exportación/impresión se actualizan automáticamente sin botón «Aplicar»/«Filtrar», reiniciando paginación a página 1 y evitando respuestas asíncronas obsoletas; el botón «Limpiar» restablece todos los filtros conservando la pestaña activa
+
+#### Scenario: Selector inteligente de paradas compatibles al asignar solicitud a un viaje
+- **WHEN** un usuario con `VIAJES_ASIGNAR` abre el modal «Asignar solicitud» en `/viajes/detalle.php`
+- **THEN** los selectores de parada inician bloqueados hasta elegir una solicitud; al elegirla, «Parada de recogida» muestra únicamente paradas `RECOGIDA`/`MIXTA` con `ubicacion_id = origen_id`, «Parada de entrega» muestra únicamente paradas `ENTREGA`/`MIXTA` con `ubicacion_id = destino_id` (nunca por proximidad ni incluyendo `INTERMEDIA`), respetando `orden(recogida) < orden(entrega)` y paradas distintas, preseleccionando si existe una única pareja válida o bloqueando el envío con aviso concreto si falta compatibilidad, mientras `dbo.sp_asignar_solicitud_viaje` mantiene el rechazo autoritativo en servidor (`50312`)
 
 #### Scenario: Consulta real al Data Warehouse en solo lectura sin ejecutar ETL
-- **WHEN** un usuario autorizado consulta el reporte Desempeño histórico
-- **THEN** el servidor consulta `TransportesSegurosSA_DW` verificando `DB_NAME() = 'TransportesSegurosSA_DW'`, muestra la fuente explícita, la última carga conocida (`MAX(fecha_carga_utc)`) y los agregados de `dbo.fact_entregas` sin ejecutar `dbo.sp_cargar_datawarehouse`
+- **WHEN** un usuario autorizado consulta el reporte **Análisis histórico (DW)**
+- **THEN** el servidor consulta `TransportesSegurosSA_DW` verificando `DB_NAME() = 'TransportesSegurosSA_DW'`, muestra la fuente explícita de solo lectura consolidada por ETL, la última carga conocida (`MAX(fecha_carga_utc)`), advierte que puede no coincidir con cambios operativos recientes y presenta los agregados de `dbo.fact_entregas` sin ejecutar `dbo.sp_cargar_datawarehouse`
 - **AND WHEN** el DW no está disponible o no tiene hechos cargados
 - **THEN** el reporte degrada elegantemente con mensaje claro sin afectar los demás reportes
 

@@ -95,7 +95,7 @@ if ($section === 'solicitudes') {
 } else {
     $k = $data['kpis'];
     $ultimaCargaTexto = $data['ultima_carga_utc'] ? format_utc_datetime($data['ultima_carga_utc']) : 'Sin cargas ETL registradas';
-    $sourceText = 'Data Warehouse (TransportesSegurosSA_DW · última carga conocida: ' . $ultimaCargaTexto . ')';
+    $sourceText = 'Data Warehouse de solo lectura · datos históricos consolidados por ETL (TransportesSegurosSA_DW · última carga conocida: ' . $ultimaCargaTexto . '; puede no coincidir con cambios operativos recientes)';
     $headers = ['Fecha', 'Ruta', 'Placa vehículo', 'Conductor', 'Cliente (ID)', 'Resultado', 'Puntual', 'Peso (kg)', 'Volumen (m³)', 'Incidencias'];
     foreach ($data['rows'] as $r) {
         $tableRows[] = [

@@ -393,6 +393,9 @@
                             desdeInput._flatpickr.set('maxDate', dateStr || null);
                         }
                     }
+                    if (form.id === 'reportes-filtros') {
+                        syncReportExportLinks();
+                    }
                 },
             };
 
@@ -1180,15 +1183,328 @@
         });
     }
 
+    /* ======================================================================
+       SELECTOR INTELIGENTE DE PARADAS AL ASIGNAR SOLICITUD A UN VIAJE
+       ====================================================================== */
+
+    function initAssignStopsModal(root = document) {
+        if (!root || !root.querySelectorAll) return;
+        const containers = root.querySelectorAll('[data-assign-stops-root]');
+        containers.forEach((container) => {
+            if (container.dataset.assignStopsInit === '1') return;
+            container.dataset.assignStopsInit = '1';
+
+            const form = container.closest('form');
+            const selSol = container.querySelector('#asignar-solicitud');
+            const selRec = container.querySelector('#parada-recogida');
+            const selEnt = container.querySelector('#parada-entrega');
+            const aviso = container.querySelector('#asignar-validacion-aviso');
+            const ayuda = container.querySelector('#asignar-paradas-ayuda');
+            const submitBtn = form ? form.querySelector('button[type="submit"]') : null;
+            if (!selSol || !selRec || !selEnt) return;
+
+            let allStops = [];
+            try {
+                const parsed = JSON.parse(container.dataset.tripStops || '[]');
+                if (Array.isArray(parsed)) {
+                    allStops = parsed.map((s) => ({
+                        id: parseInt(s.id, 10),
+                        ubicacion_id: parseInt(s.ubicacion_id, 10),
+                        orden: parseInt(s.orden, 10),
+                        tipo_parada: String(s.tipo_parada || '').toUpperCase().trim(),
+                        ubicacion_nombre: String(s.ubicacion_nombre || ''),
+                        label: String(s.label || ''),
+                        subtext: String(s.subtext || ''),
+                    })).filter((s) => Number.isFinite(s.id) && s.id > 0);
+                }
+            } catch {
+                allStops = [];
+            }
+
+            const getSolicitudMeta = () => {
+                const val = String(selSol.value || '').trim();
+                if (!val) return null;
+                const opt = Array.from(selSol.options || []).find((o) => String(o.value) === val);
+                const tsOpt = selSol.tomselect?.options?.[val];
+                const rawOri = opt?.dataset?.origen ?? tsOpt?.$option?.dataset?.origen ?? '';
+                const rawDes = opt?.dataset?.destino ?? tsOpt?.$option?.dataset?.destino ?? '';
+                const origenId = parseInt(rawOri, 10);
+                const destinoId = parseInt(rawDes, 10);
+                if (!Number.isFinite(origenId) || !Number.isFinite(destinoId) || origenId <= 0 || destinoId <= 0) {
+                    return null;
+                }
+                return { solicitudId: parseInt(val, 10), origenId, destinoId };
+            };
+
+            const setSelectOptions = (selectEl, stopsList, selectedId, enabled, placeholderText) => {
+                const ts = selectEl.tomselect || null;
+                const wantedVal = selectedId > 0 && stopsList.some((s) => s.id === selectedId) ? String(selectedId) : '';
+
+                if (ts) {
+                    ts.settings.placeholder = placeholderText;
+                    if (ts.control_input) {
+                        ts.control_input.setAttribute('placeholder', placeholderText);
+                    }
+                    ts.clear(true);
+                    ts.clearOptions();
+                    stopsList.forEach((stop) => {
+                        ts.addOption({
+                            value: String(stop.id),
+                            text: stop.label,
+                            subtext: stop.subtext,
+                        });
+                    });
+                    if (wantedVal !== '') {
+                        ts.setValue(wantedVal, true);
+                    }
+                    ts.refreshOptions(false);
+                    if (enabled) {
+                        ts.enable();
+                        selectEl.disabled = false;
+                    } else {
+                        ts.disable();
+                        selectEl.disabled = true;
+                    }
+                    if (ts.control_input) {
+                        ts.control_input.setAttribute('placeholder', wantedVal === '' ? placeholderText : '');
+                    }
+                    return;
+                }
+
+                // Fallback sin Tom Select
+                selectEl.innerHTML = '';
+                const emptyOpt = document.createElement('option');
+                emptyOpt.value = '';
+                emptyOpt.textContent = placeholderText;
+                selectEl.appendChild(emptyOpt);
+                stopsList.forEach((stop) => {
+                    const opt = document.createElement('option');
+                    opt.value = String(stop.id);
+                    opt.textContent = stop.label;
+                    if (wantedVal === opt.value) opt.selected = true;
+                    selectEl.appendChild(opt);
+                });
+                selectEl.value = wantedVal;
+                selectEl.disabled = !enabled;
+            };
+
+            const showNotice = (msg) => {
+                if (!aviso) return;
+                if (!msg) {
+                    aviso.hidden = true;
+                    aviso.textContent = '';
+                } else {
+                    aviso.hidden = false;
+                    aviso.textContent = msg;
+                }
+            };
+
+            const setHelp = (msg) => {
+                if (ayuda && msg) {
+                    ayuda.textContent = msg;
+                }
+            };
+
+            let isUpdating = false;
+            let lastValidPairs = [];
+
+            const recompute = (source = 'init') => {
+                if (isUpdating) return;
+                isUpdating = true;
+                try {
+                    const meta = getSolicitudMeta();
+                    if (!meta) {
+                        lastValidPairs = [];
+                        setSelectOptions(selRec, [], 0, false, 'Selecciona primero una solicitud…');
+                        setSelectOptions(selEnt, [], 0, false, 'Selecciona primero una solicitud…');
+                        showNotice('');
+                        setHelp('Selecciona primero una solicitud para mostrar únicamente las paradas compatibles en origen, destino y secuencia del itinerario.');
+                        if (submitBtn) submitBtn.disabled = true;
+                        return;
+                    }
+
+                    const recCandidates = allStops.filter(
+                        (s) => (s.tipo_parada === 'RECOGIDA' || s.tipo_parada === 'MIXTA') && s.ubicacion_id === meta.origenId
+                    );
+                    const entCandidates = allStops.filter(
+                        (s) => (s.tipo_parada === 'ENTREGA' || s.tipo_parada === 'MIXTA') && s.ubicacion_id === meta.destinoId
+                    );
+
+                    const validPairs = [];
+                    recCandidates.forEach((r) => {
+                        entCandidates.forEach((e) => {
+                            if (r.id !== e.id && r.orden < e.orden) {
+                                validPairs.push({ rec: r, ent: e });
+                            }
+                        });
+                    });
+                    lastValidPairs = validPairs;
+
+                    if (recCandidates.length === 0 && entCandidates.length === 0) {
+                        setSelectOptions(selRec, [], 0, false, 'Sin parada compatible en origen');
+                        setSelectOptions(selEnt, [], 0, false, 'Sin parada compatible en destino');
+                        showNotice('No hay paradas compatibles en el itinerario para el origen ni el destino de esta solicitud. Agrégalas o corrígelas en el itinerario.');
+                        setHelp('Se requiere una parada de tipo Recogida o Mixta en el origen y una de tipo Entrega o Mixta en el destino.');
+                        if (submitBtn) submitBtn.disabled = true;
+                        return;
+                    }
+
+                    if (recCandidates.length === 0) {
+                        setSelectOptions(selRec, [], 0, false, 'Sin parada compatible en origen');
+                        setSelectOptions(selEnt, [], 0, false, 'Requiere parada de recogida compatible');
+                        showNotice('No hay una parada de recogida en el origen de esta solicitud. Agrégala o corrígela en el itinerario.');
+                        setHelp('Solo se admiten paradas de tipo Recogida o Mixta cuya ubicación coincida exactamente con el origen de la solicitud.');
+                        if (submitBtn) submitBtn.disabled = true;
+                        return;
+                    }
+
+                    if (entCandidates.length === 0) {
+                        setSelectOptions(selRec, recCandidates, 0, true, 'Selecciona parada de recogida…');
+                        setSelectOptions(selEnt, [], 0, false, 'Sin parada compatible en destino');
+                        showNotice('No hay una parada de entrega en su destino. Agrégala o corrígela en el itinerario.');
+                        setHelp('Solo se admiten paradas de tipo Entrega o Mixta cuya ubicación coincida exactamente con el destino de la solicitud.');
+                        if (submitBtn) submitBtn.disabled = true;
+                        return;
+                    }
+
+                    if (validPairs.length === 0) {
+                        setSelectOptions(selRec, recCandidates, 0, false, 'Orden incompatible en el itinerario');
+                        setSelectOptions(selEnt, entCandidates, 0, false, 'Orden incompatible en el itinerario');
+                        showNotice('La parada de recogida en el origen aparece después o en la misma posición que la entrega en el destino. Reordena las paradas del itinerario antes de asignar.');
+                        setHelp('El orden de la parada de recogida debe ser estrictamente menor que el orden de la parada de entrega.');
+                        if (submitBtn) submitBtn.disabled = true;
+                        return;
+                    }
+
+                    let curRecId = parseInt(selRec.value || '0', 10) || 0;
+                    let curEntId = parseInt(selEnt.value || '0', 10) || 0;
+
+                    if (source === 'solicitud') {
+                        if (validPairs.length === 1) {
+                            curRecId = validPairs[0].rec.id;
+                            curEntId = validPairs[0].ent.id;
+                        } else {
+                            const stillValidPair = validPairs.some((p) => p.rec.id === curRecId && p.ent.id === curEntId);
+                            if (!stillValidPair) {
+                                curRecId = 0;
+                                curEntId = 0;
+                            }
+                        }
+                    }
+
+                    const allValidRecIds = new Set(validPairs.map((p) => p.rec.id));
+                    const allValidEntIds = new Set(validPairs.map((p) => p.ent.id));
+
+                    let recAllowedIds = allValidRecIds;
+                    let entAllowedIds = allValidEntIds;
+
+                    if (source === 'recogida') {
+                        if (curRecId > 0 && allValidRecIds.has(curRecId)) {
+                            entAllowedIds = new Set(validPairs.filter((p) => p.rec.id === curRecId).map((p) => p.ent.id));
+                            if (curEntId > 0 && !entAllowedIds.has(curEntId)) {
+                                curEntId = 0;
+                            }
+                        } else {
+                            curRecId = 0;
+                        }
+                    } else if (source === 'entrega') {
+                        if (curEntId > 0 && allValidEntIds.has(curEntId)) {
+                            recAllowedIds = new Set(validPairs.filter((p) => p.ent.id === curEntId).map((p) => p.rec.id));
+                            if (curRecId > 0 && !recAllowedIds.has(curRecId)) {
+                                curRecId = 0;
+                            }
+                        } else {
+                            curEntId = 0;
+                        }
+                    } else {
+                        if (curRecId > 0 && !allValidRecIds.has(curRecId)) curRecId = 0;
+                        if (curEntId > 0 && !allValidEntIds.has(curEntId)) curEntId = 0;
+                        if (curRecId > 0) {
+                            entAllowedIds = new Set(validPairs.filter((p) => p.rec.id === curRecId).map((p) => p.ent.id));
+                            if (curEntId > 0 && !entAllowedIds.has(curEntId)) curEntId = 0;
+                        }
+                        if (curEntId > 0) {
+                            recAllowedIds = new Set(validPairs.filter((p) => p.ent.id === curEntId).map((p) => p.rec.id));
+                            if (curRecId > 0 && !recAllowedIds.has(curRecId)) curRecId = 0;
+                        }
+                    }
+
+                    const recList = recCandidates.filter((s) => recAllowedIds.has(s.id));
+                    const entList = entCandidates.filter((s) => entAllowedIds.has(s.id));
+
+                    setSelectOptions(selRec, recList, curRecId, true, 'Selecciona parada de recogida…');
+                    setSelectOptions(selEnt, entList, curEntId, true, 'Selecciona parada de entrega…');
+
+                    const hasValidSelection = validPairs.some((p) => p.rec.id === curRecId && p.ent.id === curEntId);
+                    showNotice('');
+                    if (hasValidSelection) {
+                        if (submitBtn) submitBtn.disabled = false;
+                        setHelp(
+                            validPairs.length === 1
+                                ? 'Se seleccionó la única combinación compatible de recogida y entrega en este itinerario.'
+                                : 'Combinación compatible seleccionada (origen, destino, tipo y secuencia verificados).'
+                        );
+                    } else {
+                        if (submitBtn) submitBtn.disabled = true;
+                        setHelp('Elige una parada de recogida y una parada de entrega compatibles (recogida antes que entrega).');
+                    }
+                } finally {
+                    isUpdating = false;
+                }
+            };
+
+            const onSolChange = () => recompute('solicitud');
+            const onRecChange = () => recompute('recogida');
+            const onEntChange = () => recompute('entrega');
+            const onFormSubmit = (ev) => {
+                const recId = parseInt(selRec.value || '0', 10) || 0;
+                const entId = parseInt(selEnt.value || '0', 10) || 0;
+                const ok = lastValidPairs.some((p) => p.rec.id === recId && p.ent.id === entId);
+                if (!ok) {
+                    ev.preventDefault();
+                    ev.stopImmediatePropagation();
+                    showNotice('Selecciona una solicitud y una pareja válida de paradas de recogida y entrega antes de asignar.');
+                }
+            };
+
+            selSol.addEventListener('change', onSolChange);
+            selRec.addEventListener('change', onRecChange);
+            selEnt.addEventListener('change', onEntChange);
+            form?.addEventListener('submit', onFormSubmit, true);
+
+            container._tssaAssignStopsCleanup = () => {
+                selSol.removeEventListener('change', onSolChange);
+                selRec.removeEventListener('change', onRecChange);
+                selEnt.removeEventListener('change', onEntChange);
+                form?.removeEventListener('submit', onFormSubmit, true);
+                delete container._tssaAssignStopsCleanup;
+            };
+
+            recompute(selSol.value ? 'solicitud' : 'init');
+        });
+    }
+
+    function destroyAssignStopsModal(root = document) {
+        if (!root || !root.querySelectorAll) return;
+        root.querySelectorAll('[data-assign-stops-root]').forEach((container) => {
+            if (typeof container._tssaAssignStopsCleanup === 'function') {
+                container._tssaAssignStopsCleanup();
+            }
+            delete container.dataset.assignStopsInit;
+        });
+    }
+
     function initComponents(root = document) {
         initComboboxes(root);
         initDatepickers(root);
         initCharts(root);
         initLocationMaps(root);
         initHybridRequestLocations(root);
+        initAssignStopsModal(root);
     }
 
     function destroyComponents(root = document) {
+        destroyAssignStopsModal(root);
         destroyComboboxes(root);
         destroyDatepickers(root);
         destroyCharts(root);
@@ -2330,47 +2646,7 @@
             return;
         }
 
-        // Validación de consistencia en modal de asignación de paradas de viajes
-        if (['asignar-solicitud', 'parada-recogida', 'parada-entrega'].includes(target.id)) {
-            const selSol = document.getElementById('asignar-solicitud');
-            const selRec = document.getElementById('parada-recogida');
-            const selEnt = document.getElementById('parada-entrega');
-            const aviso = document.getElementById('asignar-validacion-aviso');
-
-            if (!selSol || !selRec || !selEnt || !aviso) return;
-            const optSol = selSol.options[selSol.selectedIndex];
-            const optRec = selRec.options[selRec.selectedIndex];
-            const optEnt = selEnt.options[selEnt.selectedIndex];
-
-            if (!optSol?.value || !optRec?.value || !optEnt?.value) {
-                aviso.hidden = true;
-                return;
-            }
-
-            const origenId = optSol.dataset.origen;
-            const destinoId = optSol.dataset.destino;
-            const ubicRecId = optRec.dataset.ubicacion;
-            const ubicEntId = optEnt.dataset.ubicacion;
-            const ordenRec = parseInt(optRec.dataset.orden || '0', 10);
-            const ordenEnt = parseInt(optEnt.dataset.orden || '0', 10);
-
-            if (ordenRec >= ordenEnt) {
-                aviso.hidden = false;
-                aviso.textContent = 'Inconsistencia de ruta: la parada de recogida debe ser anterior en el orden a la parada de entrega.';
-                return;
-            }
-            if (origenId && ubicRecId && origenId !== ubicRecId) {
-                aviso.hidden = false;
-                aviso.textContent = 'La ubicación de la parada de recogida no coincide con el origen de la solicitud.';
-                return;
-            }
-            if (destinoId && ubicEntId && destinoId !== ubicEntId) {
-                aviso.hidden = false;
-                aviso.textContent = 'La ubicación de la parada de entrega no coincide con el destino de la solicitud.';
-                return;
-            }
-            aviso.hidden = true;
-        }
+        // La consistencia del modal de asignación de paradas se gestiona en initAssignStopsModal().
 
         if (target.id === 'cond-tipo-licencia' || target.dataset?.licenseSelect === '1') {
             handleLicenseCategoryChange(target);

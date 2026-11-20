@@ -331,6 +331,43 @@ try {
     [$stNoPerm] = sar_http("{$base}/viajes/paradas_orden_guardar.php", $cookieNoStops, 'POST', http_build_query(['csrf_token' => $csrfNoStops, 'viaje_id' => $viajeId, 'orden_paradas' => [$pIds[1], $pIds[2]]]), true);
     sar_assert($stNoPerm === 403, "Actor sin VIAJES_PARADAS debe recibir 403 (recibido {$stNoPerm}).");
 
+    // Escenario (g) Cambio C: modal asignar + rechazo HTTP/SQL de paradas incompatibles sin escrituras parciales
+    $stSol3 = $pdo->prepare("SET NOCOUNT ON; DECLARE @m dbo.tipo_mercancias, @sid INT; INSERT INTO @m VALUES (?, N'Carga SAR3', 50, 0.5); EXEC dbo.sp_crear_solicitud @codigo=NULL,@cliente_id=?,@origen_id=?,@destino_id=?,@destinatario_nombre=N'Test',@destinatario_apellido1=N'Tres',@destinatario_apellido2=N'Ok',@destinatario_identificacion=N'101010103',@destinatario_telefono=N'88888883',@fecha_entrega_requerida=?,@mercancias=@m,@solicitud_id=@sid OUTPUT; SELECT @sid;");
+    $stSol3->execute([$tipoMercId, $clienteId, $uIds[1], $uIds[4], $future]);
+    $sol3Id = 0;
+    do {
+        if ($stSol3->columnCount() > 0) {
+            $v = $stSol3->fetchColumn();
+            if ($v !== false) {
+                $sol3Id = (int)$v;
+            }
+        }
+    } while ($stSol3->nextRowset());
+    $stSol3->closeCursor();
+    sar_assert($sol3Id > 0, 'No se pudo crear sol3 para escenario (g).');
+    $solIds[] = $sol3Id;
+
+    [$stAsgForm, $asgFormHtml] = sar_http("{$base}/viajes/accion_form.php?id={$viajeId}&accion=asignar", $cookieAdmin, 'GET', null, true);
+    sar_assert($stAsgForm === 200 && str_contains($asgFormHtml, 'data-assign-stops-root') && str_contains($asgFormHtml, 'data-trip-stops='), 'Modal asignar debe incluir catálogo data-trip-stops y raíz reactiva.');
+
+    // Intentar asignar sol3 (u1->u4) con parada orden invertido (p3->p1) y ubicación incompatible (p2->p4) -> 422 / 50312 sin escrituras
+    $badAssign1 = http_build_query(['csrf_token' => $csrfAdmin, 'viaje_id' => $viajeId, 'accion' => 'asignar', 'solicitud_id' => $sol3Id, 'parada_recogida_id' => $pIds[3], 'parada_entrega_id' => $pIds[1]]);
+    [$stBadAsg1, $badAsgBody1] = sar_http("{$base}/viajes/accion.php", $cookieAdmin, 'POST', $badAssign1, true);
+    sar_assert($stBadAsg1 === 422 && str_contains($badAsgBody1, 'Las paradas no corresponden'), "Asignación manipulada con orden invertido debe dar 422 (recibido {$stBadAsg1}).");
+
+    $badAssign2 = http_build_query(['csrf_token' => $csrfAdmin, 'viaje_id' => $viajeId, 'accion' => 'asignar', 'solicitud_id' => $sol3Id, 'parada_recogida_id' => $pIds[2], 'parada_entrega_id' => $pIds[4]]);
+    [$stBadAsg2] = sar_http("{$base}/viajes/accion.php", $cookieAdmin, 'POST', $badAssign2, true);
+    sar_assert($stBadAsg2 === 422, "Asignación manipulada con ubicaciones incompatibles debe dar 422 (recibido {$stBadAsg2}).");
+
+    $sol3Assigned = (int)$pdo->query("SELECT COUNT(*) FROM dbo.viaje_solicitudes WHERE solicitud_id = {$sol3Id}")->fetchColumn();
+    $sol3State = (string)$pdo->query("SELECT estado FROM dbo.solicitudes WHERE solicitud_id = {$sol3Id}")->fetchColumn();
+    sar_assert($sol3Assigned === 0 && $sol3State === 'REGISTRADA', 'Rechazo SQL 50312 no debe dejar escrituras parciales.');
+
+    // Sin permiso VIAJES_ASIGNAR -> 403
+    $noPermAsg = http_build_query(['csrf_token' => $csrfNoStops, 'viaje_id' => $viajeId, 'accion' => 'asignar', 'solicitud_id' => $sol3Id, 'parada_recogida_id' => $pIds[1], 'parada_entrega_id' => $pIds[3]]);
+    [$stNoPermAsg] = sar_http("{$base}/viajes/accion.php", $cookieNoStops, 'POST', $noPermAsg, true);
+    sar_assert($stNoPermAsg === 403, "Actor sin VIAJES_ASIGNAR debe recibir 403 (recibido {$stNoPermAsg}).");
+
     // Iniciar viaje -> detalle oculta controles y POST devuelve 409
     $pdo->prepare('EXEC dbo.sp_iniciar_viaje @viaje_id = ?')->execute([$viajeId]);
     [$stStartedDet, $startedHtml] = sar_http("{$base}/viajes/detalle.php?id={$viajeId}", $cookieAdmin);
@@ -381,13 +418,21 @@ try {
     sar_assert((string)$dw->query('SELECT DB_NAME()')->fetchColumn() === 'TransportesSegurosSA_DW', 'db_dw() debe apuntar a TransportesSegurosSA_DW.');
     $dwBefore = $dw->query('SELECT COUNT(*) AS n, MAX(fecha_carga_utc) AS last_load FROM dbo.fact_entregas')->fetch();
 
-    // Pestañas y reporte 1 (Solicitudes)
-    [$stS1, $solRepHtml] = sar_http("{$base}/reportes/lista.php?seccion=solicitudes", $cookieReportOnly, 'GET', null, true);
-    sar_assert($stS1 === 200 && str_contains($solRepHtml, 'Total solicitudes') && str_contains($solRepHtml, 'data-chart-config'), 'Reporte 1 solicitudes debe mostrar KPIs y gráficos.');
+    // Pestañas y reporte 1 (Solicitudes) + verificación Cambio A/B (sin botón Aplicar/Filtrar, nombres claros)
+    [$stRepPage, $repPageHtml] = sar_http("{$base}/reportes.php?seccion=solicitudes", $cookieReportOnly);
+    sar_assert($stRepPage === 200, "Página /reportes.php devolvió {$stRepPage}.");
+    sar_assert(str_contains($repPageHtml, '>Solicitudes<') && str_contains($repPageHtml, '>Entregas operativas<') && str_contains($repPageHtml, '>Análisis histórico (DW)<'), 'Reportes debe mostrar las tres etiquetas inequívocas de pestañas.');
+    sar_assert(!str_contains($repPageHtml, '<span>Aplicar</span>') && str_contains($repPageHtml, '>Limpiar</a>'), 'Reportes debe omitir el botón Aplicar y conservar Limpiar.');
 
-    // Reporte 2 (Entregas) + caso vacío sin división por cero
+    [$stAudPage, $audPageHtml] = sar_http("{$base}/auditoria.php", $cookieAuditOnly);
+    sar_assert($stAudPage === 200 && !str_contains($audPageHtml, '<span>Filtrar</span>') && str_contains($audPageHtml, '>Limpiar</a>'), 'Historial de actividad debe omitir el botón Filtrar y conservar Limpiar.');
+
+    [$stS1, $solRepHtml] = sar_http("{$base}/reportes/lista.php?seccion=solicitudes", $cookieReportOnly, 'GET', null, true);
+    sar_assert($stS1 === 200 && str_contains($solRepHtml, 'Total solicitudes') && str_contains($solRepHtml, 'Base operacional (datos en tiempo real)') && str_contains($solRepHtml, 'data-chart-config'), 'Reporte 1 solicitudes debe mostrar KPIs, origen en tiempo real y gráficos.');
+
+    // Reporte 2 (Entregas operativas) + caso vacío sin división por cero
     [$stE1, $entRepHtml] = sar_http("{$base}/reportes/lista.php?seccion=entregas", $cookieReportOnly, 'GET', null, true);
-    sar_assert($stE1 === 200 && str_contains($entRepHtml, 'Tasa de éxito') && str_contains($entRepHtml, 'Entregadas ÷ (Entregadas + Fallidas)'), 'Reporte 2 debe mostrar tasa de éxito con denominador explícito.');
+    sar_assert($stE1 === 200 && str_contains($entRepHtml, 'Tasa de éxito') && str_contains($entRepHtml, 'Entregadas ÷ (Entregadas + Fallidas)') && str_contains($entRepHtml, 'Base operacional (datos en tiempo real)'), 'Reporte 2 debe mostrar tasa de éxito con denominador explícito y fuente operacional.');
 
     [$stE0, $entEmptyHtml] = sar_http("{$base}/reportes/lista.php?seccion=entregas&desde=2099-01-01&hasta=2099-01-02", $cookieReportOnly, 'GET', null, true);
     sar_assert($stE0 === 200 && str_contains($entEmptyHtml, 'Sin datos'), 'Reporte 2 sin entregas debe mostrar "Sin datos" sin división por cero.');
@@ -399,7 +444,8 @@ try {
     [$stDw, $dwRepHtml] = sar_http("{$base}/reportes/lista.php?seccion=historico_dw", $cookieReportOnly, 'GET', null, true);
     sar_assert($stDw === 200, "Reporte 3 DW falló (HTTP {$stDw}).");
     sar_assert(str_contains($dwRepHtml, 'data-dw-source="TransportesSegurosSA_DW"'), 'Reporte 3 debe confirmar origen TransportesSegurosSA_DW.');
-    sar_assert(str_contains($dwRepHtml, 'Data Warehouse (última carga conocida:'), 'Reporte 3 debe mostrar explícitamente fuente DW y fecha de última carga.');
+    sar_assert(str_contains($dwRepHtml, 'Data Warehouse de solo lectura (última carga conocida:'), 'Reporte 3 debe mostrar explícitamente fuente DW solo lectura y fecha de última carga.');
+    sar_assert(str_contains($dwRepHtml, 'puede no coincidir con cambios operativos recientes'), 'Reporte 3 debe aclarar que los datos ETL pueden no reflejar cambios operativos recientes.');
 
     $dwAfter = $dw->query('SELECT COUNT(*) AS n, MAX(fecha_carga_utc) AS last_load FROM dbo.fact_entregas')->fetch();
     sar_assert((int)$dwAfter['n'] === (int)$dwBefore['n'] && $dwAfter['last_load'] === $dwBefore['last_load'], 'Consultar reporte DW no debe alterar hechos ni disparar ETL.');
