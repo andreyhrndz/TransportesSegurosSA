@@ -41,9 +41,9 @@ La plataforma cubre el ciclo de vida completo de la operación de transporte de 
   - Registro y resolución de incidencias operativas en ruta.
   - Carga y vinculación de respaldos documentales protegidos.
 
-- **Reportes, Auditoría y Data Warehouse:**
-  - Visualización del historial de auditoría de modificaciones a entidades críticas.
-  - Esquema dimensional de analítica en `TransportesSegurosSA_DW` (6 tablas dimensionales y procedimientos ETL).
+- **Reportes, Bitácora Independiente y Data Warehouse:**
+  - Módulo independiente **Historial de actividad** (`/auditoria.php`) bajo Administración (visible solo con `AUDITORIA_VER`), con filtros SQL por usuario (preservando inactivos y sistema), módulo, acción y rango de fechas, descripción en lenguaje humano y detalle técnico desplegable con redacción de secretos.
+  - Módulo **Reportes** (`/reportes.php`) con tres vistas analíticas (**Solicitudes por período**, **Entregas y resultados** y **Desempeño histórico (DW)** conectado en modo solo lectura a `TransportesSegurosSA_DW`), gráficos Chart.js, exportación **CSV** segura (UTF-8 BOM + protección contra inyección de fórmulas) y vista limpia **Imprimir / PDF**.
 
 ---
 
@@ -80,7 +80,7 @@ Ejecute el asistente automatizado de configuración:
 > ```
 
 ### Paso 3: Inicializar la Base de Datos de Pruebas (`TransportesSegurosSA_Test`)
-Para aprovisionar la base de datos de pruebas local con las tablas, procedimientos almacenados y contratos `01` a `12`:
+Para aprovisionar la base de datos de pruebas local con las tablas, procedimientos almacenados y contratos `01` a `13`:
 ```powershell
 .\tools\scripts\init-test-db.ps1
 ```
@@ -155,8 +155,8 @@ TransportesSegurosSA/
 | Base de Datos | Propósito | Reglas Operativas |
 |---|---|---|
 | **`TransportesSegurosSA_Test`** | **Desarrollo y Pruebas** | Entorno predeterminado en `.env`. Destino seguro para ejecutar suites de pruebas automatizadas, pruebas de integración y creación de registros efímeros. |
-| **`TransportesSegurosSA`** | **Base Original de Producción** | Base de datos principal. Actualmente mantiene las migraciones 01 a 09; las migraciones **10, 11 y 12** quedan listas y pendientes de despliegue autorizado (ver `docs/qa/plan-qa-exposicion.md`). **PROHIBIDO ejecutar pruebas automatizadas con escrituras o modificaciones directas sobre esta base.** |
-| **`TransportesSegurosSA_DW`** | **Data Warehouse** | Base dimensional para analítica e indicadores operacionales (ETL programado). |
+| **`TransportesSegurosSA`** | **Base Original de Exposición** | Base de datos principal. Compatible con las migraciones `01` a `13` tras respaldo verificado y ensayo en staging (ver `docs/ops/deploy-migrations-pr4-exposicion.md`). **PROHIBIDO ejecutar pruebas automatizadas con escrituras o modificaciones directas sobre esta base.** |
+| **`TransportesSegurosSA_DW`** | **Data Warehouse** | Base dimensional en estrella (6 tablas + ETL) consultada en modo solo lectura (`ApplicationIntent=ReadOnly`) desde el reporte histórico. |
 
 ---
 

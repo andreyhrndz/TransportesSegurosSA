@@ -2892,4 +2892,93 @@
             }
         }
     });
+
+    /* ======================================================================
+       REORDENAMIENTO DE PARADAS DE VIAJE, EXPORTACIÓN E IMPRESIÓN DE REPORTES
+       ====================================================================== */
+
+    function refreshStopReorderState(listEl) {
+        if (!listEl) return;
+        const items = Array.from(listEl.querySelectorAll('[data-stop-item]'));
+        const total = items.length;
+        items.forEach((item, index) => {
+            const badge = item.querySelector('[data-stop-order-badge]');
+            if (badge) badge.textContent = '#' + (index + 1);
+            const upBtn = item.querySelector('[data-stop-move="up"]');
+            const downBtn = item.querySelector('[data-stop-move="down"]');
+            if (upBtn) upBtn.disabled = index === 0;
+            if (downBtn) downBtn.disabled = index === total - 1;
+        });
+    }
+
+    function syncReportExportLinks() {
+        const links = document.querySelectorAll('[data-report-export-link]');
+        if (!links.length) return;
+        links.forEach((link) => {
+            const base = link.dataset.exportBase || '/reportes/exportar.php';
+            const format = link.dataset.exportFormat || 'csv';
+            const formSelector = link.dataset.exportForm || '#reportes-filtros';
+            const form = document.querySelector(formSelector);
+            const params = new URLSearchParams();
+            if (form) {
+                const fd = new FormData(form);
+                fd.forEach((value, key) => {
+                    const str = String(value ?? '').trim();
+                    if (str !== '') params.set(key, str);
+                });
+            }
+            params.set('formato', format);
+            link.setAttribute('href', base + '?' + params.toString());
+        });
+    }
+
+    document.addEventListener('click', (event) => {
+        const moveBtn = event.target.closest('[data-stop-move]');
+        if (moveBtn && !moveBtn.disabled) {
+            const dir = moveBtn.dataset.stopMove;
+            const item = moveBtn.closest('[data-stop-item]');
+            const listEl = item ? item.closest('[data-stop-reorder-list]') : null;
+            if (item && listEl) {
+                if (dir === 'up' && item.previousElementSibling) {
+                    listEl.insertBefore(item, item.previousElementSibling);
+                } else if (dir === 'down' && item.nextElementSibling) {
+                    listEl.insertBefore(item.nextElementSibling, item);
+                }
+                refreshStopReorderState(listEl);
+                if (!moveBtn.disabled) {
+                    moveBtn.focus();
+                } else {
+                    const fallback = item.querySelector(dir === 'up' ? '[data-stop-move="down"]' : '[data-stop-move="up"]');
+                    fallback?.focus();
+                }
+            }
+            return;
+        }
+
+        const printBtn = event.target.closest('[data-print-report]');
+        if (printBtn) {
+            event.preventDefault();
+            window.print();
+        }
+    });
+
+    document.addEventListener('input', (event) => {
+        if (event.target && event.target.closest && event.target.closest('#reportes-filtros')) {
+            syncReportExportLinks();
+        }
+    });
+    document.addEventListener('change', (event) => {
+        if (event.target && event.target.closest && event.target.closest('#reportes-filtros')) {
+            syncReportExportLinks();
+        }
+    });
+    document.addEventListener('htmx:afterSwap', () => {
+        syncReportExportLinks();
+    });
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', syncReportExportLinks);
+    } else {
+        syncReportExportLinks();
+    }
 })();

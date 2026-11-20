@@ -76,7 +76,7 @@ try {
         routes_assert($status===200,"Detalle {$path} debe responder 200.");
         routes_assert(str_contains($body,$title),"Detalle {$path} debe renderizar datos reales.");
     }
-    foreach(['/reportes/lista.php?seccion=solicitudes'=>'table','/reportes/lista.php?seccion=flota'=>'table','/reportes/lista.php?seccion=viajes'=>'table','/reportes/lista.php?seccion=entregas'=>'table','/reportes/lista.php?seccion=auditoria'=>'table'] as $path=>$expectedMarkup){
+    foreach(['/auditoria/lista.php'=>'table','/reportes/lista.php?seccion=solicitudes'=>'table','/reportes/lista.php?seccion=entregas'=>'table','/reportes/lista.php?seccion=historico_dw'=>'table'] as $path=>$expectedMarkup){
         [$status,$body]=routes_request($base.$path,$cookie,true);
         routes_assert($status===200,"Reporte {$path} debe responder 200.");
         routes_assert(str_contains($body,$expectedMarkup),"Reporte {$path} debe devolver datos o estado vacío real.");
@@ -90,6 +90,8 @@ try {
         '/solicitudes/accion.php'=>'csrf_token=incorrecto&accion=prioridad',
         '/viajes/guardar.php'=>'csrf_token=incorrecto',
         '/viajes/accion.php'=>'csrf_token=incorrecto&accion=iniciar',
+        '/viajes/paradas_orden_guardar.php'=>'csrf_token=incorrecto&viaje_id=1',
+        '/viajes/parada_editar_guardar.php'=>'csrf_token=incorrecto&viaje_id=1&parada_id=1',
         '/entregas/registrar.php'=>'csrf_token=incorrecto',
         '/entregas/incidencia.php'=>'csrf_token=incorrecto&accion=registrar',
         '/entregas/documento.php'=>'csrf_token=incorrecto',

@@ -15,7 +15,7 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
 
     $grupoSeccion = match ($activo) {
         'solicitudes', 'viajes', 'entregas' => 'Operaciones',
-        'usuarios', 'flota' => 'Administración',
+        'usuarios', 'flota', 'auditoria' => 'Administración',
         default => 'Principal',
     };
     $nombreUsuario = (string)($usuario['nombre_usuario'] ?? 'Usuario');
@@ -73,14 +73,12 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
             <span class="brand-monogram" aria-hidden="true">TS</span>
         </div>
         <nav class="sidebar-navigation" aria-label="Módulos del sistema">
-            <?php if ($puedeReportes || $puedeAuditoria || $puedeClientes): ?>
+            <?php if ($puedeReportes || $puedeClientes): ?>
             <div class="nav-group">
                 <p class="nav-section-label">Principal</p>
                 <div class="menu-list">
                 <?php if ($puedeReportes): ?>
                     <a class="sidebar-link <?= $activo === 'dashboard' ? 'active' : '' ?>" href="/" <?= $activo === 'dashboard' ? 'aria-current="page"' : '' ?> data-tooltip="Panel general"><?= svg_icon('dashboard') ?><span class="sidebar-link-text">Panel general</span></a>
-                <?php endif; ?>
-                <?php if ($puedeReportes || $puedeAuditoria): ?>
                     <a class="sidebar-link <?= $activo === 'reportes' ? 'active' : '' ?>" href="/reportes.php" <?= $activo === 'reportes' ? 'aria-current="page"' : '' ?> data-tooltip="Reportes"><?= svg_icon('reports') ?><span class="sidebar-link-text">Reportes</span></a>
                 <?php endif; ?>
                 <?php if ($puedeClientes): ?>
@@ -105,7 +103,7 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
                 </div>
             </div>
             <?php endif; ?>
-            <?php if ($puedeFlota || $puedeUsuarios): ?>
+            <?php if ($puedeFlota || $puedeUsuarios || $puedeAuditoria): ?>
             <div class="nav-group">
                 <p class="nav-section-label">Administración</p>
                 <div class="menu-list">
@@ -114,6 +112,9 @@ function layout_start(string $activo, string $titulo, string $descripcion): void
                 <?php endif; ?>
                 <?php if ($puedeFlota): ?>
                     <a class="sidebar-link <?= $activo === 'flota' ? 'active' : '' ?>" href="/flota.php" <?= $activo === 'flota' ? 'aria-current="page"' : '' ?> data-tooltip="Flota y catálogos"><?= svg_icon('fleet') ?><span class="sidebar-link-text">Flota y catálogos</span></a>
+                <?php endif; ?>
+                <?php if ($puedeAuditoria): ?>
+                    <a class="sidebar-link <?= $activo === 'auditoria' ? 'active' : '' ?>" href="/auditoria.php" <?= $activo === 'auditoria' ? 'aria-current="page"' : '' ?> data-tooltip="Historial de actividad"><?= svg_icon('shield') ?><span class="sidebar-link-text">Historial de actividad</span></a>
                 <?php endif; ?>
                 </div>
             </div>

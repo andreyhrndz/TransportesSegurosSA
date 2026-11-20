@@ -25,6 +25,11 @@ if (!is_array($viaje)) {
 }
 $paradas = $sets[1] ?? [];
 $asignaciones = $sets[2] ?? [];
+$puedeGestionarParadas = ($viaje['estado'] === 'PLANIFICADO') && has_permission('VIAJES_PARADAS');
+$paradaPorId = [];
+foreach ($paradas as $p) {
+    $paradaPorId[(int)$p['parada_id']] = $p;
+}
 require_once __DIR__ . '/../../app/layout.php';
 layout_start('viajes', 'Viaje ' . (string)$viaje['codigo_viaje'], 'Detalle de unidad, conductor, paradas en ruta y órdenes asociadas.');
 ?>
@@ -86,7 +91,18 @@ layout_start('viajes', 'Viaje ' . (string)$viaje['codigo_viaje'], 'Detalle de un
 
 <section class="panel-box table-panel">
     <div class="panel-box-header">
-        <h2 class="panel-box-title">Paradas del itinerario</h2>
+        <div>
+            <h2 class="panel-box-title">Paradas del itinerario</h2>
+            <p class="panel-box-subtitle">El estado de las paradas se actualiza automáticamente al iniciar y finalizar el despacho (no es seguimiento GPS en tiempo real).</p>
+        </div>
+        <?php if ($puedeGestionarParadas && count($paradas) >= 2): ?>
+            <div class="buttons">
+                <button class="button is-small button-secondary" type="button" hx-get="/viajes/paradas_orden_form.php?id=<?= (int)$id ?>" hx-target="#modal-contenido">
+                    <?= svg_icon('arrows-vertical') ?>
+                    <span>Reordenar paradas</span>
+                </button>
+            </div>
+        <?php endif; ?>
     </div>
     <div class="table-container">
         <table class="table is-fullwidth is-hoverable">
@@ -98,13 +114,18 @@ layout_start('viajes', 'Viaje ' . (string)$viaje['codigo_viaje'], 'Detalle de un
                     <th>Estado</th>
                     <th>Llegada</th>
                     <th class="has-text-right">Mapa</th>
+                    <?php if ($puedeGestionarParadas): ?>
+                        <th class="has-text-right">Acciones</th>
+                    <?php endif; ?>
                 </tr>
             </thead>
             <tbody>
+                <?php $colSpanParadas = $puedeGestionarParadas ? 7 : 6; ?>
                 <?php if (!$paradas): ?>
-                    <tr><td colspan="6"><?= empty_state('Sin paradas registradas', 'Agrega paradas al viaje antes de asignar solicitudes.') ?></td></tr>
+                    <tr><td colspan="<?= $colSpanParadas ?>"><?= empty_state('Sin paradas registradas', 'Agrega paradas al viaje antes de asignar solicitudes.') ?></td></tr>
                 <?php endif; ?>
                 <?php foreach ($paradas as $row): ?>
+                    <?php $vinculada = !empty($row['tiene_solicitudes']); ?>
                     <tr>
                         <td><strong>#<?= (int)$row['orden'] ?></strong></td>
                         <td>
@@ -119,6 +140,20 @@ layout_start('viajes', 'Viaje ' . (string)$viaje['codigo_viaje'], 'Detalle de un
                         <td><?= status_tag($row['estado']) ?></td>
                         <td><?= format_utc_datetime($row['llegada_real'] ?: $row['llegada_programada']) ?></td>
                         <td class="has-text-right"><?= google_maps_link($row['latitud'] ?? null, $row['longitud'] ?? null, 'Abrir en Google Maps', true) ?></td>
+                        <?php if ($puedeGestionarParadas): ?>
+                            <td class="has-text-right">
+                                <div class="row-actions">
+                                    <?php if (!$vinculada): ?>
+                                        <button class="button is-small button-secondary" type="button" hx-get="/viajes/parada_editar_form.php?viaje_id=<?= (int)$id ?>&parada_id=<?= (int)$row['parada_id'] ?>" hx-target="#modal-contenido">
+                                            <?= svg_icon('edit') ?>
+                                            <span>Editar</span>
+                                        </button>
+                                    <?php else: ?>
+                                        <span class="is-size-7 has-text-grey" title="Parada vinculada a una solicitud asignada: no puede cambiar su ubicación ni tipo, pero sí puede reordenarse manteniendo recogida antes que entrega.">Vinculada a solicitud</span>
+                                    <?php endif; ?>
+                                </div>
+                            </td>
+                        <?php endif; ?>
                     </tr>
                 <?php endforeach; ?>
             </tbody>
@@ -147,12 +182,18 @@ layout_start('viajes', 'Viaje ' . (string)$viaje['codigo_viaje'], 'Detalle de un
                     <tr><td colspan="6"><?= empty_state('Sin solicitudes asociadas', 'Asigna órdenes pendientes a las paradas configuradas en este viaje.') ?></td></tr>
                 <?php endif; ?>
                 <?php foreach ($asignaciones as $row): ?>
+                    <?php
+                    $pRec = $paradaPorId[(int)$row['parada_recogida_id']] ?? null;
+                    $pEnt = $paradaPorId[(int)$row['parada_entrega_id']] ?? null;
+                    $lblRec = $pRec ? '#' . (int)$pRec['orden'] . ' · ' . (string)$pRec['ubicacion_nombre'] : '#' . (int)$row['parada_recogida_id'];
+                    $lblEnt = $pEnt ? '#' . (int)$pEnt['orden'] . ' · ' . (string)$pEnt['ubicacion_nombre'] : '#' . (int)$row['parada_entrega_id'];
+                    ?>
                     <tr>
                         <td><a class="table-link" href="/solicitudes/detalle.php?id=<?= (int)$row['solicitud_id'] ?>"><strong><?= e($row['codigo_solicitud']) ?></strong></a></td>
                         <td><?= status_tag($row['estado_solicitud']) ?></td>
                         <td><?= status_tag($row['estado_asignacion']) ?></td>
-                        <td>#<?= (int)$row['parada_recogida_id'] ?></td>
-                        <td>#<?= (int)$row['parada_entrega_id'] ?></td>
+                        <td><?= e($lblRec) ?></td>
+                        <td><?= e($lblEnt) ?></td>
                         <td>
                             <div class="row-actions">
                                 <?php if ($viaje['estado'] === 'EN_CURSO' && $row['estado_asignacion'] === 'EN_TRANSITO' && has_permission('ENTREGAS_REGISTRAR')): ?>
