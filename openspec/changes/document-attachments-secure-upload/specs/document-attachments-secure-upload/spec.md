@@ -28,6 +28,17 @@ Los bytes almacenados SHALL residir exclusivamente fuera del document root `publ
 - **WHEN** un usuario no autenticado, sin `DOCUMENTOS_VER`, con ID inexistente/URL externa o intentando acceder directamente a rutas de almacenamiento vía HTTP solicita un archivo
 - **THEN** el sistema responde `302/401`, `403` o `404` sin exponer rutas físicas, nombres internos ni contenido del archivo
 
+### Requirement: Registro de comprobante de entrega mediante archivo local o URL externa mutuamente excluyentes
+En el modal **Registrar entrega** (`/entregas/registrar_form.php`, invocado desde `Viajes → Detalle`), un usuario con `ENTREGAS_REGISTRAR` SHALL poder confirmar una entrega `ENTREGADA` adjuntando un comprobante local (`PDF`, `JPG/JPEG` o `PNG`, hasta 10 MiB / límite efectivo PHP) o vinculando una URL `HTTP/HTTPS`, y al marcar `FALLIDA` SHALL omitir el comprobante.
+
+#### Scenario: Confirmación de entrega con comprobante local y descarga con ENTREGAS_VER
+- **WHEN** un usuario con `ENTREGAS_REGISTRAR` confirma una entrega `ENTREGADA` adjuntando un archivo `PDF`, `JPG/JPEG` o `PNG` válido
+- **THEN** el servidor valida y almacena el archivo fuera de `public/` reutilizando el mismo servicio seguro, registra la entrega y actualiza `viaje_solicitudes`/`solicitudes` de forma atómica en `dbo.sp_registrar_entrega` (eliminando el archivo si SQL falla), y un usuario con `ENTREGAS_VER` puede descargarlo byte a byte desde `/entregas/comprobante_descargar.php?id=<entrega_id>` con cabeceras seguras
+
+#### Scenario: Compatibilidad de entregas con URL externa y entregas fallidas
+- **WHEN** un usuario registra una entrega `ENTREGADA` en modo URL externa o registra una entrega `FALLIDA` con motivo de fallo, o consulta entregas históricas
+- **THEN** el sistema preserva el flujo retrocompatible de `comprobante_url` (sin fetch remoto) y de `FALLIDA` sin exigir archivo, mostrando `Ver comprobante` para URLs y el motivo de fallo en entregas fallidas
+
 ### Requirement: Portabilidad y documentación de respaldo/restauración separada de archivos
 El sistema SHALL excluir los archivos subidos de Git y SHALL documentar en `docs/ops/document-attachments-storage-backup-restore.md` que los backups FULL/DIFF de SQL Server no respaldan los adjuntos en disco, junto con un procedimiento reproducible de respaldo conjunto, verificación SHA-256 y restauración en entorno de prueba.
 

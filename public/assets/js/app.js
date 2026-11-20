@@ -1507,12 +1507,12 @@
 
             const maxBytes = parseInt(form.dataset.maxBytes || '10485760', 10) || 10485760;
             const maxLabel = form.dataset.maxLabel || '10 MB';
-            const modeRadios = Array.from(form.querySelectorAll('input[name="modo_respaldo"]'));
+            const modeRadios = Array.from(form.querySelectorAll('[data-doc-mode-radio], input[name="modo_respaldo"]'));
             const modeLabels = Array.from(form.querySelectorAll('[data-doc-mode-label]'));
             const panelArchivo = form.querySelector('[data-doc-panel="archivo"]');
             const panelUrl = form.querySelector('[data-doc-panel="url"]');
-            const fileInput = form.querySelector('#documento-archivo');
-            const urlInput = form.querySelector('#documento-url');
+            const fileInput = form.querySelector('[data-doc-file-input], #documento-archivo');
+            const urlInput = form.querySelector('[data-doc-url-input], #documento-url');
             const dropzone = form.querySelector('[data-doc-dropzone]');
             const browseBtn = form.querySelector('[data-doc-browse]');
             const statusEl = form.querySelector('[data-doc-status]');
@@ -1520,7 +1520,7 @@
             const previewNameEl = form.querySelector('[data-doc-preview-name]');
             const previewMetaEl = form.querySelector('[data-doc-preview-meta]');
             const clearBtn = form.querySelector('[data-doc-clear]');
-            const msgBox = form.querySelector('#mensaje-documento');
+            const msgBox = form.querySelector('[data-doc-feedback], #mensaje-documento');
 
             if (!panelArchivo || !panelUrl || !fileInput || !urlInput) return;
 
@@ -1589,6 +1589,8 @@
             };
 
             const syncMode = () => {
+                const entregaEstado = form.querySelector('[data-entrega-estado]');
+                const isSuspended = Boolean(entregaEstado && entregaEstado.value !== 'ENTREGADA');
                 const active = modeRadios.find((r) => r.checked)?.value || 'archivo';
                 const isFile = active === 'archivo';
 
@@ -1599,11 +1601,21 @@
                 panelArchivo.hidden = !isFile;
                 panelUrl.hidden = isFile;
 
-                fileInput.disabled = !isFile;
-                fileInput.required = isFile;
-                urlInput.disabled = isFile;
-                urlInput.required = !isFile;
+                if (isSuspended) {
+                    fileInput.disabled = true;
+                    fileInput.required = false;
+                    urlInput.disabled = true;
+                    urlInput.required = false;
+                    modeRadios.forEach((r) => { r.disabled = true; });
+                } else {
+                    modeRadios.forEach((r) => { r.disabled = false; });
+                    fileInput.disabled = !isFile;
+                    fileInput.required = isFile;
+                    urlInput.disabled = isFile;
+                    urlInput.required = !isFile;
+                }
             };
+            form._tssaDocSyncMode = syncMode;
 
             const onRadioChange = () => {
                 syncMode();
@@ -1684,12 +1696,16 @@
             };
 
             const onBeforeRequest = () => {
+                const entregaEstado = form.querySelector('[data-entrega-estado]');
+                if (entregaEstado && entregaEstado.value !== 'ENTREGADA') return;
                 const active = modeRadios.find((r) => r.checked)?.value || 'archivo';
                 if (active === 'archivo') {
                     setStatus('Subiendo archivo de forma segura…', 'loading');
                 }
             };
             const onAfterRequest = (ev) => {
+                const entregaEstado = form.querySelector('[data-entrega-estado]');
+                if (entregaEstado && entregaEstado.value !== 'ENTREGADA') return;
                 const active = modeRadios.find((r) => r.checked)?.value || 'archivo';
                 if (active !== 'archivo') return;
                 const status = ev.detail?.xhr?.status || 0;
@@ -1726,6 +1742,7 @@
                 clearBtn?.removeEventListener('click', onClearClick);
                 form.removeEventListener('htmx:beforeRequest', onBeforeRequest);
                 form.removeEventListener('htmx:afterRequest', onAfterRequest);
+                delete form._tssaDocSyncMode;
                 delete form._tssaDocUploadCleanup;
             };
 
@@ -2236,11 +2253,15 @@
         if (successFields) successFields.hidden = !delivered;
         if (failureFields) failureFields.hidden = delivered;
         successFields?.querySelectorAll('input').forEach((field) => {
-            field.required = delivered && ['receptor_nombre', 'comprobante_url'].includes(field.name);
+            if (field.matches('[data-doc-file-input], [data-doc-url-input], [data-doc-mode-radio]')) return;
+            field.required = delivered && field.name === 'receptor_nombre';
         });
         failureFields?.querySelectorAll('textarea').forEach((field) => {
             field.required = !delivered && field.name === 'motivo_fallo';
         });
+        if (typeof form?._tssaDocSyncMode === 'function') {
+            form._tssaDocSyncMode();
+        }
     });
 
     /* ======================================================================

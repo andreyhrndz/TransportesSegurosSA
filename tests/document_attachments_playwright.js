@@ -164,9 +164,36 @@ async function assertNoDesktopOverflow(page, label) {
                 }
                 return $id;
             };
-            $uFull = $mk($p, ${JSON.stringify(ADMIN_USER)}, ${JSON.stringify(ADMIN_PASS)}, ['REPORTES_VER', 'ENTREGAS_VER', 'DOCUMENTOS_VER', 'DOCUMENTOS_REGISTRAR', 'SOLICITUDES_VER']);
-            $uView = $mk($p, ${JSON.stringify(VIEW_USER)}, ${JSON.stringify(VIEW_PASS)}, ['REPORTES_VER', 'DOCUMENTOS_VER', 'SOLICITUDES_VER']);
-            echo json_encode(['uFull' => $uFull, 'uView' => $uView, 'solId' => $solId, 'tipoId' => $tipoId, 'maxAud' => $maxAud, 'maxDoc' => $maxDoc]);
+            $uFull = $mk($p, ${JSON.stringify(ADMIN_USER)}, ${JSON.stringify(ADMIN_PASS)}, ['REPORTES_VER', 'ENTREGAS_VER', 'ENTREGAS_REGISTRAR', 'VIAJES_VER', 'DOCUMENTOS_VER', 'DOCUMENTOS_REGISTRAR', 'SOLICITUDES_VER']);
+            $uView = $mk($p, ${JSON.stringify(VIEW_USER)}, ${JSON.stringify(VIEW_PASS)}, ['REPORTES_VER', 'DOCUMENTOS_VER', 'ENTREGAS_VER', 'SOLICITUDES_VER']);
+
+            $cliId = (int)$p->query('SELECT TOP (1) cliente_id FROM dbo.clientes ORDER BY cliente_id')->fetchColumn();
+            $oriId = (int)$p->query('SELECT TOP (1) ubicacion_id FROM dbo.ubicaciones ORDER BY ubicacion_id')->fetchColumn();
+            $dstId = (int)$p->query("SELECT TOP (1) ubicacion_id FROM dbo.ubicaciones WHERE ubicacion_id <> {$oriId} ORDER BY ubicacion_id")->fetchColumn();
+            $rutId = (int)$p->query('SELECT TOP (1) ruta_id FROM dbo.rutas ORDER BY ruta_id')->fetchColumn();
+            $insId = static function(PDO $db, string $sql, array $params = []): int {
+                $st = $db->prepare($sql . '; SELECT SCOPE_IDENTITY();');
+                $st->execute($params);
+                $st->nextRowset();
+                $id = (int)$st->fetchColumn();
+                $st->closeCursor();
+                return $id;
+            };
+            $sfx = ${JSON.stringify(SUFFIX.toUpperCase())};
+            $vehId = $insId($p, "INSERT INTO dbo.vehiculos (placa, marca, modelo, anio, capacidad_carga_kg, kilometraje_actual, estado, activo, pma_kg, clase_legal, es_articulado, estado_homologacion) VALUES (?, N'Test', N'PW', 2024, 3000, 100, 'ASIGNADO', 1, 3500, 'LIVIANO', 0, 'VERIFICADO')", ['PW' . substr($sfx, 0, 6)]);
+            $conId = $insId($p, "INSERT INTO dbo.conductores (identificacion, nombre, primer_apellido, numero_licencia, fecha_vencimiento_licencia, estado_operativo, activo) VALUES (?, N'Chofer', N'PW', ?, DATEADD(YEAR, 2, CONVERT(DATE, SYSUTCDATETIME())), 'ASIGNADO', 1)", ['PW-' . $sfx, 'LIC-PW-' . $sfx]);
+            $viajeId = $insId($p, "INSERT INTO dbo.viajes (codigo_viaje, vehiculo_id, conductor_id, ruta_id, fecha_programada_salida, fecha_salida_real, estado) VALUES (?, ?, ?, ?, SYSUTCDATETIME(), SYSUTCDATETIME(), 'EN_CURSO')", ['VPW-' . $sfx, $vehId, $conId, $rutId]);
+            $par1 = $insId($p, "INSERT INTO dbo.paradas_viaje (viaje_id, ubicacion_id, orden, tipo_parada, estado) VALUES (?, ?, 1, 'RECOGIDA', 'COMPLETADA')", [$viajeId, $oriId]);
+            $par2 = $insId($p, "INSERT INTO dbo.paradas_viaje (viaje_id, ubicacion_id, orden, tipo_parada, estado) VALUES (?, ?, 2, 'ENTREGA', 'PENDIENTE')", [$viajeId, $dstId]);
+            $solEntId = $insId($p, "INSERT INTO dbo.solicitudes (codigo_solicitud, cliente_id, origen_id, destino_id, destinatario_nombre, destinatario_apellido1, destinatario_apellido2, fecha_solicitud, fecha_entrega_requerida, prioridad_calculada, prioridad_actual, estado) VALUES (?, ?, ?, ?, N'Dest', N'Entrega', N'PW', SYSUTCDATETIME(), DATEADD(DAY, 1, SYSUTCDATETIME()), 'NORMAL', 'NORMAL', 'EN_TRANSITO')", ['SOL-PW-' . $sfx, $cliId, $oriId, $dstId]);
+            $vsEntId = $insId($p, "INSERT INTO dbo.viaje_solicitudes (viaje_id, solicitud_id, parada_recogida_id, parada_entrega_id, estado) VALUES (?, ?, ?, ?, 'EN_TRANSITO')", [$viajeId, $solEntId, $par1, $par2]);
+
+            echo json_encode([
+                'uFull' => $uFull, 'uView' => $uView, 'solId' => $solId, 'tipoId' => $tipoId,
+                'maxAud' => $maxAud, 'maxDoc' => $maxDoc,
+                'vehId' => $vehId, 'conId' => $conId, 'viajeId' => $viajeId,
+                'par1' => $par1, 'par2' => $par2, 'solEntId' => $solEntId, 'vsEntId' => $vsEntId,
+            ]);
         `);
         fx = JSON.parse(seedJson);
 
@@ -294,9 +321,13 @@ async function assertNoDesktopOverflow(page, label) {
         await assertNoDesktopOverflow(page, 'tabla documentos 1440x900');
         await page.screenshot({ path: path.join(SHOT_DIR, '04_tabla_documentos_mixta_1440.png'), fullPage: true });
 
-        // Verificar descarga real con verificación SHA-256 de los adjuntos subidos
-        const dlLinks = await page.locator('#entregas-resultado a[href^="/entregas/documento_descargar.php?id="]').evaluateAll((els) => els.map((e) => e.getAttribute('href')));
-        assert(dlLinks.length >= 2, 'Deben existir al menos 2 botones Descargar.');
+        // Verificar descarga real con verificación SHA-256 de los adjuntos subidos por esta ejecución (id > fx.maxDoc)
+        const allDlLinks = await page.locator('#entregas-resultado a[href^="/entregas/documento_descargar.php?id="]').evaluateAll((els) => els.map((e) => e.getAttribute('href')));
+        const dlLinks = allDlLinks.filter((href) => {
+            const m = String(href || '').match(/[?&]id=(\d+)/);
+            return m && Number(m[1]) > fx.maxDoc;
+        });
+        assert(dlLinks.length >= 2, `Deben existir al menos 2 botones Descargar propios de esta prueba (encontrados: ${dlLinks.length}).`);
         const hashes = [];
         for (const href of dlLinks) {
             const resp = await context.request.get(`${BASE_URL}${href}`);
@@ -338,9 +369,66 @@ async function assertNoDesktopOverflow(page, label) {
         await viewCtx.close();
         console.log('[OK] E2E 3: Control visual de permisos DOCUMENTOS_VER vs DOCUMENTOS_REGISTRAR.');
 
+        // 11. E2E 4: Registrar entrega desde Viajes -> Detalle con comprobante PDF (modo dual + toggle Fallida/Entregada + descarga SHA-256)
+        await page.setViewportSize({ width: 1440, height: 900 });
+        await page.goto(`${BASE_URL}/viajes/detalle.php?id=${fx.viajeId}`, { waitUntil: 'networkidle' });
+        await page.click('button:has-text("Registrar entrega")');
+        await page.waitForSelector('[data-doc-upload-form] #entrega-estado', { timeout: 10000 });
+        await page.waitForTimeout(200);
+        assert.strictEqual(await page.locator('#entrega-panel-archivo').isVisible(), true, 'Modal Registrar entrega debe iniciar en modo Subir archivo local.');
+        await page.screenshot({ path: path.join(SHOT_DIR, '08_modal_entrega_comprobante_archivo_1440.png') });
+
+        // Alternar a Fallida y comprobar desactivación limpia de inputs de comprobante, luego volver a Entregada
+        await page.selectOption('#entrega-estado', 'FALLIDA');
+        await page.waitForTimeout(100);
+        assert.strictEqual(await page.locator('[data-entrega-fallo]').isVisible(), true, 'Al elegir Fallida debe mostrarse Motivo del fallo.');
+        assert.strictEqual(await page.locator('#comprobante-archivo').isDisabled(), true, 'En modo Fallida el input de archivo debe deshabilitarse.');
+        await page.selectOption('#entrega-estado', 'ENTREGADA');
+        await page.waitForTimeout(100);
+        assert.strictEqual(await page.locator('#comprobante-archivo').isDisabled(), false, 'Al volver a Entregada debe reactivarse el input de archivo.');
+
+        // Llenar receptor, alternar a URL y volver a Archivo preservando receptor
+        await page.fill('#receptor-nombre', 'Sofía Receptora Demo');
+        await page.click('[data-doc-mode-label="url"]');
+        await page.waitForTimeout(100);
+        assert.strictEqual(await page.locator('#entrega-panel-url').isVisible(), true, 'Panel URL debe mostrarse en Registrar entrega.');
+        await page.click('[data-doc-mode-label="archivo"]');
+        await page.waitForTimeout(100);
+        assert.strictEqual(await page.inputValue('#receptor-nombre'), 'Sofía Receptora Demo', 'Alternar modo de comprobante no debe borrar Receptor efectivo.');
+
+        // Arrastrar comprobante PDF válido y enviar (exactamente 1 POST)
+        await page.evaluate((b64) => {
+            const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+            const dz = document.querySelector('[data-doc-dropzone]');
+            const dt = new DataTransfer();
+            dt.items.add(new File([bin], 'comprobante_entrega_firmado.pdf', { type: 'application/pdf' }));
+            dz.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+        }, pdfBytes.toString('base64'));
+        await page.waitForSelector('[data-doc-preview]:not([hidden])', { timeout: 5000 });
+
+        const entregaPosts = [];
+        page.on('request', (req) => {
+            if (req.method() === 'POST' && req.url().includes('/entregas/registrar.php')) entregaPosts.push(req.url());
+        });
+        await Promise.all([
+            page.waitForNavigation({ waitUntil: 'networkidle', timeout: 15000 }),
+            page.click('.modal button[type="submit"]'),
+        ]);
+        await page.waitForSelector('#entregas-resultado table', { timeout: 15000 });
+        assert.strictEqual(entregaPosts.length, 1, `Registrar entrega debe enviar exactamente 1 POST (enviados: ${entregaPosts.length}).`);
+        const dlCompHref = await page.locator('#entregas-resultado a[href*="/entregas/comprobante_descargar.php?id="]').first().getAttribute('href');
+        assert(dlCompHref, 'La tabla de entregas debe mostrar enlace Descargar comprobante.');
+        await page.screenshot({ path: path.join(SHOT_DIR, '09_tabla_entregas_comprobante_1440.png') });
+
+        const dlCompRes = await page.request.get(`${BASE_URL}${dlCompHref}`);
+        assert.strictEqual(dlCompRes.status(), 200, `Descarga de comprobante de entrega debe devolver 200 (recibido ${dlCompRes.status()}).`);
+        const dlCompSha = crypto.createHash('sha256').update(await dlCompRes.body()).digest('hex');
+        assert.strictEqual(dlCompSha, pdfSha, 'El comprobante de entrega descargado debe coincidir byte a byte (SHA-256).');
+        console.log('[OK] E2E 4: Registrar entrega desde Viajes -> Detalle con comprobante PDF, toggle Fallida/Entregada y descarga SHA-256.');
+
         assert.strictEqual(pageErrors.length, 0, `Errores JS: ${pageErrors.join(' | ')}`);
         assert.strictEqual(server500s.length, 0, `Errores 500: ${server500s.join(' | ')}`);
-        console.log('=== PLAYWRIGHT ADJUNTOS DOCUMENTALES: 100% PASS ===');
+        console.log('=== PLAYWRIGHT ADJUNTOS DOCUMENTALES + ENTREGAS: 100% PASS ===');
     } catch (err) {
         console.error('FAIL:', err);
         process.exitCode = 1;
@@ -364,6 +452,14 @@ async function assertNoDesktopOverflow(page, label) {
             try {
                 phpEval(`
                     $fx = json_decode(${JSON.stringify(JSON.stringify(fx))}, true);
+                    $p->prepare('DELETE FROM dbo.entregas WHERE viaje_solicitud_id = ?')->execute([$fx['vsEntId']]);
+                    $p->prepare('DELETE FROM dbo.viaje_solicitudes WHERE viaje_solicitud_id = ?')->execute([$fx['vsEntId']]);
+                    $p->prepare('DELETE FROM dbo.paradas_viaje WHERE parada_id IN (?, ?)')->execute([$fx['par1'], $fx['par2']]);
+                    $p->prepare('DELETE FROM dbo.viajes WHERE viaje_id = ?')->execute([$fx['viajeId']]);
+                    $p->prepare('DELETE FROM dbo.historial_estados_solicitud WHERE solicitud_id = ?')->execute([$fx['solEntId']]);
+                    $p->prepare('DELETE FROM dbo.solicitudes WHERE solicitud_id = ?')->execute([$fx['solEntId']]);
+                    $p->prepare('DELETE FROM dbo.vehiculos WHERE vehiculo_id = ?')->execute([$fx['vehId']]);
+                    $p->prepare('DELETE FROM dbo.conductores WHERE conductor_id = ?')->execute([$fx['conId']]);
                     $p->prepare('DELETE FROM dbo.documentos WHERE documento_id > ?')->execute([$fx['maxDoc']]);
                     $p->prepare('DELETE FROM dbo.auditorias WHERE auditoria_id > ?')->execute([$fx['maxAud']]);
                     foreach ([$fx['uFull'], $fx['uView']] as $uid) {

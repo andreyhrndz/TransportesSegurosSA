@@ -127,3 +127,146 @@ BEGIN
     END;
 END;
 GO
+
+-- Reversión de contratos y columnas condicionales en dbo.entregas
+DROP PROCEDURE IF EXISTS dbo.sp_obtener_comprobante_entrega;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_registrar_entrega
+    @viaje_solicitud_id INT,
+    @estado VARCHAR(15),
+    @receptor_nombre NVARCHAR(150) = NULL,
+    @receptor_identificacion NVARCHAR(30) = NULL,
+    @receptor_telefono NVARCHAR(30) = NULL,
+    @comprobante_url NVARCHAR(500) = NULL,
+    @motivo_fallo NVARCHAR(500) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @usuario INT = TRY_CONVERT(INT, SESSION_CONTEXT(N'usuario_id'));
+    DECLARE @solicitud INT;
+
+    IF dbo.fn_tiene_permiso(@usuario, N'ENTREGAS_REGISTRAR') = 0
+        THROW 50319, 'No tiene permiso para registrar entregas.', 1;
+    IF @estado NOT IN ('ENTREGADA','FALLIDA')
+        THROW 50320, 'Estado de entrega invalido.', 1;
+    IF @estado = 'ENTREGADA' AND
+       (NULLIF(LTRIM(RTRIM(@receptor_nombre)), N'') IS NULL OR
+        NULLIF(LTRIM(RTRIM(@comprobante_url)), N'') IS NULL)
+        THROW 50321, 'La entrega exige receptor y comprobante.', 1;
+    IF @estado = 'FALLIDA' AND NULLIF(LTRIM(RTRIM(@motivo_fallo)), N'') IS NULL
+        THROW 50322, 'Debe justificar la entrega fallida.', 1;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+        SELECT @solicitud = vs.solicitud_id
+        FROM dbo.viaje_solicitudes vs WITH (UPDLOCK, HOLDLOCK)
+        JOIN dbo.viajes v ON v.viaje_id = vs.viaje_id
+        WHERE vs.viaje_solicitud_id = @viaje_solicitud_id
+          AND vs.estado = 'EN_TRANSITO'
+          AND v.estado = 'EN_CURSO';
+        IF @solicitud IS NULL
+            THROW 50323, 'La solicitud no esta en un viaje en curso.', 1;
+        IF EXISTS (SELECT 1 FROM dbo.entregas WHERE viaje_solicitud_id = @viaje_solicitud_id)
+            THROW 50324, 'La solicitud ya tiene una entrega registrada.', 1;
+
+        INSERT INTO dbo.entregas
+        (
+            viaje_solicitud_id, estado, receptor_nombre,
+            receptor_identificacion, receptor_telefono, fecha_recepcion,
+            comprobante_url, registrado_por_usuario_id, motivo_fallo
+        )
+        VALUES
+        (
+            @viaje_solicitud_id, @estado, @receptor_nombre,
+            @receptor_identificacion, @receptor_telefono,
+            CASE WHEN @estado = 'ENTREGADA' THEN SYSUTCDATETIME() ELSE NULL END,
+            @comprobante_url, @usuario, @motivo_fallo
+        );
+
+        UPDATE dbo.viaje_solicitudes SET estado = @estado WHERE viaje_solicitud_id = @viaje_solicitud_id;
+        UPDATE dbo.solicitudes
+        SET estado = CASE WHEN @estado = 'ENTREGADA' THEN 'ENTREGADA' ELSE 'ENTREGA_FALLIDA' END,
+            fecha_actualizacion = SYSUTCDATETIME()
+        WHERE solicitud_id = @solicitud;
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH;
+END;
+GO
+
+CREATE OR ALTER PROCEDURE dbo.sp_listar_entregas
+    @estado VARCHAR(15) = NULL,
+    @viaje_id INT = NULL,
+    @desde DATETIME2 = NULL,
+    @hasta DATETIME2 = NULL,
+    @pagina INT = 1,
+    @por_pagina INT = 20,
+    @total_registros INT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @usuario_id INT = TRY_CONVERT(INT, SESSION_CONTEXT(N'usuario_id'));
+    DECLARE @offset BIGINT;
+
+    IF dbo.fn_tiene_permiso(@usuario_id, N'ENTREGAS_VER') = 0
+        THROW 50103, N'No tiene permiso para consultar entregas.', 1;
+    IF @pagina < 1 OR @por_pagina NOT BETWEEN 1 AND 100 OR (@desde IS NOT NULL AND @hasta IS NOT NULL AND @desde > @hasta)
+        THROW 50102, N'Filtros o paginación inválidos.', 1;
+    IF @estado IS NOT NULL AND @estado NOT IN ('ENTREGADA', 'FALLIDA')
+        THROW 50102, N'Estado de entrega inválido.', 1;
+
+    SET @offset = CONVERT(BIGINT, @pagina - 1) * @por_pagina;
+
+    SELECT @total_registros = COUNT(*)
+    FROM dbo.entregas AS e
+    JOIN dbo.viaje_solicitudes AS vs ON vs.viaje_solicitud_id = e.viaje_solicitud_id
+    WHERE (@estado IS NULL OR e.estado = @estado)
+      AND (@viaje_id IS NULL OR vs.viaje_id = @viaje_id)
+      AND (@desde IS NULL OR e.fecha_resultado >= @desde)
+      AND (@hasta IS NULL OR e.fecha_resultado < DATEADD(DAY, 1, @hasta));
+
+    SELECT
+        e.entrega_id, e.estado, e.fecha_resultado, e.receptor_nombre,
+        e.receptor_identificacion, e.receptor_telefono, e.fecha_recepcion,
+        e.comprobante_url, e.motivo_fallo, e.observaciones,
+        vs.viaje_solicitud_id, vs.viaje_id, s.solicitud_id, s.codigo_solicitud
+    FROM dbo.entregas AS e
+    JOIN dbo.viaje_solicitudes AS vs ON vs.viaje_solicitud_id = e.viaje_solicitud_id
+    JOIN dbo.solicitudes AS s ON s.solicitud_id = vs.solicitud_id
+    WHERE (@estado IS NULL OR e.estado = @estado)
+      AND (@viaje_id IS NULL OR vs.viaje_id = @viaje_id)
+      AND (@desde IS NULL OR e.fecha_resultado >= @desde)
+      AND (@hasta IS NULL OR e.fecha_resultado < DATEADD(DAY, 1, @hasta))
+    ORDER BY e.fecha_resultado DESC, e.entrega_id DESC
+    OFFSET @offset ROWS FETCH NEXT @por_pagina ROWS ONLY;
+END;
+GO
+
+IF COL_LENGTH(N'dbo.entregas', N'comprobante_origen') IS NOT NULL
+BEGIN
+    DECLARE @ent_internos INT = 0;
+    EXEC sp_executesql N'SELECT @c = COUNT(*) FROM dbo.entregas WHERE comprobante_origen = ''INTERNA'';', N'@c INT OUTPUT', @c = @ent_internos OUTPUT;
+
+    IF @ent_internos = 0
+    BEGIN
+        IF EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'dbo.entregas') AND name = N'UQ_entregas_comprobante_storage_key')
+            DROP INDEX UQ_entregas_comprobante_storage_key ON dbo.entregas;
+        IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id = OBJECT_ID(N'dbo.entregas') AND name = N'CK_entregas_comprobante_coherente')
+            ALTER TABLE dbo.entregas DROP CONSTRAINT CK_entregas_comprobante_coherente;
+        IF EXISTS (SELECT 1 FROM sys.check_constraints WHERE parent_object_id = OBJECT_ID(N'dbo.entregas') AND name = N'CK_entregas_comprobante_origen')
+            ALTER TABLE dbo.entregas DROP CONSTRAINT CK_entregas_comprobante_origen;
+
+        ALTER TABLE dbo.entregas
+            DROP COLUMN comprobante_sha256_hex, comprobante_tamano_bytes, comprobante_mime_type, comprobante_nombre_original, comprobante_storage_key, comprobante_origen;
+        PRINT 'Rollback 14 entregas completo: columnas aditivas removidas (0 comprobantes internos presentes).';
+    END
+    ELSE
+    BEGIN
+        PRINT 'Rollback 14 entregas seguro (no destructivo): procedimientos revertidos; columnas preservadas porque existen comprobantes internos.';
+    END;
+END;
+GO

@@ -96,14 +96,41 @@ $page = min($page, $pages);
             <?php foreach ($result['rows'] as $row): ?>
                 <tr>
                     <?php if ($section === 'entregas'): ?>
-                        <?php $url = read_safe_reference_url($row['comprobante_url']); ?>
+                        <?php
+                        $compOrigen = strtoupper((string)($row['comprobante_origen'] ?? ''));
+                        $esCompInterno = $row['estado'] === 'ENTREGADA' && $compOrigen === 'INTERNA';
+                        $url = !$esCompInterno ? read_safe_reference_url($row['comprobante_url'] ?? null) : null;
+                        $compMimeShort = match (strtolower((string)($row['comprobante_mime_type'] ?? ''))) {
+                            'application/pdf' => 'PDF',
+                            'image/jpeg' => 'JPG',
+                            'image/png' => 'PNG',
+                            default => 'Archivo',
+                        };
+                        $compSizeTxt = isset($row['comprobante_tamano_bytes']) && (int)$row['comprobante_tamano_bytes'] > 0
+                            ? document_format_bytes((int)$row['comprobante_tamano_bytes'])
+                            : '';
+                        ?>
                         <td><a class="table-link" href="/solicitudes/detalle.php?id=<?= (int)$row['solicitud_id'] ?>"><strong><?= e($row['codigo_solicitud']) ?></strong></a></td>
                         <td><a class="table-link" href="/viajes/detalle.php?id=<?= (int)$row['viaje_id'] ?>">#<?= (int)$row['viaje_id'] ?></a></td>
                         <td><?= status_tag($row['estado']) ?></td>
                         <td><?= e($row['receptor_nombre'] ?: 'No aplica') ?></td>
                         <td>
-                            <?php if ($url): ?>
-                                <a class="table-link" target="_blank" rel="noopener noreferrer" href="<?= e($url) ?>">Ver comprobante <?= svg_icon('arrow-up-right') ?></a>
+                            <?php if ($esCompInterno): ?>
+                                <?php $compName = (string)($row['comprobante_nombre_original'] ?? 'Comprobante'); ?>
+                                <div class="cell-stack">
+                                    <div>
+                                        <a class="button is-small button-secondary" href="/entregas/comprobante_descargar.php?id=<?= (int)$row['entrega_id'] ?>">
+                                            <?= svg_icon('download') ?>
+                                            <span>Descargar comprobante</span>
+                                        </a>
+                                    </div>
+                                    <span class="doc-support-meta">
+                                        <span class="doc-support-filename" title="<?= e($compName) ?>"><?= e($compName) ?></span>
+                                        <span class="is-nowrap">· <?= e($compMimeShort) ?><?= $compSizeTxt !== '' ? ' · ' . e($compSizeTxt) : '' ?></span>
+                                    </span>
+                                </div>
+                            <?php elseif ($url): ?>
+                                <a class="table-link is-nowrap" target="_blank" rel="noopener noreferrer" href="<?= e($url) ?>">Ver comprobante <?= svg_icon('arrow-up-right') ?></a>
                             <?php else: ?>
                                 <?= e($row['motivo_fallo'] ?: 'Sin evidencia') ?>
                             <?php endif; ?>

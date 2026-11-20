@@ -239,9 +239,10 @@ try {
         return $uid;
     };
 
-    $uFull = $mkUser($pdo, "docfull_{$runId}", ['DOCUMENTOS_VER', 'DOCUMENTOS_REGISTRAR', 'SOLICITUDES_VER']);
-    $uViewOnly = $mkUser($pdo, "docview_{$runId}", ['DOCUMENTOS_VER', 'SOLICITUDES_VER']);
+    $uFull = $mkUser($pdo, "docfull_{$runId}", ['DOCUMENTOS_VER', 'DOCUMENTOS_REGISTRAR', 'ENTREGAS_VER', 'ENTREGAS_REGISTRAR', 'SOLICITUDES_VER']);
+    $uViewOnly = $mkUser($pdo, "docview_{$runId}", ['DOCUMENTOS_VER', 'ENTREGAS_VER', 'SOLICITUDES_VER']);
     $uNone = $mkUser($pdo, "docnone_{$runId}", ['CLIENTES_VER']);
+    $deliveryFixture = null;
 
     // ------------------------------------------------------------------
     // 3. Arrancar servidor PHP aislado con upload_max_filesize=10M y post_max_size=12M
@@ -513,7 +514,174 @@ try {
         doc_assert(hash_file('sha256', $rstPath) === $entry['sha256_hex'], 'SHA-256 restaurado no coincide con SQL.');
     }
     echo "[OK] 5. Simulación de respaldo + manifiesto SHA-256 + restauración verificada (4/4 archivos íntegros).\n";
-    echo "=== SUITE HTTP/SEGURIDAD ADJUNTOS DOCUMENTALES: 100% PASS ===\n";
+
+    // ------------------------------------------------------------------
+    // 8. Comprobantes de entrega (registrar_form.php, registrar.php, comprobante_descargar.php)
+    // ------------------------------------------------------------------
+    $pdfBytes = doc_valid_pdf_bytes(4096);
+    $pngBytes = doc_valid_png_bytes();
+    $cliId = (int)$pdo->query('SELECT TOP (1) cliente_id FROM dbo.clientes ORDER BY cliente_id')->fetchColumn();
+    $oriId = (int)$pdo->query('SELECT TOP (1) ubicacion_id FROM dbo.ubicaciones ORDER BY ubicacion_id')->fetchColumn();
+    $dstId = (int)$pdo->query("SELECT TOP (1) ubicacion_id FROM dbo.ubicaciones WHERE ubicacion_id <> {$oriId} ORDER BY ubicacion_id")->fetchColumn();
+    $rutId = (int)$pdo->query('SELECT TOP (1) ruta_id FROM dbo.rutas ORDER BY ruta_id')->fetchColumn();
+
+    $insId = static function (PDO $db, string $sql, array $params = []): int {
+        $st = $db->prepare($sql . '; SELECT SCOPE_IDENTITY();');
+        $st->execute($params);
+        $st->nextRowset();
+        $id = (int)$st->fetchColumn();
+        $st->closeCursor();
+        return $id;
+    };
+
+    $vehId = $insId($pdo, "INSERT INTO dbo.vehiculos (placa, marca, modelo, anio, capacidad_carga_kg, kilometraje_actual, estado, activo, pma_kg, clase_legal, es_articulado, estado_homologacion) VALUES (?, N'Test', N'Prueba', 2024, 3000, 100, 'ASIGNADO', 1, 3500, 'LIVIANO', 0, 'VERIFICADO')", ['DF' . strtoupper(substr($runId, 0, 6))]);
+    $conId = $insId($pdo, "INSERT INTO dbo.conductores (identificacion, nombre, primer_apellido, numero_licencia, fecha_vencimiento_licencia, estado_operativo, activo) VALUES (?, N'Chofer', N'Entrega', ?, DATEADD(YEAR, 2, CONVERT(DATE, SYSUTCDATETIME())), 'ASIGNADO', 1)", ['DF-' . $runId, 'LIC-DF-' . $runId]);
+    $viajeId = $insId($pdo, "INSERT INTO dbo.viajes (codigo_viaje, vehiculo_id, conductor_id, ruta_id, fecha_programada_salida, fecha_salida_real, estado) VALUES (?, ?, ?, ?, SYSUTCDATETIME(), SYSUTCDATETIME(), 'EN_CURSO')", ['VDF-' . strtoupper($runId), $vehId, $conId, $rutId]);
+    $par1 = $insId($pdo, "INSERT INTO dbo.paradas_viaje (viaje_id, ubicacion_id, orden, tipo_parada, estado) VALUES (?, ?, 1, 'RECOGIDA', 'COMPLETADA')", [$viajeId, $oriId]);
+    $par2 = $insId($pdo, "INSERT INTO dbo.paradas_viaje (viaje_id, ubicacion_id, orden, tipo_parada, estado) VALUES (?, ?, 2, 'ENTREGA', 'PENDIENTE')", [$viajeId, $dstId]);
+
+    $solIds = [];
+    $vsIds = [];
+    for ($i = 1; $i <= 4; $i++) {
+        $sid = $insId($pdo, "INSERT INTO dbo.solicitudes (codigo_solicitud, cliente_id, origen_id, destino_id, destinatario_nombre, destinatario_apellido1, destinatario_apellido2, fecha_solicitud, fecha_entrega_requerida, prioridad_calculada, prioridad_actual, estado) VALUES (?, ?, ?, ?, N'Dest', N'Prueba', N'Entrega', SYSUTCDATETIME(), DATEADD(DAY, 1, SYSUTCDATETIME()), 'NORMAL', 'NORMAL', 'EN_TRANSITO')", ["SDF{$i}-" . strtoupper($runId), $cliId, $oriId, $dstId]);
+        $vsid = $insId($pdo, "INSERT INTO dbo.viaje_solicitudes (viaje_id, solicitud_id, parada_recogida_id, parada_entrega_id, estado) VALUES (?, ?, ?, ?, 'EN_TRANSITO')", [$viajeId, $sid, $par1, $par2]);
+        $solIds[] = $sid;
+        $vsIds[] = $vsid;
+    }
+    $deliveryFixture = [
+        'vehId' => $vehId, 'conId' => $conId, 'viajeId' => $viajeId,
+        'parIds' => [$par1, $par2], 'solIds' => $solIds, 'vsIds' => $vsIds,
+    ];
+
+    // 8.1 Formulario y permisos
+    [$sRfFull, $bRfFull] = doc_http("{$base}/entregas/registrar_form.php?viaje_solicitud_id={$vsIds[0]}", $cFull);
+    [$sRfView] = doc_http("{$base}/entregas/registrar_form.php?viaje_solicitud_id={$vsIds[0]}", $cView);
+    doc_assert($sRfFull === 200 && str_contains($bRfFull, 'modo_comprobante') && str_contains($bRfFull, 'comprobante_archivo'), "registrar_form.php debe renderizar selector dual para ENTREGAS_REGISTRAR (status={$sRfFull}).");
+    doc_assert($sRfView === 403, "registrar_form.php sin ENTREGAS_REGISTRAR debe dar 403 (status={$sRfView}).");
+
+    // 8.2 Negativas sobre registrar.php (405, CSRF 403, RBAC 403, 413, 422, fallo SQL 50323 -> 0 huérfanos)
+    $entFilesBefore = doc_count_files($storageDir);
+    [$sEntGet] = doc_http("{$base}/entregas/registrar.php", $cFull);
+    doc_assert($sEntGet === 405, "GET /entregas/registrar.php debe dar 405 (recibido {$sEntGet}).");
+
+    [$sEntNoCsrf] = doc_http("{$base}/entregas/registrar.php", $cFull, 'POST', ['viaje_solicitud_id' => $vsIds[0], 'estado' => 'ENTREGADA', 'receptor_nombre' => 'Sin CSRF', 'modo_comprobante' => 'url', 'comprobante_url' => 'https://example.test/x.pdf']);
+    doc_assert($sEntNoCsrf === 403, "registrar.php sin CSRF debe dar 403 (recibido {$sEntNoCsrf}).");
+
+    [$sEntNoPerm] = doc_http("{$base}/entregas/registrar.php", $cView, 'POST', ['csrf_token' => $csrfView, 'viaje_solicitud_id' => $vsIds[0], 'estado' => 'ENTREGADA', 'receptor_nombre' => 'Sin Perm', 'modo_comprobante' => 'url', 'comprobante_url' => 'https://example.test/x.pdf']);
+    doc_assert($sEntNoPerm === 403, "registrar.php sin ENTREGAS_REGISTRAR debe dar 403 (recibido {$sEntNoPerm}).");
+
+    // 413 > 10 MiB y > post_max_size
+    [$sEntBig] = doc_http("{$base}/entregas/registrar.php", $cFull, 'POST', [
+        'csrf_token' => $csrfFull, 'viaje_solicitud_id' => $vsIds[0], 'estado' => 'ENTREGADA', 'receptor_nombre' => 'Grande', 'modo_comprobante' => 'archivo',
+    ], ['field' => 'comprobante_archivo', 'filename' => 'grande.pdf', 'content_type' => 'application/pdf', 'content' => "%PDF-1.4\n" . str_repeat('B', 10485761 - 9)]);
+    doc_assert($sEntBig === 413, "Comprobante >10 MiB debe dar 413 (recibido {$sEntBig}).");
+
+    [$sEntPostBig] = doc_http("{$base}/entregas/registrar.php", $cFull, 'POST', [
+        'csrf_token' => $csrfFull, 'viaje_solicitud_id' => $vsIds[0], 'estado' => 'ENTREGADA', 'receptor_nombre' => 'MuyGrande', 'modo_comprobante' => 'archivo',
+    ], ['field' => 'comprobante_archivo', 'filename' => 'muygrande.pdf', 'content_type' => 'application/pdf', 'content' => "%PDF-1.4\n" . str_repeat('C', 13 * 1024 * 1024)]);
+    doc_assert($sEntPostBig === 413, "Cuerpo >post_max_size en registrar.php debe dar 413 (recibido {$sEntPostBig}).");
+
+    // 422: PDF fingido, ambos (archivo+URL), ninguno, FALLIDA con archivo
+    [$sEntFake] = doc_http("{$base}/entregas/registrar.php", $cFull, 'POST', [
+        'csrf_token' => $csrfFull, 'viaje_solicitud_id' => $vsIds[0], 'estado' => 'ENTREGADA', 'receptor_nombre' => 'Falso', 'modo_comprobante' => 'archivo',
+    ], ['field' => 'comprobante_archivo', 'filename' => 'falso.pdf', 'content_type' => 'application/pdf', 'content' => '<html>no es pdf</html>']);
+    doc_assert($sEntFake === 422, "Comprobante PDF fingido debe dar 422 (recibido {$sEntFake}).");
+
+    [$sEntBoth] = doc_http("{$base}/entregas/registrar.php", $cFull, 'POST', [
+        'csrf_token' => $csrfFull, 'viaje_solicitud_id' => $vsIds[0], 'estado' => 'ENTREGADA', 'receptor_nombre' => 'Ambos', 'modo_comprobante' => 'archivo', 'comprobante_url' => 'https://example.test/ambos.pdf',
+    ], ['field' => 'comprobante_archivo', 'filename' => 'ok.pdf', 'content_type' => 'application/pdf', 'content' => $pdfBytes]);
+    doc_assert($sEntBoth === 422, "Comprobante archivo + URL simultáneos debe dar 422 (recibido {$sEntBoth}).");
+
+    [$sEntFailFile] = doc_http("{$base}/entregas/registrar.php", $cFull, 'POST', [
+        'csrf_token' => $csrfFull, 'viaje_solicitud_id' => $vsIds[0], 'estado' => 'FALLIDA', 'motivo_fallo' => 'Cerrado',
+    ], ['field' => 'comprobante_archivo', 'filename' => 'ok.pdf', 'content_type' => 'application/pdf', 'content' => $pdfBytes]);
+    doc_assert($sEntFailFile === 422, "Entrega FALLIDA con archivo adjunto debe dar 422 (recibido {$sEntFailFile}).");
+
+    // Fallo SQL (viaje_solicitud_id inexistente -> 50323) debe borrar archivo inmediatamente
+    [$sEntSqlFail] = doc_http("{$base}/entregas/registrar.php", $cFull, 'POST', [
+        'csrf_token' => $csrfFull, 'viaje_solicitud_id' => 99999999, 'estado' => 'ENTREGADA', 'receptor_nombre' => 'NoExiste', 'modo_comprobante' => 'archivo',
+    ], ['field' => 'comprobante_archivo', 'filename' => 'cleanup.pdf', 'content_type' => 'application/pdf', 'content' => $pdfBytes]);
+    doc_assert($sEntSqlFail === 422, "Fallo SQL 50323 en registrar.php debe dar 422 (recibido {$sEntSqlFail}).");
+    doc_assert(doc_count_files($storageDir) === $entFilesBefore, 'Fallo SQL / validación en registrar.php no debe dejar huérfanos en disco.');
+
+    // 8.3 Altas válidas: PDF adjunto (vs0), PNG adjunto (vs1), URL externa (vs2), FALLIDA (vs3)
+    [$sEntPdf, , $hEntPdf] = doc_http("{$base}/entregas/registrar.php", $cFull, 'POST', [
+        'csrf_token' => $csrfFull, 'viaje_solicitud_id' => $vsIds[0], 'estado' => 'ENTREGADA',
+        'receptor_nombre' => 'Laura Receptora', 'receptor_identificacion' => '112220333', 'receptor_telefono' => '88881111',
+        'modo_comprobante' => 'archivo',
+    ], ['field' => 'comprobante_archivo', 'filename' => 'comprobante_firmado_01.pdf', 'content_type' => 'application/pdf', 'content' => $pdfBytes], true);
+    doc_assert($sEntPdf === 200 && str_contains((string)doc_header($hEntPdf, 'HX-Redirect'), '/entregas.php?seccion=entregas'), "Entrega con PDF adjunto debe retornar 200 (status={$sEntPdf}).");
+
+    // Reintento sobre la misma asignación (50324) con PNG válido -> 422/409 y 0 huérfanos
+    $filesAfterOne = doc_count_files($storageDir);
+    doc_assert($filesAfterOne === $entFilesBefore + 1, 'Debe haber exactamente 1 archivo nuevo tras primera entrega.');
+    [$sEntDup] = doc_http("{$base}/entregas/registrar.php", $cFull, 'POST', [
+        'csrf_token' => $csrfFull, 'viaje_solicitud_id' => $vsIds[0], 'estado' => 'ENTREGADA',
+        'receptor_nombre' => 'Duplicado', 'modo_comprobante' => 'archivo',
+    ], ['field' => 'comprobante_archivo', 'filename' => 'dup.png', 'content_type' => 'image/png', 'content' => $pngBytes], true);
+    doc_assert(in_array($sEntDup, [409, 422], true), "Entrega duplicada 50324 debe rechazarse (recibido {$sEntDup}).");
+    doc_assert(doc_count_files($storageDir) === $filesAfterOne, 'Rechazo 50324 no debe dejar archivo huérfano.');
+
+    [$sEntPng] = doc_http("{$base}/entregas/registrar.php", $cFull, 'POST', [
+        'csrf_token' => $csrfFull, 'viaje_solicitud_id' => $vsIds[1], 'estado' => 'ENTREGADA',
+        'receptor_nombre' => 'Marco Receptor', 'modo_comprobante' => 'archivo',
+    ], ['field' => 'comprobante_archivo', 'filename' => 'foto_entrega_02.png', 'content_type' => 'image/png', 'content' => $pngBytes], true);
+    doc_assert($sEntPng === 200, "Entrega con PNG adjunto debe retornar 200 (status={$sEntPng}).");
+
+    [$sEntUrl] = doc_http("{$base}/entregas/registrar.php", $cFull, 'POST', [
+        'csrf_token' => $csrfFull, 'viaje_solicitud_id' => $vsIds[2], 'estado' => 'ENTREGADA',
+        'receptor_nombre' => 'Carlos URL', 'modo_comprobante' => 'url', 'comprobante_url' => 'https://example.test/comp-legacy-ok.pdf',
+    ], null, true);
+    doc_assert($sEntUrl === 200, "Entrega retrocompatible con URL externa debe retornar 200 (status={$sEntUrl}).");
+
+    [$sEntFall] = doc_http("{$base}/entregas/registrar.php", $cFull, 'POST', [
+        'csrf_token' => $csrfFull, 'viaje_solicitud_id' => $vsIds[3], 'estado' => 'FALLIDA',
+        'motivo_fallo' => 'Bodega cerrada en horario nocturno',
+    ], null, true);
+    doc_assert($sEntFall === 200, "Entrega FALLIDA sin comprobante debe retornar 200 (status={$sEntFall}).");
+
+    // 8.4 Descarga autenticada con ENTREGAS_VER, cabeceras seguras y SHA-256 byte a byte
+    $entRows = $pdo->query("SELECT entrega_id, viaje_solicitud_id, estado, comprobante_origen, comprobante_storage_key, comprobante_sha256_hex FROM dbo.entregas WHERE viaje_solicitud_id IN (" . implode(',', $vsIds) . ")")->fetchAll(PDO::FETCH_ASSOC);
+    $entByVs = [];
+    foreach ($entRows as $er) {
+        $entByVs[(int)$er['viaje_solicitud_id']] = $er;
+    }
+    $entPdfId = (int)$entByVs[$vsIds[0]]['entrega_id'];
+    $entPngId = (int)$entByVs[$vsIds[1]]['entrega_id'];
+    $entUrlId = (int)$entByVs[$vsIds[2]]['entrega_id'];
+    $entFallId = (int)$entByVs[$vsIds[3]]['entrega_id'];
+
+    // Unauth 302, sin permiso 403, POST 405, URL/FALLIDA/inexistente 404
+    [$sDlUnauth] = doc_http("{$base}/entregas/comprobante_descargar.php?id={$entPdfId}", '');
+    [$sDlNoPerm] = doc_http("{$base}/entregas/comprobante_descargar.php?id={$entPdfId}", $cNone);
+    [$sDlPost] = doc_http("{$base}/entregas/comprobante_descargar.php?id={$entPdfId}", $cView, 'POST');
+    [$sDlUrl] = doc_http("{$base}/entregas/comprobante_descargar.php?id={$entUrlId}", $cView);
+    [$sDlFall] = doc_http("{$base}/entregas/comprobante_descargar.php?id={$entFallId}", $cView);
+    [$sDlMiss] = doc_http("{$base}/entregas/comprobante_descargar.php?id=99999999", $cView);
+    doc_assert($sDlUnauth === 302, "Descarga comprobante sin sesión debe dar 302 (recibido {$sDlUnauth}).");
+    doc_assert($sDlNoPerm === 403, "Descarga comprobante sin ENTREGAS_VER debe dar 403 (recibido {$sDlNoPerm}).");
+    doc_assert($sDlPost === 405, "POST comprobante_descargar.php debe dar 405 (recibido {$sDlPost}).");
+    doc_assert($sDlUrl === 404 && $sDlFall === 404 && $sDlMiss === 404, "Descarga de URL/FALLIDA/inexistente debe dar 404 ({$sDlUrl}/{$sDlFall}/{$sDlMiss}).");
+
+    // Descarga autorizada PDF y PNG (con usuario solo ENTREGAS_VER)
+    [$sDlPdf, $bDlPdf, $hDlPdf] = doc_http("{$base}/entregas/comprobante_descargar.php?id={$entPdfId}", $cView);
+    doc_assert($sDlPdf === 200 && hash('sha256', $bDlPdf) === hash('sha256', $pdfBytes), 'Descarga PDF de comprobante debe coincidir byte a byte (SHA-256).');
+    doc_assert(
+        doc_header($hDlPdf, 'Content-Type') === 'application/pdf'
+        && str_starts_with((string)doc_header($hDlPdf, 'Content-Disposition'), 'attachment;')
+        && doc_header($hDlPdf, 'X-Content-Type-Options') === 'nosniff'
+        && str_contains((string)doc_header($hDlPdf, 'Cache-Control'), 'no-store'),
+        'Cabeceras seguras de comprobante PDF incompletas.'
+    );
+
+    [$sDlPng, $bDlPng, $hDlPng] = doc_http("{$base}/entregas/comprobante_descargar.php?id={$entPngId}", $cView);
+    doc_assert($sDlPng === 200 && hash('sha256', $bDlPng) === hash('sha256', $pngBytes) && doc_header($hDlPng, 'Content-Type') === 'image/png', 'Descarga PNG de comprobante debe coincidir byte a byte.');
+
+    // Verificar lista de entregas renderiza Descargar comprobante y Ver comprobante
+    [$sListaEnt, $bListaEnt] = doc_http("{$base}/entregas/lista.php?seccion=entregas", $cView);
+    doc_assert($sListaEnt === 200 && str_contains($bListaEnt, "/entregas/comprobante_descargar.php?id={$entPdfId}") && str_contains($bListaEnt, 'Ver comprobante'), 'Lista de entregas debe mostrar botón Descargar comprobante y enlaces externos.');
+    echo "[OK] 6. Comprobantes de entrega (PDF/PNG/URL/FALLIDA, RBAC ENTREGAS_VER/REGISTRAR, 413/422/404 y SHA-256).\n";
+    echo "=== SUITE HTTP/SEGURIDAD ADJUNTOS DOCUMENTALES + ENTREGAS: 100% PASS ===\n";
 } catch (Throwable $ex) {
     fwrite(STDERR, 'FAIL: ' . $ex->getMessage() . "\n");
     $exitCode = 1;
@@ -534,6 +702,19 @@ try {
     }
 
     try {
+        if (is_array($deliveryFixture)) {
+            $vsCsv = implode(',', array_map('intval', $deliveryFixture['vsIds']));
+            $solCsv = implode(',', array_map('intval', $deliveryFixture['solIds']));
+            $parCsv = implode(',', array_map('intval', $deliveryFixture['parIds']));
+            $pdo->exec("DELETE FROM dbo.entregas WHERE viaje_solicitud_id IN ({$vsCsv})");
+            $pdo->exec("DELETE FROM dbo.viaje_solicitudes WHERE viaje_solicitud_id IN ({$vsCsv})");
+            $pdo->exec("DELETE FROM dbo.paradas_viaje WHERE parada_id IN ({$parCsv})");
+            $pdo->prepare('DELETE FROM dbo.viajes WHERE viaje_id = ?')->execute([(int)$deliveryFixture['viajeId']]);
+            $pdo->exec("DELETE FROM dbo.historial_estados_solicitud WHERE solicitud_id IN ({$solCsv})");
+            $pdo->exec("DELETE FROM dbo.solicitudes WHERE solicitud_id IN ({$solCsv})");
+            $pdo->prepare('DELETE FROM dbo.vehiculos WHERE vehiculo_id = ?')->execute([(int)$deliveryFixture['vehId']]);
+            $pdo->prepare('DELETE FROM dbo.conductores WHERE conductor_id = ?')->execute([(int)$deliveryFixture['conId']]);
+        }
         foreach ($createdDocIds as $did) {
             $pdo->prepare('DELETE FROM dbo.documentos WHERE documento_id = ?')->execute([$did]);
         }

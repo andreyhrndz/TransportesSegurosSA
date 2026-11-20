@@ -1,12 +1,12 @@
 # Almacenamiento privado, respaldo y restauración de documentos adjuntos
 
-**Módulo:** `Entregas → Documentos` (`/entregas.php?seccion=documentos`)  
+**Módulos:** `Entregas → Documentos` (`/entregas.php?seccion=documentos`) y `Registrar entrega` (`/entregas/registrar_form.php` desde `Viajes → Detalle` y `Entregas → Entregas`)  
 **Migración SQL asociada:** `database/migrations/14_document_attachments_contracts.sql`  
 **Script auxiliar opcional (manual / `-DryRun` / `-WhatIf`):** `tools/scripts/backup-document-storage.ps1`  
 
 > [!IMPORTANT]
 > **Los respaldos `FULL` y `DIFF` de Microsoft SQL Server NO respaldan los archivos físicos (PDF, JPG, PNG) guardados en disco.**  
-> La base de datos almacena únicamente los metadatos (`origen_archivo`, `storage_key`, `nombre_original`, `mime_type`, `tamano_bytes`, `sha256_hex`) y la auditoría en `dbo.auditorias`. Respaldar únicamente archivos `.bak` sin respaldar el almacén privado provoca pérdida irrecuperable de los documentos adjuntos ante una restauración completa.
+> La base de datos almacena únicamente los metadatos en `dbo.documentos` (`origen_archivo`, `storage_key`, `nombre_original`, `mime_type`, `tamano_bytes`, `sha256_hex`) y `dbo.entregas` (`comprobante_origen`, `comprobante_storage_key`, `comprobante_nombre_original`, `comprobante_mime_type`, `comprobante_tamano_bytes`, `comprobante_sha256_hex`), junto con la auditoría en `dbo.auditorias`. Respaldar únicamente archivos `.bak` sin respaldar el almacén privado provoca pérdida irrecuperable tanto de documentos adjuntos como de comprobantes de entrega ante una restauración completa.
 
 ---
 
@@ -59,11 +59,11 @@ Para un despliegue productivo en Windows Server o estación dedicada:
 
 ### 1.4 Descarga autenticada y cabeceras HTTP
 
-Los archivos adjuntos solo se entregan mediante `GET /entregas/documento_descargar.php?id=<documento_id>`:
-- Exige sesión PHP autenticada y permiso granular `DOCUMENTOS_VER`.
-- Consulta `dbo.sp_obtener_documento` (revalida RBAC en SQL Server y verifica `origen_archivo = 'INTERNA'`).
-- Revalida `storage_key` y contención `realpath()` dentro del almacén privado.
-- Envía cabeceras seguras: `Content-Type` estricto (`application/pdf`, `image/jpeg` o `image/png`), `Content-Disposition: attachment` con nombre ASCII saneado + `filename*` RFC 5987, `X-Content-Type-Options: nosniff`, `Cache-Control: private, no-store, max-age=0` y `Pragma: no-cache`.
+Los archivos adjuntos solo se entregan mediante dos endpoints autenticados con separación estricta de permisos:
+- **Documentos de solicitud:** `GET /entregas/documento_descargar.php?id=<documento_id>` (exige `DOCUMENTOS_VER`, invoca `dbo.sp_obtener_documento` y verifica `origen_archivo = 'INTERNA'`).
+- **Comprobantes de entrega:** `GET /entregas/comprobante_descargar.php?id=<entrega_id>` (exige `ENTREGAS_VER`, invoca `dbo.sp_obtener_comprobante_entrega` y verifica `estado = 'ENTREGADA'` y `comprobante_origen = 'INTERNA'`).
+
+Ambos revalidan `storage_key` y contención `realpath()` dentro del almacén privado, y envían cabeceras seguras: `Content-Type` estricto (`application/pdf`, `image/jpeg` o `image/png`), `Content-Disposition: attachment` con nombre ASCII saneado + `filename*` RFC 5987, `X-Content-Type-Options: nosniff`, `Cache-Control: private, no-store, max-age=0` y `Pragma: no-cache`.
 
 ---
 
@@ -113,13 +113,17 @@ El script `tools/scripts/backup-document-storage.ps1` es manual, portable y segu
 
 ### 2.4 Reconciliación SQL ↔ disco tras un fallo o restauración
 
-Para auditar que todo registro `INTERNA` en SQL tiene su archivo íntegro en disco (consulta estrictamente de solo lectura):
+Para auditar que todo registro `INTERNA` en SQL (`dbo.documentos` y `dbo.entregas`) tiene su archivo íntegro en disco (consulta estrictamente de solo lectura):
 
 ```sql
-SELECT documento_id, solicitud_id, numero_referencia, storage_key, tamano_bytes, sha256_hex, fecha_documento
+SELECT N'documentos' AS tabla, documento_id AS registro_id, storage_key, tamano_bytes, sha256_hex, fecha_registro AS fecha_utc
 FROM dbo.documentos
 WHERE origen_archivo = N'INTERNA'
-ORDER BY documento_id;
+UNION ALL
+SELECT N'entregas' AS tabla, entrega_id AS registro_id, comprobante_storage_key AS storage_key, comprobante_tamano_bytes AS tamano_bytes, comprobante_sha256_hex AS sha256_hex, fecha_resultado AS fecha_utc
+FROM dbo.entregas
+WHERE comprobante_origen = N'INTERNA'
+ORDER BY tabla, registro_id;
 ```
 
 Cada `storage_key` devuelto debe existir bajo `<storage_root>/<storage_key>` con exactamente `tamano_bytes` y el mismo hash `sha256_hex` (`Get-FileHash -Algorithm SHA256`).
@@ -132,7 +136,7 @@ Cada `storage_key` devuelto debe existir bajo `<storage_root>/<storage_key>` con
 
 > [!WARNING]
 > **En este PR NO se ha migrado `TransportesSegurosSA` (base original) ni se ha modificado `TransportesSegurosSA_DW`.**  
-> La base original permanece intacta en Migración `13`. Ejecutar el código nuevo de `Entregas → Documentos` contra `TransportesSegurosSA` **antes** de aplicar la Migración `14` provocará errores al intentar invocar `dbo.sp_registrar_documento_archivo`, `dbo.sp_obtener_documento` o leer las columnas aditivas de `dbo.sp_listar_documentos`.
+> La base original permanece intacta en Migración `13`. Ejecutar el código nuevo de `Entregas → Documentos` o `Registrar entrega` contra `TransportesSegurosSA` **antes** de aplicar la Migración `14` provocará errores al intentar invocar `dbo.sp_registrar_documento_archivo`, `dbo.sp_obtener_documento`, `dbo.sp_obtener_comprobante_entrega` o los parámetros/columnas aditivos de `dbo.sp_listar_documentos`, `dbo.sp_registrar_entrega` y `dbo.sp_listar_entregas`.
 
 ### 3.1 Secuencia exacta de despliegue controlada por el propietario (post-merge)
 
@@ -164,6 +168,6 @@ sqlcmd -S localhost -E -d TransportesSegurosSA -b -I -f 65001 -i database\migrat
 ```
 
 Comportamiento del rollback verificado en base efímera:
-- Siempre revierte `dbo.sp_listar_documentos`, `dbo.sp_registrar_documento` y `dbo.sp_listar_tipos_documento` a sus contratos previos y elimina `dbo.sp_registrar_documento_archivo` y `dbo.sp_obtener_documento`.
-- **Si existen 0 registros con `origen_archivo = 'INTERNA'`:** elimina limpiamente índices, checks y las 6 columnas nuevas de `dbo.documentos`.
-- **Si existe al menos 1 registro con `origen_archivo = 'INTERNA'`:** **NO elimina columnas ni datos** (rollback estrictamente no destructivo) y deja un aviso explícito para preservar los metadatos de adjuntos existentes.
+- Siempre revierte `dbo.sp_listar_documentos`, `dbo.sp_registrar_documento`, `dbo.sp_listar_tipos_documento`, `dbo.sp_registrar_entrega` y `dbo.sp_listar_entregas` a sus contratos previos y elimina `dbo.sp_registrar_documento_archivo`, `dbo.sp_obtener_documento` y `dbo.sp_obtener_comprobante_entrega`.
+- **Si existen `0` registros con `origen_archivo = 'INTERNA'` (o `comprobante_origen = 'INTERNA'`):** elimina limpiamente índices, checks y las 6 columnas nuevas de cada tabla (`dbo.documentos` / `dbo.entregas`).
+- **Si existe al menos `1` registro interno en la tabla:** **NO elimina columnas ni datos** (rollback estrictamente no destructivo) y deja un aviso explícito para preservar los metadatos de adjuntos existentes.

@@ -16,6 +16,13 @@
   - `dbo.sp_registrar_documento_archivo`: exige `DOCUMENTOS_REGISTRAR` (`50406`), valida existencia de solicitud (`50431`), tipo de documento activo (`50432`), parámetros de archivo (`50433`), unicidad de `storage_key`, inserta con `origen_archivo = 'INTERNA'` y registra auditoría en `dbo.auditorias` (sin exponer rutas locales).
   - `dbo.sp_obtener_documento`: exige `DOCUMENTOS_VER` (`50103`), devuelve metadatos completos de un `documento_id` para descarga autorizada (lanza `50101` si no existe).
   - `dbo.sp_listar_documentos`: conserva firma y todas las columnas previas y agrega al final `origen_archivo`, `nombre_original`, `mime_type`, `tamano_bytes`.
+- Sobre `dbo.entregas` (sin tocar columnas existentes ni disparar `tr_auditar_entregas` sobre filas históricas):
+  - `comprobante_origen VARCHAR(10) NULL` (`EXTERNA` o `INTERNA` en entregas confirmadas; `NULL` en fallidas y filas previas proyectadas como `EXTERNA` cuando `estado = 'ENTREGADA'`).
+  - `comprobante_storage_key NVARCHAR(120) NULL` (único filtrado `UQ_entregas_comprobante_storage_key`), `comprobante_nombre_original NVARCHAR(255) NULL`, `comprobante_mime_type VARCHAR(100) NULL`, `comprobante_tamano_bytes BIGINT NULL`, `comprobante_sha256_hex CHAR(64) NULL`.
+  - Restricciones `CK_entregas_comprobante_origen` y `CK_entregas_comprobante_coherente`.
+  - `dbo.sp_registrar_entrega`: conserva los 7 parámetros originales y agrega 5 parámetros opcionales (`DEFAULT NULL`) para metadatos de comprobante interno, exige exclusión mutua en `ENTREGADA` y bloquea adjunto en `FALLIDA`, manteniendo intacta la transacción `UPDLOCK/HOLDLOCK`.
+  - `dbo.sp_obtener_comprobante_entrega`: exige `ENTREGAS_VER` (`50103`) y devuelve metadatos del comprobante por `entrega_id` (`50101` si no existe).
+  - `dbo.sp_listar_entregas`: agrega al final las 6 columnas aditivas del comprobante.
 
 ## 2. Almacenamiento privado y consistencia FS ↔ SQL (`app/document_storage.php`)
 - **Resolución de ruta:** `TSSA_DOCUMENT_STORAGE_DIR` (si se configura debe ser ruta absoluta y fuera de `public/`; de lo contrario fallback `<repo>/storage/private/documents`). Verifica que no sea symlink/reparse point y que esté estrictamente fuera de `realpath(public/)`.
@@ -33,14 +40,13 @@
   4. Si SQL falla por cualquier motivo (FK, permiso, error transaccional), eliminar inmediatamente el archivo recién movido (`@unlink`) antes de responder el error HTTP.
   5. Si ocurriera un crash extremo del proceso entre disco y SQL, el runbook documenta la reconciliación periódica comparando `storage_key` en SQL vs disco sin borrar registros válidos.
 
-## 3. Descarga segura (`public/entregas/documento_descargar.php`)
-- `require_permission('DOCUMENTOS_VER')`, validación entera de `$_GET['id']`.
-- Invoca `EXEC dbo.sp_obtener_documento @documento_id = ?;` con contexto de sesión SQL.
-- Verifica `origen_archivo === 'INTERNA'` y `storage_key` válido mediante regex estricta (`^[0-9]{4}/[0-9]{2}/[0-9a-f]{64}\.(pdf|jpg|png)$`), resuelve ruta dentro del directorio privado y valida `realpath` dentro de la raíz de almacenamiento (bloqueando symlinks/traversal).
-- Sirve bytes con `Content-Type` de allowlist, `Content-Disposition: attachment; filename="..."; filename*=UTF-8''...` (nombre saneado sin CRLF/comillas/controles), `X-Content-Type-Options: nosniff`, `Cache-Control: private, no-store`, `Content-Length`, streaming en bloques sin buffer inflado.
+## 3. Descarga segura (`public/entregas/documento_descargar.php` y `public/entregas/comprobante_descargar.php`)
+- `documento_descargar.php` exige `DOCUMENTOS_VER` e invoca `dbo.sp_obtener_documento`; `comprobante_descargar.php` exige `ENTREGAS_VER` e invoca `dbo.sp_obtener_comprobante_entrega`.
+- Verifican origen `'INTERNA'` y `storage_key` válido mediante regex estricta (`^[0-9]{4}/[0-9]{2}/[0-9a-f]{64}\.(pdf|jpg|png)$`), resuelven ruta dentro del directorio privado y validan `realpath` dentro de la raíz de almacenamiento (bloqueando symlinks/traversal).
+- Sirven bytes con `Content-Type` de allowlist, `Content-Disposition: attachment; filename="..."; filename*=UTF-8''...` (nombre saneado sin CRLF/comillas/controles), `X-Content-Type-Options: nosniff`, `Cache-Control: private, no-store`, `Content-Length`, streaming en bloques sin buffer inflado.
 
 ## 4. UI y HTMX `multipart/form-data`
-- `public/entregas/documento_form.php`: `<form hx-post="/entregas/documento.php" hx-encoding="multipart/form-data" enctype="multipart/form-data" ...>`.
-- Selector de modo de respaldo (radios/botones segmentados): **Subir archivo** (predeterminado) y **Vincular URL externa**. Cambiar de modo actualiza `required`/`disabled` solo en la alternativa activa sin perder `solicitud_id`, `tipo_documento_id` ni `numero_referencia`.
-- Zona drag-and-drop con botón accesible `Seleccionar archivo`, estado visible (`Sin archivo`, `Archivo seleccionado`, `Archivo inválido`, `Subiendo…`), nombre/tamaño/tipo y acción `Quitar archivo`.
-- `public/entregas/lista.php`: columna de soporte mostrando badge **Archivo adjunto** + botón `Descargar` (`/entregas/documento_descargar.php?id=...`) con tamaño y nombre saneado, o **Enlace externo** + `Abrir referencia` (`target="_blank" rel="noopener noreferrer"`).
+- `public/entregas/documento_form.php` y `public/entregas/registrar_form.php`: `<form hx-encoding="multipart/form-data" enctype="multipart/form-data" data-doc-upload-form ...>`.
+- Selector de modo de respaldo (radios/botones segmentados): **Subir archivo local** (predeterminado) y **Vincular URL externa**. Cambiar de modo actualiza `required`/`disabled` solo en la alternativa activa sin perder los demás campos. En `registrar_form.php`, cambiar a `FALLIDA` oculta y deshabilita todo el bloque de comprobante.
+- Zona drag-and-drop con botón accesible `Seleccionar archivo`, estado visible (`Sin archivo`, `Archivo seleccionado`, `Archivo inválido`, `Subiendo…`), nombre/tamaño/tipo y acción `Quitar`.
+- `public/entregas/lista.php`: en `Documentos` muestra **Archivo adjunto** + `Descargar` o **Enlace externo** + `Abrir referencia`; en `Entregas` muestra **Comprobante adjunto** + `Descargar` (`/entregas/comprobante_descargar.php?id=...`) o `Ver comprobante` para URLs externas.
