@@ -1588,6 +1588,12 @@
                 return true;
             };
 
+            const receptorRadios = Array.from(form.querySelectorAll('[data-entrega-receptor-radio]'));
+            const receptorLabels = Array.from(form.querySelectorAll('[data-entrega-receptor-label]'));
+            const receptorPanelDest = form.querySelector('[data-entrega-receptor-panel="destinatario"]');
+            const receptorPanelTerc = form.querySelector('[data-entrega-receptor-panel="tercero"]');
+            const receptorHaciendaBtn = form.querySelector('#btn-consultar-hacienda-entrega');
+
             const syncMode = () => {
                 const entregaEstado = form.querySelector('[data-entrega-estado]');
                 const isSuspended = Boolean(entregaEstado && entregaEstado.value !== 'ENTREGADA');
@@ -1613,6 +1619,34 @@
                     fileInput.required = isFile;
                     urlInput.disabled = isFile;
                     urlInput.required = !isFile;
+                }
+
+                if (receptorRadios.length > 0) {
+                    const activeRec = receptorRadios.find((r) => r.checked)?.value || 'destinatario';
+                    const isTercero = activeRec === 'tercero';
+                    receptorLabels.forEach((lbl) => {
+                        lbl.classList.toggle('is-active', lbl.dataset.entregaReceptorLabel === activeRec);
+                    });
+                    if (receptorPanelDest) receptorPanelDest.hidden = isTercero;
+                    if (receptorPanelTerc) receptorPanelTerc.hidden = !isTercero;
+
+                    const enableTercero = !isSuspended && isTercero;
+                    receptorRadios.forEach((r) => {
+                        if (isSuspended) {
+                            r.disabled = true;
+                        } else if (r.value === 'destinatario' && !receptorPanelDest) {
+                            r.disabled = true;
+                        } else {
+                            r.disabled = false;
+                        }
+                    });
+                    receptorPanelTerc?.querySelectorAll('input').forEach((inp) => {
+                        inp.disabled = !enableTercero;
+                        inp.required = enableTercero && inp.name === 'receptor_nombre';
+                    });
+                    if (receptorHaciendaBtn) {
+                        receptorHaciendaBtn.disabled = !enableTercero;
+                    }
                 }
             };
             form._tssaDocSyncMode = syncMode;
@@ -1719,6 +1753,7 @@
             };
 
             modeRadios.forEach((r) => r.addEventListener('change', onRadioChange));
+            receptorRadios.forEach((r) => r.addEventListener('change', onRadioChange));
             browseBtn?.addEventListener('click', onBrowseClick);
             dropzone?.addEventListener('keydown', onDropzoneKeydown);
             dropzone?.addEventListener('dragenter', onDragEnter);
@@ -1732,6 +1767,7 @@
 
             form._tssaDocUploadCleanup = () => {
                 modeRadios.forEach((r) => r.removeEventListener('change', onRadioChange));
+                receptorRadios.forEach((r) => r.removeEventListener('change', onRadioChange));
                 browseBtn?.removeEventListener('click', onBrowseClick);
                 dropzone?.removeEventListener('keydown', onDropzoneKeydown);
                 dropzone?.removeEventListener('dragenter', onDragEnter);
@@ -2253,7 +2289,7 @@
         if (successFields) successFields.hidden = !delivered;
         if (failureFields) failureFields.hidden = delivered;
         successFields?.querySelectorAll('input').forEach((field) => {
-            if (field.matches('[data-doc-file-input], [data-doc-url-input], [data-doc-mode-radio]')) return;
+            if (field.matches('[data-doc-file-input], [data-doc-url-input], [data-doc-mode-radio], [data-entrega-receptor-radio], [data-entrega-receptor-panel="tercero"] input')) return;
             field.required = delivered && field.name === 'receptor_nombre';
         });
         failureFields?.querySelectorAll('textarea').forEach((field) => {
@@ -2524,7 +2560,7 @@
 
     // Delegación de clic para botones de consulta a Hacienda
     document.addEventListener('click', (event) => {
-        const btn = event.target.closest('#btn-consultar-hacienda-cli, #btn-consultar-hacienda-edit, #btn-consultar-hacienda-dest, #btn-onb-hacienda, [data-hacienda-btn]');
+        const btn = event.target.closest('#btn-consultar-hacienda-cli, #btn-consultar-hacienda-edit, #btn-consultar-hacienda-dest, #btn-consultar-hacienda-entrega, #btn-onb-hacienda, [data-hacienda-btn]');
         if (!btn) return;
         event.preventDefault();
 
@@ -2532,6 +2568,7 @@
         const isCli = btn.id === 'btn-consultar-hacienda-cli';
         const isEdit = btn.id === 'btn-consultar-hacienda-edit';
         const isDest = btn.id === 'btn-consultar-hacienda-dest';
+        const isEntrega = btn.id === 'btn-consultar-hacienda-entrega';
         const isOnb = btn.id === 'btn-onb-hacienda';
 
         let idVal = '';
@@ -2546,6 +2583,9 @@
         } else if (isDest) {
             idVal = (document.getElementById('destinatario-id')?.value || '').trim();
             avisoEl = document.getElementById('hacienda-dest-aviso');
+        } else if (isEntrega) {
+            idVal = (document.getElementById('entrega-receptor-id')?.value || '').trim();
+            avisoEl = document.getElementById('hacienda-entrega-aviso');
         } else if (isOnb) {
             idVal = (document.getElementById('onb-identificacion')?.value || '').trim();
             avisoEl = document.getElementById('onb-hacienda-help');
@@ -2655,6 +2695,10 @@
                                 setHaciendaAviso(avisoEl, '', '');
                             }
                         }
+                    } else if (isEntrega) {
+                        const inputRecNom = document.getElementById('receptor-nombre');
+                        if (inputRecNom) inputRecNom.value = rawNombre;
+                        setHaciendaAviso(avisoEl, 'success', 'Nombre completo obtenido desde Hacienda. Verifica y completa si es necesario.');
                     } else if (isDest) {
                         const inputNom = document.getElementById('destinatario-nombre');
                         const inputAp1 = document.getElementById('destinatario-apellido1');

@@ -12,7 +12,7 @@ $hasActiveSession = !empty($_SESSION['usuario_id']) && session_is_current();
 $authorized = false;
 
 if ($hasActiveSession) {
-    if (has_permission('CLIENTES_CREAR') || has_permission('SOLICITUDES_CREAR') || has_permission('CLIENTES_VER')) {
+    if (has_permission('CLIENTES_CREAR') || has_permission('SOLICITUDES_CREAR') || has_permission('CLIENTES_VER') || has_permission('ENTREGAS_REGISTRAR')) {
         $authorized = true;
     } else {
         http_response_code(403);

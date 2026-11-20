@@ -132,13 +132,12 @@ Cada `storage_key` devuelto debe existir bajo `<storage_root>/<storage_key>` con
 
 ---
 
-## 3. Requisitos obligatorios antes de usar este PR sobre `TransportesSegurosSA` (Base Original)
+## 3. Despliegue verificado sobre `TransportesSegurosSA` (Base Original) y `TransportesSegurosSA_DW`
 
-> [!WARNING]
-> **En este PR NO se ha migrado `TransportesSegurosSA` (base original) ni se ha modificado `TransportesSegurosSA_DW`.**  
-> La base original permanece intacta en Migración `13`. Ejecutar el código nuevo de `Entregas → Documentos` o `Registrar entrega` contra `TransportesSegurosSA` **antes** de aplicar la Migración `14` provocará errores al intentar invocar `dbo.sp_registrar_documento_archivo`, `dbo.sp_obtener_documento`, `dbo.sp_obtener_comprobante_entrega` o los parámetros/columnas aditivos de `dbo.sp_listar_documentos`, `dbo.sp_registrar_entrega` y `dbo.sp_listar_entregas`.
+> [!NOTE]
+> Con autorización expresa del propietario se ejecutaron respaldos `FULL WITH CHECKSUM` + `RESTORE VERIFYONLY` previos (`C:\SQL\Backups\TransportesSegurosSA_PRE_MIG14_EXPO_20261120_134204.bak` y `C:\SQL\Backups\TransportesSegurosSA_DW_PRE_EXPO_20261120_134204.bak`, fuera de Git), se aplicó la Migración `14` sobre `TransportesSegurosSA`, se cargó el lote realista de exposición y se refrescó `TransportesSegurosSA_DW` (`fact_entregas = 7`). El archivo `.env` local se preservó intacto para el QA previo en `TransportesSegurosSA_Test`.
 
-### 3.1 Secuencia exacta de despliegue controlada por el propietario (post-merge)
+### 3.1 Secuencia reproducible de despliegue (si se despliega en otro equipo)
 
 1. **Respaldo previo obligatorio de `TransportesSegurosSA` (`WITH CHECKSUM` + `RESTORE VERIFYONLY`):**
    ```sql
@@ -168,6 +167,6 @@ sqlcmd -S localhost -E -d TransportesSegurosSA -b -I -f 65001 -i database\migrat
 ```
 
 Comportamiento del rollback verificado en base efímera:
-- Siempre revierte `dbo.sp_listar_documentos`, `dbo.sp_registrar_documento`, `dbo.sp_listar_tipos_documento`, `dbo.sp_registrar_entrega` y `dbo.sp_listar_entregas` a sus contratos previos y elimina `dbo.sp_registrar_documento_archivo`, `dbo.sp_obtener_documento` y `dbo.sp_obtener_comprobante_entrega`.
+- Siempre revierte `dbo.sp_listar_documentos`, `dbo.sp_registrar_documento`, `dbo.sp_listar_tipos_documento`, `dbo.sp_registrar_entrega` y `dbo.sp_listar_entregas` a sus contratos previos y elimina `dbo.sp_registrar_documento_archivo`, `dbo.sp_obtener_documento`, `dbo.sp_obtener_comprobante_entrega` y `dbo.sp_obtener_destinatario_asignacion`.
 - **Si existen `0` registros con `origen_archivo = 'INTERNA'` (o `comprobante_origen = 'INTERNA'`):** elimina limpiamente índices, checks y las 6 columnas nuevas de cada tabla (`dbo.documentos` / `dbo.entregas`).
 - **Si existe al menos `1` registro interno en la tabla:** **NO elimina columnas ni datos** (rollback estrictamente no destructivo) y deja un aviso explícito para preservar los metadatos de adjuntos existentes.

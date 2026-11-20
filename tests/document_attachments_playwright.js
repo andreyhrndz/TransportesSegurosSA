@@ -369,14 +369,25 @@ async function assertNoDesktopOverflow(page, label) {
         await viewCtx.close();
         console.log('[OK] E2E 3: Control visual de permisos DOCUMENTOS_VER vs DOCUMENTOS_REGISTRAR.');
 
-        // 11. E2E 4: Registrar entrega desde Viajes -> Detalle con comprobante PDF (modo dual + toggle Fallida/Entregada + descarga SHA-256)
+        // 11. E2E 4: Registrar entrega desde Viajes -> Detalle (destinatario precargado + opción Otra persona/Hacienda + comprobante PDF + descarga SHA-256)
         await page.setViewportSize({ width: 1440, height: 900 });
         await page.goto(`${BASE_URL}/viajes/detalle.php?id=${fx.viajeId}`, { waitUntil: 'networkidle' });
         await page.click('button:has-text("Registrar entrega")');
         await page.waitForSelector('[data-doc-upload-form] #entrega-estado', { timeout: 10000 });
         await page.waitForTimeout(200);
         assert.strictEqual(await page.locator('#entrega-panel-archivo').isVisible(), true, 'Modal Registrar entrega debe iniciar en modo Subir archivo local.');
+        assert.strictEqual(await page.locator('[data-entrega-receptor-panel="destinatario"]').isVisible(), true, 'Debe mostrarse por defecto el destinatario precargado de la solicitud.');
+        assert.strictEqual(await page.locator('[data-entrega-receptor-panel="tercero"]').isVisible(), false, 'Campos de tercero deben estar ocultos por defecto.');
         await page.screenshot({ path: path.join(SHOT_DIR, '08_modal_entrega_comprobante_archivo_1440.png') });
+
+        // Probar cambio a Otra persona en destino (muestra botón Consultar Hacienda y habilita inputs), luego volver a Destinatario de la solicitud
+        await page.click('[data-entrega-receptor-label="tercero"]');
+        await page.waitForTimeout(100);
+        assert.strictEqual(await page.locator('[data-entrega-receptor-panel="tercero"]').isVisible(), true, 'Al elegir Otra persona deben mostrarse sus campos.');
+        assert.strictEqual(await page.locator('#btn-consultar-hacienda-entrega').isDisabled(), false, 'Botón Consultar Hacienda debe habilitarse en modo Otra persona.');
+        await page.click('[data-entrega-receptor-label="destinatario"]');
+        await page.waitForTimeout(100);
+        assert.strictEqual(await page.locator('[data-entrega-receptor-panel="destinatario"]').isVisible(), true, 'Al volver a Destinatario debe reaparecer el resumen precargado.');
 
         // Alternar a Fallida y comprobar desactivación limpia de inputs de comprobante, luego volver a Entregada
         await page.selectOption('#entrega-estado', 'FALLIDA');
@@ -387,16 +398,14 @@ async function assertNoDesktopOverflow(page, label) {
         await page.waitForTimeout(100);
         assert.strictEqual(await page.locator('#comprobante-archivo').isDisabled(), false, 'Al volver a Entregada debe reactivarse el input de archivo.');
 
-        // Llenar receptor, alternar a URL y volver a Archivo preservando receptor
-        await page.fill('#receptor-nombre', 'Sofía Receptora Demo');
+        // Alternar a URL y volver a Archivo
         await page.click('[data-doc-mode-label="url"]');
         await page.waitForTimeout(100);
         assert.strictEqual(await page.locator('#entrega-panel-url').isVisible(), true, 'Panel URL debe mostrarse en Registrar entrega.');
         await page.click('[data-doc-mode-label="archivo"]');
         await page.waitForTimeout(100);
-        assert.strictEqual(await page.inputValue('#receptor-nombre'), 'Sofía Receptora Demo', 'Alternar modo de comprobante no debe borrar Receptor efectivo.');
 
-        // Arrastrar comprobante PDF válido y enviar (exactamente 1 POST)
+        // Arrastrar comprobante PDF válido y enviar SIN volver a digitar el destinatario (exactamente 1 POST)
         await page.evaluate((b64) => {
             const bin = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
             const dz = document.querySelector('[data-doc-dropzone]');
@@ -416,6 +425,8 @@ async function assertNoDesktopOverflow(page, label) {
         ]);
         await page.waitForSelector('#entregas-resultado table', { timeout: 15000 });
         assert.strictEqual(entregaPosts.length, 1, `Registrar entrega debe enviar exactamente 1 POST (enviados: ${entregaPosts.length}).`);
+        const entTableText = await page.locator('#entregas-resultado').innerText();
+        assert(entTableText.includes('Dest Entrega PW'), 'La entrega registrada debe conservar automáticamente el destinatario precargado de la solicitud.');
         const dlCompHref = await page.locator('#entregas-resultado a[href*="/entregas/comprobante_descargar.php?id="]').first().getAttribute('href');
         assert(dlCompHref, 'La tabla de entregas debe mostrar enlace Descargar comprobante.');
         await page.screenshot({ path: path.join(SHOT_DIR, '09_tabla_entregas_comprobante_1440.png') });

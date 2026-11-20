@@ -265,6 +265,17 @@ BEGIN TRY
 
     EXEC dbo.sp_registrar_entrega @viaje_solicitud_id=@vs3, @estado='FALLIDA', @motivo_fallo=N'Cliente ausente prueba';
 
+    -- Verificar sp_obtener_destinatario_asignacion autorizado y RBAC denegado (50319)
+    DECLARE @chk_dest TABLE (
+        viaje_solicitud_id INT, viaje_id INT, codigo_viaje NVARCHAR(50), estado_viaje VARCHAR(30),
+        estado_asignacion VARCHAR(30), solicitud_id INT, codigo_solicitud NVARCHAR(50),
+        destinatario_nombre NVARCHAR(150), destinatario_apellido1 NVARCHAR(100), destinatario_apellido2 NVARCHAR(100),
+        destinatario_nombre_completo NVARCHAR(150), destinatario_identificacion NVARCHAR(30), destinatario_telefono NVARCHAR(30)
+    );
+    INSERT INTO @chk_dest EXEC dbo.sp_obtener_destinatario_asignacion @viaje_solicitud_id = @vs1;
+    IF NOT EXISTS (SELECT 1 FROM @chk_dest WHERE destinatario_nombre_completo = N'Prueba Entrega Interna')
+        THROW 50999, N'sp_obtener_destinatario_asignacion no devolvió el nombre completo esperado.', 1;
+
     -- Verificar sp_obtener_comprobante_entrega autorizado y RBAC denegado (50103)
     DECLARE @chk_e TABLE (
         entrega_id INT, viaje_solicitud_id INT, viaje_id INT, solicitud_id INT, codigo_solicitud NVARCHAR(50),
@@ -278,6 +289,11 @@ BEGIN TRY
         THROW 50999, N'sp_obtener_comprobante_entrega no devolvió los metadatos esperados.', 1;
 
     EXEC sys.sp_set_session_context @key = N'usuario_id', @value = @noperm_uid;
+    SET @err = 0;
+    BEGIN TRY EXEC dbo.sp_obtener_destinatario_asignacion @viaje_solicitud_id = @vs1; END TRY
+    BEGIN CATCH SET @err = ERROR_NUMBER(); END CATCH;
+    IF @err <> 50319 THROW 50999, N'Sin ENTREGAS_REGISTRAR sp_obtener_destinatario_asignacion debe lanzar 50319.', 1;
+
     SET @err = 0;
     BEGIN TRY EXEC dbo.sp_obtener_comprobante_entrega @entrega_id = @ent_int_id; END TRY
     BEGIN CATCH SET @err = ERROR_NUMBER(); END CATCH;

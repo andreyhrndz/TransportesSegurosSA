@@ -760,3 +760,49 @@ BEGIN
     OFFSET @offset ROWS FETCH NEXT @por_pagina ROWS ONLY;
 END;
 GO
+
+-- -------------------------------------------------------------------------
+-- 12. dbo.sp_obtener_destinatario_asignacion (PRECARGA DE RECEPTOR EN ENTREGA)
+-- -------------------------------------------------------------------------
+CREATE OR ALTER PROCEDURE dbo.sp_obtener_destinatario_asignacion
+    @viaje_solicitud_id INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @usuario_id INT = TRY_CONVERT(INT, SESSION_CONTEXT(N'usuario_id'));
+
+    IF dbo.fn_tiene_permiso(@usuario_id, N'ENTREGAS_REGISTRAR') = 0
+        THROW 50319, N'No tiene permiso para registrar entregas.', 1;
+
+    IF @viaje_solicitud_id IS NULL OR @viaje_solicitud_id < 1
+        THROW 50102, N'Identificador de asignación inválido.', 1;
+
+    SELECT
+        vs.viaje_solicitud_id,
+        vs.viaje_id,
+        v.codigo_viaje,
+        v.estado AS estado_viaje,
+        vs.estado AS estado_asignacion,
+        s.solicitud_id,
+        s.codigo_solicitud,
+        s.destinatario_nombre,
+        s.destinatario_apellido1,
+        s.destinatario_apellido2,
+        LEFT(LTRIM(RTRIM(
+            CONCAT(
+                LTRIM(RTRIM(s.destinatario_nombre)),
+                CASE WHEN NULLIF(LTRIM(RTRIM(s.destinatario_apellido1)), N'') IS NOT NULL THEN N' ' + LTRIM(RTRIM(s.destinatario_apellido1)) ELSE N'' END,
+                CASE WHEN NULLIF(LTRIM(RTRIM(s.destinatario_apellido2)), N'') IS NOT NULL THEN N' ' + LTRIM(RTRIM(s.destinatario_apellido2)) ELSE N'' END
+            )
+        )), 150) AS destinatario_nombre_completo,
+        s.destinatario_identificacion,
+        s.destinatario_telefono
+    FROM dbo.viaje_solicitudes AS vs
+    JOIN dbo.viajes AS v ON v.viaje_id = vs.viaje_id
+    JOIN dbo.solicitudes AS s ON s.solicitud_id = vs.solicitud_id
+    WHERE vs.viaje_solicitud_id = @viaje_solicitud_id;
+
+    IF @@ROWCOUNT = 0
+        THROW 50101, N'Asignación de entrega no encontrada.', 1;
+END;
+GO

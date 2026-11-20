@@ -129,6 +129,8 @@ END;
 GO
 
 -- Reversión de contratos y columnas condicionales en dbo.entregas
+DROP PROCEDURE IF EXISTS dbo.sp_obtener_destinatario_asignacion;
+GO
 DROP PROCEDURE IF EXISTS dbo.sp_obtener_comprobante_entrega;
 GO
 

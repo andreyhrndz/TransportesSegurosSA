@@ -22,6 +22,7 @@
   - Restricciones `CK_entregas_comprobante_origen` y `CK_entregas_comprobante_coherente`.
   - `dbo.sp_registrar_entrega`: conserva los 7 parámetros originales y agrega 5 parámetros opcionales (`DEFAULT NULL`) para metadatos de comprobante interno, exige exclusión mutua en `ENTREGADA` y bloquea adjunto en `FALLIDA`, manteniendo intacta la transacción `UPDLOCK/HOLDLOCK`.
   - `dbo.sp_obtener_comprobante_entrega`: exige `ENTREGAS_VER` (`50103`) y devuelve metadatos del comprobante por `entrega_id` (`50101` si no existe).
+  - `dbo.sp_obtener_destinatario_asignacion`: exige `ENTREGAS_REGISTRAR` (`50319`) y devuelve el destinatario registrado en la solicitud vinculada al `viaje_solicitud_id` para precargarlo sin recaptura en el modal **Registrar entrega**.
   - `dbo.sp_listar_entregas`: agrega al final las 6 columnas aditivas del comprobante.
 
 ## 2. Almacenamiento privado y consistencia FS ↔ SQL (`app/document_storage.php`)

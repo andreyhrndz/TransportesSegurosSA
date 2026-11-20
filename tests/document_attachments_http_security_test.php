@@ -553,10 +553,18 @@ try {
         'parIds' => [$par1, $par2], 'solIds' => $solIds, 'vsIds' => $vsIds,
     ];
 
-    // 8.1 Formulario y permisos
+    // 8.1 Formulario y permisos (verifica precarga de destinatario + opción Otra persona + botón Hacienda)
     [$sRfFull, $bRfFull] = doc_http("{$base}/entregas/registrar_form.php?viaje_solicitud_id={$vsIds[0]}", $cFull);
     [$sRfView] = doc_http("{$base}/entregas/registrar_form.php?viaje_solicitud_id={$vsIds[0]}", $cView);
-    doc_assert($sRfFull === 200 && str_contains($bRfFull, 'modo_comprobante') && str_contains($bRfFull, 'comprobante_archivo'), "registrar_form.php debe renderizar selector dual para ENTREGAS_REGISTRAR (status={$sRfFull}).");
+    doc_assert(
+        $sRfFull === 200
+        && str_contains($bRfFull, 'modo_comprobante')
+        && str_contains($bRfFull, 'comprobante_archivo')
+        && str_contains($bRfFull, 'modo_receptor')
+        && str_contains($bRfFull, 'Dest Prueba Entrega')
+        && str_contains($bRfFull, 'btn-consultar-hacienda-entrega'),
+        "registrar_form.php debe precargar destinatario de solicitud y selector dual para ENTREGAS_REGISTRAR (status={$sRfFull})."
+    );
     doc_assert($sRfView === 403, "registrar_form.php sin ENTREGAS_REGISTRAR debe dar 403 (status={$sRfView}).");
 
     // 8.2 Negativas sobre registrar.php (405, CSRF 403, RBAC 403, 413, 422, fallo SQL 50323 -> 0 huérfanos)
@@ -604,29 +612,30 @@ try {
     doc_assert($sEntSqlFail === 422, "Fallo SQL 50323 en registrar.php debe dar 422 (recibido {$sEntSqlFail}).");
     doc_assert(doc_count_files($storageDir) === $entFilesBefore, 'Fallo SQL / validación en registrar.php no debe dejar huérfanos en disco.');
 
-    // 8.3 Altas válidas: PDF adjunto (vs0), PNG adjunto (vs1), URL externa (vs2), FALLIDA (vs3)
+    // 8.3 Altas válidas: PDF adjunto usando destinatario precargado (vs0), PNG adjunto con otra persona (vs1), URL externa (vs2), FALLIDA (vs3)
     [$sEntPdf, , $hEntPdf] = doc_http("{$base}/entregas/registrar.php", $cFull, 'POST', [
         'csrf_token' => $csrfFull, 'viaje_solicitud_id' => $vsIds[0], 'estado' => 'ENTREGADA',
-        'receptor_nombre' => 'Laura Receptora', 'receptor_identificacion' => '112220333', 'receptor_telefono' => '88881111',
-        'modo_comprobante' => 'archivo',
+        'modo_receptor' => 'destinatario', 'modo_comprobante' => 'archivo',
     ], ['field' => 'comprobante_archivo', 'filename' => 'comprobante_firmado_01.pdf', 'content_type' => 'application/pdf', 'content' => $pdfBytes], true);
-    doc_assert($sEntPdf === 200 && str_contains((string)doc_header($hEntPdf, 'HX-Redirect'), '/entregas.php?seccion=entregas'), "Entrega con PDF adjunto debe retornar 200 (status={$sEntPdf}).");
+    doc_assert($sEntPdf === 200 && str_contains((string)doc_header($hEntPdf, 'HX-Redirect'), '/entregas.php?seccion=entregas'), "Entrega con destinatario precargado y PDF adjunto debe retornar 200 (status={$sEntPdf}).");
+    $rec0 = (string)$pdo->query("SELECT receptor_nombre FROM dbo.entregas WHERE viaje_solicitud_id = {$vsIds[0]}")->fetchColumn();
+    doc_assert($rec0 === 'Dest Prueba Entrega', "Modo destinatario debe tomar el nombre completo de la solicitud (obtenido '{$rec0}').");
 
     // Reintento sobre la misma asignación (50324) con PNG válido -> 422/409 y 0 huérfanos
     $filesAfterOne = doc_count_files($storageDir);
     doc_assert($filesAfterOne === $entFilesBefore + 1, 'Debe haber exactamente 1 archivo nuevo tras primera entrega.');
     [$sEntDup] = doc_http("{$base}/entregas/registrar.php", $cFull, 'POST', [
         'csrf_token' => $csrfFull, 'viaje_solicitud_id' => $vsIds[0], 'estado' => 'ENTREGADA',
-        'receptor_nombre' => 'Duplicado', 'modo_comprobante' => 'archivo',
+        'modo_receptor' => 'tercero', 'receptor_nombre' => 'Duplicado', 'modo_comprobante' => 'archivo',
     ], ['field' => 'comprobante_archivo', 'filename' => 'dup.png', 'content_type' => 'image/png', 'content' => $pngBytes], true);
     doc_assert(in_array($sEntDup, [409, 422], true), "Entrega duplicada 50324 debe rechazarse (recibido {$sEntDup}).");
     doc_assert(doc_count_files($storageDir) === $filesAfterOne, 'Rechazo 50324 no debe dejar archivo huérfano.');
 
     [$sEntPng] = doc_http("{$base}/entregas/registrar.php", $cFull, 'POST', [
         'csrf_token' => $csrfFull, 'viaje_solicitud_id' => $vsIds[1], 'estado' => 'ENTREGADA',
-        'receptor_nombre' => 'Marco Receptor', 'modo_comprobante' => 'archivo',
+        'modo_receptor' => 'tercero', 'receptor_nombre' => 'Marco Receptor Tercero', 'receptor_identificacion' => '112220333', 'modo_comprobante' => 'archivo',
     ], ['field' => 'comprobante_archivo', 'filename' => 'foto_entrega_02.png', 'content_type' => 'image/png', 'content' => $pngBytes], true);
-    doc_assert($sEntPng === 200, "Entrega con PNG adjunto debe retornar 200 (status={$sEntPng}).");
+    doc_assert($sEntPng === 200, "Entrega con tercero y PNG adjunto debe retornar 200 (status={$sEntPng}).");
 
     [$sEntUrl] = doc_http("{$base}/entregas/registrar.php", $cFull, 'POST', [
         'csrf_token' => $csrfFull, 'viaje_solicitud_id' => $vsIds[2], 'estado' => 'ENTREGADA',

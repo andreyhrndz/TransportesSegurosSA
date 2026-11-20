@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/../../app/bootstrap.php';
+require_once __DIR__ . '/../../app/read_queries.php';
 require_once __DIR__ . '/../../app/operational_writes.php';
 require_once __DIR__ . '/../../app/document_storage.php';
 
@@ -41,9 +42,34 @@ try {
     $hasUrl = $rawUrl !== '';
 
     if ($state === 'ENTREGADA') {
-        $receiver = operation_text($_POST['receptor_nombre'] ?? null, 150);
-        $identifier = operation_text($_POST['receptor_identificacion'] ?? null, 30, false);
-        $phone = operation_text($_POST['receptor_telefono'] ?? null, 30, false);
+        $receptorMode = strtolower(trim((string)($_POST['modo_receptor'] ?? '')));
+        $rawReceiverName = trim((string)($_POST['receptor_nombre'] ?? ''));
+        if ($receptorMode === '') {
+            // Retrocompatibilidad: si viene receptor_nombre explícito se usa como tercero; si no, destinatario de la solicitud.
+            $receptorMode = $rawReceiverName !== '' ? 'tercero' : 'destinatario';
+        }
+        if (!in_array($receptorMode, ['destinatario', 'tercero'], true)) {
+            throw new InvalidArgumentException('Selecciona quién recibió la carga.');
+        }
+
+        if ($receptorMode === 'destinatario') {
+            try {
+                $destSets = read_procedure_sets('EXEC dbo.sp_obtener_destinatario_asignacion @viaje_solicitud_id = ?;', [$assignment]);
+            } catch (PDOException $destEx) {
+                if (read_is_missing_record($destEx)) {
+                    throw new InvalidArgumentException('La solicitud no está en un viaje en curso.');
+                }
+                throw new InvalidArgumentException('No se pudo consultar el destinatario registrado en la solicitud.');
+            }
+            $destRow = $destSets[0][0] ?? null;
+            $receiver = operation_text(is_array($destRow) ? ($destRow['destinatario_nombre_completo'] ?? null) : null, 150);
+            $identifier = operation_text(is_array($destRow) ? ($destRow['destinatario_identificacion'] ?? null) : null, 30, false);
+            $phone = operation_text(is_array($destRow) ? ($destRow['destinatario_telefono'] ?? null) : null, 30, false);
+        } else {
+            $receiver = operation_text($_POST['receptor_nombre'] ?? null, 150);
+            $identifier = operation_text($_POST['receptor_identificacion'] ?? null, 30, false);
+            $phone = operation_text($_POST['receptor_telefono'] ?? null, 30, false);
+        }
 
         $rawMode = strtolower(trim((string)($_POST['modo_comprobante'] ?? '')));
         if ($rawMode === '') {

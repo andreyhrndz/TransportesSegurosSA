@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require_once __DIR__ . '/../../app/bootstrap.php';
+require_once __DIR__ . '/../../app/read_queries.php';
 require_once __DIR__ . '/../../app/operational_writes.php';
 require_once __DIR__ . '/../../app/document_storage.php';
 require_permission('ENTREGAS_REGISTRAR');
@@ -10,6 +11,28 @@ if ($assignment === false) {
     http_response_code(404);
     exit('Asignación no encontrada.');
 }
+
+try {
+    $sets = read_procedure_sets('EXEC dbo.sp_obtener_destinatario_asignacion @viaje_solicitud_id = ?;', [(int)$assignment]);
+} catch (PDOException $exception) {
+    if (read_is_missing_record($exception)) {
+        http_response_code(404);
+        exit('Asignación no encontrada.');
+    }
+    read_error_response('No se pudieron cargar los datos del destinatario para esta entrega.');
+}
+
+$info = $sets[0][0] ?? null;
+if (!is_array($info)) {
+    http_response_code(404);
+    exit('Asignación no encontrada.');
+}
+
+$destNombre = trim((string)($info['destinatario_nombre_completo'] ?? ''));
+$destId = trim((string)($info['destinatario_identificacion'] ?? ''));
+$destTel = trim((string)($info['destinatario_telefono'] ?? ''));
+$codigoSol = trim((string)($info['codigo_solicitud'] ?? ''));
+$tieneDestinatario = $destNombre !== '';
 
 $maxBytes = document_effective_max_bytes();
 $maxLabel = document_format_bytes($maxBytes);
@@ -45,21 +68,73 @@ $maxLabel = document_format_bytes($maxBytes);
                 </div>
 
                 <div data-entrega-exito>
-                    <div class="field">
-                        <label class="label" for="receptor-nombre">Receptor efectivo <span class="required">*</span></label>
-                        <input class="input" id="receptor-nombre" name="receptor_nombre" maxlength="150" placeholder="Nombre de quien recibe la carga" required>
-                    </div>
-                    <div class="columns">
-                        <div class="column">
-                            <div class="field">
-                                <label class="label" for="receptor-id">Identificación</label>
-                                <input class="input" id="receptor-id" name="receptor_identificacion" maxlength="30">
-                            </div>
+                    <fieldset class="field doc-mode-fieldset">
+                        <legend class="label">¿Quién recibió la carga? <span class="required">*</span></legend>
+                        <div class="doc-mode-switch" role="radiogroup" aria-label="Persona que recibe la carga">
+                            <label class="doc-mode-option <?= $tieneDestinatario ? 'is-active' : '' ?>" data-entrega-receptor-label="destinatario">
+                                <input type="radio" name="modo_receptor" value="destinatario" data-entrega-receptor-radio <?= $tieneDestinatario ? 'checked' : 'disabled' ?>>
+                                <?= svg_icon('user') ?>
+                                <span>Destinatario de la solicitud</span>
+                            </label>
+                            <label class="doc-mode-option <?= $tieneDestinatario ? '' : 'is-active' ?>" data-entrega-receptor-label="tercero">
+                                <input type="radio" name="modo_receptor" value="tercero" data-entrega-receptor-radio <?= $tieneDestinatario ? '' : 'checked' ?>>
+                                <?= svg_icon('users') ?>
+                                <span>Otra persona en destino</span>
+                            </label>
                         </div>
-                        <div class="column">
-                            <div class="field">
-                                <label class="label" for="receptor-telefono">Teléfono</label>
-                                <input class="input" id="receptor-telefono" name="receptor_telefono" maxlength="30">
+                    </fieldset>
+
+                    <?php if ($tieneDestinatario): ?>
+                        <div class="readonly-summary" data-entrega-receptor-panel="destinatario">
+                            <div>
+                                <span>Destinatario registrado<?= $codigoSol !== '' ? ' · ' . e($codigoSol) : '' ?></span>
+                                <strong><?= e($destNombre) ?></strong>
+                            </div>
+                            <?php if ($destId !== ''): ?>
+                                <div>
+                                    <span>Identificación</span>
+                                    <strong><?= e($destId) ?></strong>
+                                </div>
+                            <?php endif; ?>
+                            <?php if ($destTel !== ''): ?>
+                                <div>
+                                    <span>Teléfono</span>
+                                    <strong><?= e($destTel) ?></strong>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <div data-entrega-receptor-panel="tercero" <?= $tieneDestinatario ? 'hidden' : '' ?>>
+                        <div class="field">
+                            <label class="label" for="entrega-receptor-id">Identificación del receptor</label>
+                            <div class="field has-addons mb-0">
+                                <div class="control is-expanded">
+                                    <input class="input" id="entrega-receptor-id" name="receptor_identificacion" maxlength="30" placeholder="Ej. 1-0111-0222" <?= $tieneDestinatario ? 'disabled' : '' ?>>
+                                </div>
+                                <div class="control">
+                                    <button class="button button-secondary" type="button" id="btn-consultar-hacienda-entrega" <?= $tieneDestinatario ? 'disabled' : '' ?>>
+                                        <?= svg_icon('search') ?>
+                                        <span>Consultar Hacienda</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <p class="help">Opcional. Consulta el Ministerio de Hacienda para autocompletar el nombre completo.</p>
+                            <div id="hacienda-entrega-aviso" class="mt-2" hidden></div>
+                        </div>
+
+                        <div class="columns">
+                            <div class="column is-7">
+                                <div class="field">
+                                    <label class="label" for="receptor-nombre">Nombre completo del receptor <span class="required">*</span></label>
+                                    <input class="input" id="receptor-nombre" name="receptor_nombre" maxlength="150" placeholder="Nombre y apellidos de quien recibe" <?= $tieneDestinatario ? 'disabled' : 'required' ?>>
+                                </div>
+                            </div>
+                            <div class="column is-5">
+                                <div class="field">
+                                    <label class="label" for="receptor-telefono">Teléfono</label>
+                                    <input class="input" id="receptor-telefono" name="receptor_telefono" maxlength="30" placeholder="Ej. 8888-8888" <?= $tieneDestinatario ? 'disabled' : '' ?>>
+                                </div>
                             </div>
                         </div>
                     </div>
