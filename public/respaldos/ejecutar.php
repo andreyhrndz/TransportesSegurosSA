@@ -1,8 +1,8 @@
 <?php
 declare(strict_types=1);
 
-require_once __DIR__ . '/../app/bootstrap.php';
-require_once __DIR__ . '/../app/operational_writes.php';
+require_once __DIR__ . '/../../app/bootstrap.php';
+require_once __DIR__ . '/../../app/operational_writes.php';
 
 require_permission('AUDITORIA_VER');
 require_operation_post('USUARIOS_GESTIONAR_CUENTAS');
@@ -28,7 +28,7 @@ try {
         $stmt->closeCursor();
 
         // Auditar sincronización ETL
-        $uid = (int)(current_user()['usuario_id'] ?? 0);
+        $uid = (int)($_SESSION['usuario_id'] ?? 0);
         if ($uid > 0) {
             $aud = db()->prepare("INSERT INTO dbo.auditorias (usuario_id, entidad, registro_id, accion, valores_nuevos) VALUES (?, N'respaldos', N'TransportesSegurosSA_DW', N'ETL_SYNC', ?);");
             $aud->execute([$uid, 'Sincronización manual ETL completada. Total hechos: ' . ($totalHechos ?? 0)]);
